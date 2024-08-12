@@ -1,84 +1,82 @@
-using LatticeUtilities
-using LinearAlgebra
+"""
 
+    initialize_measurement_container( model_geometry::ModelGeometry, N_burnin::Int, N_updates::Int )
+
+Creates dictionaries of generic arrays for storing measurements. Each dictionary in the container
+has (keys => values): observable_name => local_values (i.e. ∑ O_loc(x)), measured_values (i.e. ⟨O⟩≈(N)⁻¹local_values)
 
 """
-initialize_measurement_container(model_geometry::ModelGeometry)
+function initialize_measurement_container(model_geometry::ModelGeometry, N_burnin::Int, N_updates::Int, determinantal_parameters, jastrow)
+    # one side of the lattice
+    L = model_geometry.lattice.L
 
-Creates generic arrays for storage of associated measurment quantities. 
+    # total number of lattice sites
+    N = model_geometry.lattice.N
 
-"""
-function initialize_measurement_container(model_geometry, N_burnin, N_updates, variational_parameters)
-    unit_cell = model_geometry.unit_cell
-    lattice = model_geometry.lattice
+    # number of orbitals per unit cell
+    norbs = model_geometry.unit_cell.n
 
-    L = lattice.L
-    N = lattice.N
-    norbs = unit_cell.n
-    N_iterations = N_burnin + N_updates
+    # total number of MC iterations
+    N_iter = N_burnin + N_updates
 
-    local_measurements = 0.0 
+    # initialize parameter values
+    vpars = all_vpars(determinantal_parameters, jastrow)
 
+    # number of parameters
+    num_vpars = length(vpars)
+
+    # dictionary to store scalar measurements
     scalar_measurements = Dict{String, Any}([
-        ("density", zeros(AbstractFloat, norbs)),        # average density per orbital species
-        ("double_occ", zeros(AbstractFloat, norbs))      # average double occupancy per orbital species
-    ])                                                           
+        ("density", 0.0),        # average density per orbital species
+        ("double_occ", 0.0),     # average double occupancy per orbital species
+        ("parameters", Vector{Vector{AbstractFloat}}(undef, N_iter)),       # variational parameters
+        ("energy", (sum(ε₀)/N,  Vector{AbstractFloat}(undef, N_iter)))          # energy
+    ])                     
 
+    # dictionary to store derivative measurmements
     derivative_measurements = Dict{String, Any}([
-        ("Δk", (zeros(AbstractFloat, norbs), local_measurements, Any[])),        
-        ("ΔkΔkp", (zeros(AbstractFloat, norbs), local_measurements, Any[])),
-        ("ΔkE", (zeros(AbstractFloat, norbs), local_measurements, Any[]))                  
+        ("Δk", (zeros(Float64, num_vpars), Vector{Vector{Float64}}(undef, N_iter))),               
+        ("ΔkΔkp", (zeros(Float64, num_vpars), Vector{Matrix{Float64}}(undef, N_iter))),            
+        ("ΔkE", (zeros(Float64, num_vpars), Vector{Vector{Float64}}(undef, N_iter)))      
     ])      
 
-    parameter_measurements = Dict{String, Any}([
-        ("parameters", Any[])    
-    ])
-    # initialize parameters values
-    parameter_measurements["parameters"] = [variational_parameters]  
+    # dictionary to store correlation measurements
+    correlation_measurements = Dict{String, Any}()
 
-    correlation_measurements = Dict()
-
+    # create container
     measurement_container = (
         scalar_measurements       = scalar_measurements,
-        derivative_measurements   = derivative_measurements,     
-        parameter_measurements    = parameter_measurements,     
+        derivative_measurements   = derivative_measurements,         
         correlation_measurements  = correlation_measurements,                       
         L                         = L,
         N                         = N,
         norbs                     = norbs,
-        N_iterations              = N_iterations                           
+        N_iter                    = N_iter                          
     )
 
     return measurement_container
 end
 
 
-
 """
-initialize_measurements!(measurement_container::, observable::AbstractString )
+
+    initialize_measurements!( measurement_container, observable::String )
 
 For a certain type of measurment (scalar or correlation), initializes the arrays
 necessary to store measurements in respective bins.
 
 """
 function initialize_measurements!(measurement_container, observable)
-    (; scalar_measurements,N,norbs) = measurement_container
+    (; scalar_measurements, N_iter, N, norbs) = measurement_container
 
-    local_measurements = 0.0 
-    expectation = []
-
-    if observable == "energy"
-        # For energy, store tuple (zeros(AbstractFloat, norbs), local_measurements, expectation)
-        scalar_measurements["energy"] = (zeros(AbstractFloat, norbs),local_measurements,expectation)
-        # scalar_measurements["global_energy"] = local_measurements, expectation
-    elseif observable == "stripe"
-        # For stripe, store tuple (zeros(AbstractFloat, norbs*N), local_measurements, expectation)
-        scalar_measurements["site_dependent_density"] = (zeros(AbstractFloat, norbs*N),local_measurements,expectation)
-        scalar_measurements["site_dependent_spin"] = (zeros(AbstractFloat, norbs*N),local_measurements,expectation)
+    if observable == "site_dependent_density"
+        scalar_measurements["site_dependent_density"] = (zeros(AbstractFloat, norbs*N),Vector{Vector{AbstractFloat}}(undef, N_iter))    # charge stripe 
+    elseif observable == "site_dependent_spin"
+        scalar_measurements["site_dependent_spin"] = (zeros(AbstractFloat, norbs*N),Vector{Vector{AbstractFloat}}(undef, N_iter))       # spin stripe
     elseif observable == "phonon_number"
-        # For phonon number
+        scalar_measurements["phonon_number"] = (0.0,  Vector{AbstractFloat}(undef, N_iter))                     # phonon number nₚₕ
     elseif observable == "displacement"
-        # For displacement
+        scalar_measurements["displacement"] = (0.0,  Vector{AbstractFloat}(undef, N_iter))                      # phonon displacement X
     end
 
     return nothing
@@ -87,149 +85,22 @@ end
 
 # TODO: implement correlation measurmenets
 function initialize_correlation_measurements!(measurement_container,  correlation)
-    # type of measurements
-    #   - density-density correlation 
-    #   - spin-spin correlation
-    #   - pair correlation
-
     (; correlation_measurements) = measurement_container
 
-    if correlation == "den-den"
-        # scalar_measurements["density-density correlation"] = (zeros(AbstractFloat, norbs),local_measurements = 0.0,expectation = [])
-    elseif correlation == "spn-spn"
-        # scalar_measurements["spin-spin correlation"] = (zeros(AbstractFloat, norbs),local_measurements = 0.0,expectation = [])
+    if correlation == "density-density"
+        correlation_measurements["density-density"] = Vector{Vector{AbstractFloat}}(undef, N_iter)
+    elseif correlation == "spin-spin"
+        correlation_measurements["spin-spin"] = Vector{Vector{AbstractFloat}}(undef, N_iter)
     elseif correlation == "pair"
-        # scalar_measurements["pair correlation"] = (zeros(AbstractFloat, norbs),local_measurements = 0.0,expectation = [])
+        correlation_measurements["pair"] = Vector{Vector{AbstractFloat}}(undef, N_iter)
     end
 
     return nothing
 end
 
-# accumulator for measurements
-# this is reflected in the key entries for each measurement dictionary
-    # # through the course of the simulation, we estimate the expectation value of observable O using ⟨O⟩ ≈ N⁻¹ ∑ₓ Oₗ(x)
-    # by 'local' here, I mean the argument of the sums used to obtain the expectation value
-    # local_measurements = 0.0         # Oₗ(x). This is added to during the course of the simulation: local_val += measured
-    # iterations = 0.0        # N. This is incremented during the simulation, up to N_burnin + N_updates: iterations +=1
-    # by 'global' here, I mean the sum of local measurements to obtain the expectation value
-    # expectation = []   # record the expectation value for each iteration: push!(total_local_vals, local_val/iterations)
-
 
 """
-    get_local_jpar_derivative( jastrow::Jastrow, pconfig::Vector{Int} )
 
-Calculates the local logarithmic derivative Δₖ(x) = ∂lnΨ(x)/∂vₗₘ, with respect to the kth Jastrow parameter vₗₘ. Returns 
-a vector of derivatives.
-
-"""
-function get_local_jpar_derivative(jastrow, pconfig)
-    # jastrow type
-    jastrow_type = jastrow.jastrow_type;
-
-    # number of Jastrow parameters
-    num_jpars = jastrow.num_jpars;
-
-    # map of Jastrow parametersß
-    jpar_map = jastrow.jpar_map;
-
-    # vector to store derivatives
-    derivatives = zeros(AbstractFloat, num_jpars)
-                
-    # for density Jastrow
-    if jastrow_type == "e-den-den"
-        for num in 1:num_jpars
-            for (r1i, jpars1) in jpar_map         #former: indices => (dist, jpar) : (1, 2) => (1.0, jpar)
-                for (r2j, jpars2) in jpar_map
-                    if r1i[1] == r2j[1]
-                        if pht == true
-                            derivatives[num] += -(number_operator(r1i[2][1],pconfig)[1] - number_operator(r1i[2][1],pconfig)[2]) * (
-                                                  number_operator(r1i[2][2],pconfig)[1] - number_operator(r1i[2][2],pconfig)[2])
-                        elseif pht == false
-                            derivatives[num] += -(number_operator(r1i[2][1],pconfig)[1] + number_operator(r1i[2][1],pconfig)[2]) * (
-                                                  number_operator(r1i[2][2],pconfig)[1] + number_operator(r1i[2][2],pconfig)[2])
-                        else
-                        end
-                    else
-                    end
-                end
-            end
-        end
-
-        return derivatives
-
-    # for spin Jastrow
-    elseif jastrow_type == "e-spin-spin"   
-        for num in 1:num_jpars
-            for (r1i, jpars1) in jpar_map         
-                for (r2j, jpars2) in jpar_map
-                    if r1i[1] == r2j[1]
-                        if pht == true
-                            derivatives[num] += -(number_operator(r1i[2][1],pconfig)[1] - number_operator(r1i[2][1], pconfig)[2]) * (
-                                                  number_operator(r1i[2][2], pconfig)[1] - number_operator(r1i[2][2], pconfig)[2])
-                        elseif pht == false
-                            derivatives[num] += -(number_operator(r1i[2][1],pconfig)[1] + number_operator(r1i[2][1], pconfig)[2]) * (
-                                                  number_operator(r1i[2][2], pconfig)[1] + number_operator(r1i[2][2], pconfig)[2])
-                        else
-                        end
-                    end
-                end
-            end
-        end
-
-        return derivatives
-
-    # for electron-phonon Jastrow
-    elseif jastrow_type == "eph-den-den"   
-        return derivatives
-    else
-    end
-end
-
-
-"""
-    get_local_detpar_derivative( determinantal_parameters::DeterminantalParameters, model_geometry::ModelGeometry
-                                     pconfig::Vector{Int}, W::Matrix{AbstractFloat}, A::Matrix{AbstractFloat}  )
-
-Calculates the local logarithmic derivative Δₖ(x) = ∂lnΨ(x)/∂αₖ, with respect to the kth variational parameter αₖ,
-in the determinantal part of the wavefunction. Returns a vector of derivatives.
-
-"""
-function get_local_detpar_derivative(determinantal_parameters, model_geometry, particle_positions, Np, W, A)  
-
-    # dimensions
-    dims = model_geometry.unit_cell.n * model_geometry.lattice.N
-
-    # number of determinantal parameters
-    num_detpars = determinantal_parameters.num_detpars
-    
-    # particle positions
-    # particle_positions = get_particle_positions(pconfig)
-
-    # vector to store derivatives
-    derivatives = zeros(AbstractFloat, num_detpars)
-    
-
-    # loop over Nₚ particles 
-    G = zeros(AbstractFloat, 2*dims, 2*dims)
-    for β in 1:Np
-        for j in 1:2*dims
-            for (spindex, iᵦ) in particle_positions
-                G[iᵦ,j] = W[j,β]
-            # G[iᵦ,:] = W[:,β]
-            end
-        end
-    end
-
-    # loop over the number of determinantal parameters
-    for num in 1:num_detpars
-        derivatives[num] += sum(A[num] * G)
-    end
-
-    return derivatives
-end
-
-
-"""
     measure_Δk!(measurement_container, determinantal_parameters, jastrow, model_geometry, pconfig, Np, W, A)
 
 Measures logarithmic derivatives for all variational parameters. The first 'p' are derivatives of 
@@ -237,21 +108,28 @@ determinantal parameters and the rest are derivatives of Jastrow parameters. Mea
 to the measurement container.
 
 """
-# PASSED
-function measure_Δk!(measurement_container, determinantal_parameters, jastrow, model_geometry, pconfig, particle_positions, Np, W, A)
-    # perform derivatives
+function measure_Δk!(measurement_container, determinantal_parameters, jastrow, model_geometry, pconfig, particle_positions, Np, W, A, iter)
+    # perform parameter derivatives
     detpar_derivatives = get_local_detpar_derivative(determinantal_parameters, model_geometry, particle_positions, Np, W, A)
-    jpar_derivatives = get_local_jpar_derivative(jastrow, pconfig)
+    jpar_derivatives = get_local_jpar_derivative(jastrow, pconfig, pht)
     Δk = vcat(detpar_derivatives,jpar_derivatives)
 
-    # record current expectation values
-    local_measurement = measurement_container.derivative_measurements["Δk"][2] .+ Δk   
-    current_expectation = local_measurement / measurement_container.N_iterations
+    # current values
+    current_values = measurement_container.derivative_measurements["Δk"]
 
-    # write to measurement container
-    push!(measurement_container.derivative_measurements["Δk"][3], current_expectation)
-    updated_container = (measurement_container.derivative_measurements["Δk"][1], local_measurement, measurement_container.derivative_measurements["Δk"][3])
-    measurement_container.derivative_measurements["Δk"] = updated_container
+    # update the local value 
+    local_value = current_values[1] .+ Δk
+
+    # update the current expectation values 
+    new_expectation_value = local_value / iter
+    current_expectation_value = current_values[2]
+    current_expectation_value[iter] = new_expectation_value
+
+    # combine the updated values 
+    updated_values = (local_value, current_expectation_value)
+
+    # write the new values to the container
+    measurement_container.derivative_measurements["Δk"] = updated_values
 
     return nothing
 end
@@ -265,26 +143,34 @@ to the measurement container.
 
 """
 # PASSED
-function measure_ΔkE!(measurement_container, determinantal_parameters, jastrow, model_geometry, tight_binding_model, pconfig, particle_positions,  Np, W, A)
+function measure_ΔkE!(measurement_container, determinantal_parameters, jastrow, model_geometry, tight_binding_model, pconfig, particle_positions,  Np, W, A, iter)
     # perform derivatives
     detpar_derivatives = get_local_detpar_derivative(determinantal_parameters, model_geometry, particle_positions, Np, W, A)
-    jpar_derivatives = get_local_jpar_derivative(jastrow,pconfig)
+    jpar_derivatives = get_local_jpar_derivative(jastrow,pconfig,pht)
     Δk = vcat(detpar_derivatives,jpar_derivatives)
 
     # compute local energy
-    E = get_local_energy(model_geometry, tight_binding_model,jastrow,pconfig, particle_positions) 
+    E = get_local_energy(model_geometry, tight_binding_model, jastrow, pconfig, particle_positions) 
 
     # compute product of local derivatives with the local energy
     ΔkE = Δk * E
 
-    # record current expectation values
-    local_measurement = measurement_container.derivative_measurements["ΔkE"][2] .+ ΔkE
-    current_expectation = local_measurement / measurement_container.N_iterations
+    # current values
+    current_values = measurement_container.derivative_measurements["ΔkE"]
 
-    # write to measurement container
-    push!(measurement_container.derivative_measurements["ΔkE"][3], current_expectation)
-    updated_container = (measurement_container.derivative_measurements["ΔkE"][1], local_measurement, measurement_container.derivative_measurements["ΔkE"][3])
-    measurement_container.derivative_measurements["ΔkE"] = updated_container
+    # update the local value 
+    local_value = current_values[1] .+ ΔkE
+
+    # update the current expectation values 
+    new_expectation_value = local_value / iter
+    current_expectation_value = current_values[2]
+    current_expectation_value[iter] = new_expectation_value
+
+    # combine the updated values 
+    updated_values = (local_value, current_expectation_value)
+
+    # write the new values to the container
+    measurement_container.derivative_measurements["ΔkE"] = updated_values
 
     return nothing
 end
@@ -297,24 +183,31 @@ Measures the product of variational derivatives with other variational derivativ
 to the measurement container.
 
 """
-# PASSED
-function measure_ΔkΔkp!(measurement_container, determinantal_parameters, jastrow, model_geometry, pconfig, particle_positions, Np, W, A)
+function measure_ΔkΔkp!(measurement_container, determinantal_parameters, jastrow, model_geometry, pconfig, particle_positions, Np, W, A, iter)
     # perform derivatives
     detpar_derivatives = get_local_detpar_derivative(determinantal_parameters, model_geometry, particle_positions, Np, W, A)
-    jpar_derivatives = get_local_jpar_derivative(jastrow,pconfig)
+    jpar_derivatives = get_local_jpar_derivative(jastrow,pconfig, pht)
     Δk = vcat(detpar_derivatives,jpar_derivatives)
 
     # inner product of Δk and Δk′
     ΔkΔkp = Δk * Δk'
 
-    # record current expectation values
-    local_measurement = measurement_container.derivative_measurements["Δk"][2] .+ ΔkΔkp
-    current_expectation = local_measurement / measurement_container.N_iterations
+    # current values
+    current_values = measurement_container.derivative_measurements["ΔkΔkp"]
 
-    # write to measurement container
-    push!(measurement_container.derivative_measurements["ΔkΔkp"][3], current_expectation)
-    updated_container = (measurement_container.derivative_measurements["ΔkΔkp"][1], local_measurement, measurement_container.derivative_measurements["ΔkΔkp"][3])
-    measurement_container.derivative_measurements["ΔkΔkp"] = updated_container
+    # update the local value 
+    local_value = current_values[1] .+ ΔkΔkp
+
+    # update the current expectation values 
+    new_expectation_value = local_value / iter
+    current_expectation_value = current_values[2]
+    current_expectation_value[iter] = new_expectation_value
+
+    # combine the updated values 
+    updated_values = (local_value, current_expectation_value)
+
+    # write the new values to the container
+    measurement_container.derivative_measurements["ΔkΔkp"] = updated_values
 
     return nothing
 end 
@@ -326,8 +219,21 @@ end
 Calculates the local variational energy. Returns the total local energy and writes to the measurement container.
 
 """
-# PASSED
 function get_local_energy(model_geometry, tight_binding_model, jastrow, pconfig, particle_positions)
+
+    E_k = get_local_kinetic_energy(model_geometry, tight_binding_model, jastrow, pconfig, particle_positions)
+
+    E_hubb = get_local_hubbard_energy(U, model_geometry, pconfig)
+    
+    # calculate total local energy
+    E_loc = E_k + E_hubb
+
+    return E_loc
+end
+
+
+
+function get_local_kinetic_energy(model_geometry, tight_binding_model, jastrow, pconfig, particle_positions)
     # number of sites
     N = model_geometry.lattice.N
 
@@ -336,188 +242,67 @@ function get_local_energy(model_geometry, tight_binding_model, jastrow, pconfig,
                                     model_geometry.unit_cell,
                                     model_geometry.lattice)
 
-    # gnerate neighbor map
+    # generate neighbor map
     nbr_map = map_neighbor_table(nbr_table)
 
-    # particle positions
-    # particle_positions = get_particle_positions(pconfig)
-
+    # track kinetic energy
     E_loc_kinetic = 0.0
-    E_loc_hubbard = 0.0
 
     # calculate electron kinetic energy
     for β in 1:Np
-        # if β > length(particle_positions)
-        #     error("Index β ($β) is out of bounds for particle_positions of length $(length(particle_positions))")
-        # end
-        # if length(particle_positions[β]) < 2
-        #     error("particle_positions[β] does not have at least 2 elements: ", particle_positions[β])
-        # end
+        # position of particle β
         k = particle_positions[β][2]
-        # println("β: ", β, ", k: ", k)
 
-        # loop over nearest neighbors. TBA: loop over different neighbor orders (i.e. nearest and next nearest neighbors)
+        # spin of particle particle 'β' 
+        spindex = particle_positions[β][1]
+        β_spin = get_spindex_type(spindex, model_geometry)
+      
+        # loop over nearest neighbors. TODO: add next-nearest neighbors
         sum_nn = 0.0
         for l in nbr_map[k][2]
-            # reverse sign if system is particle-hole transformed
-            if pht == true
-                Rⱼ = exp(-get_jastrow_ratio(l, k, jastrow))
-            else
-                Rⱼ = exp(get_jastrow_ratio(l, k, jastrow))
+            # check that neighboring sites are unoccupied
+            if number_operator(l, pconfig)[β_spin] == 0
+                Rⱼ = get_jastrow_ratio(l, k, jastrow, pht, β_spin)
+                sum_nn += Rⱼ * W[l, β]
             end
-            sum_nn += Rⱼ * W[l, β]
         end
 
-        # reverse sign if system is particle-hole transformed
-        if pht == true
-            E_loc_kinetic += tight_binding_model.t[1] * sum_nn          
+        # calculate kinetic energy
+        if pht 
+            if β_spin == 1
+                E_loc_kinetic += -tight_binding_model.t[1] * sum_nn        
+            else
+                E_loc_kinetic += tight_binding_model.t[1] * sum_nn 
+            end
         else
-            E_loc_kinetic += - tight_binding_model.t[1] * sum_nn
+            E_loc_kinetic += -tight_binding_model.t[1] * sum_nn
         end
     end
 
-    # calculate Hubbard energy
-    for i in 1:N
-        E_loc_hubbard += U * number_operator(i, pconfig)[1] * (1 - number_operator(i, pconfig)[2])
-    end
-    
-
-    # calculate total local energy
-    E_loc = E_loc_kinetic + E_loc_hubbard
-
-    return E_loc
+    return E_loc_kinetic
 end
 
 
-"""
-    get_local_energy(model_geometry::ModelGeometry, tight_binding_model::TightBindingModel, 
-                    jastrow1::Jastrow, jastrow2::Jastrow, particle_positions:: )
-
-Calculates the local variational energy. Returns the total local energy and writes to the measurement container.
-
-"""
-function get_local_energy(model_geometry, tight_binding_model, jastrow1, jastrow2, pconfig, particle_positions)
+function get_local_hubbard_energy(U, model_geometry, pconfig)
     # number of sites
     N = model_geometry.lattice.N
 
-    # generate neighbor table
-    nbr_table = build_neighbor_table(bonds[1],
-                                    model_geometry.unit_cell,
-                                    model_geometry.lattice)
-
-    # gnerate neighbor map
-    nbr_map = map_neighbor_table(nbr_table)
-
-    # particle positions
-    # particle_positions = get_particle_positions(pconfig)
-
-    E_loc_kinetic = 0.0
-    E_loc_hubbard = 0.0
-
-    # calculate electron kinetic energy
-    for β in 1:Np
-        # loop over different electrons k
-        k = particle_positions[β][2] 
-        # loop over nearest neighbors. TBA: loop over different neighbor orders (i.e. nearest and next nearest neighbors)
-        sum_nn = 0.0
-        for l in nbr_map[k][2]
-            # reverse sign if system is particle-hole transformed
-            if pht == true
-                Rⱼ₁ = exp(-get_jastrow_ratio(l, k, jastrow1))
-                Rⱼ₂ = exp(-get_jastrow_ratio(l, k, jastrow2))
-            else
-                Rⱼ₁ = exp(get_jastrow_ratio(l, k, jastrow1))
-                Rⱼ₂ = exp(get_jastrow_ratio(l, k, jastrow2))
-            end
-            sum_nn += Rⱼ₁ * Rⱼ₂ * W[l, β]
-        end
-
-        # reverse sign if system is particle-hole transformed
-        if pht == true
-            E_loc_kinetic += tight_binding_model.t[1] * sum_nn          
-        else
-            E_loc_kinetic += - tight_binding_model.t[1] * sum_nn
-        end
-    end
+    # track hubbard energy
+    dblocc_sum = 0.0
 
     # calculate Hubbard energy
     for i in 1:N
-        E_loc_hubbard += U * number_operator(i, pconfig)[1] * (1 - number_operator(i, pconfig)[2])
-    end
-    
-
-    # calculate total local energy
-    E_loc = E_loc_kinetic + E_loc_hubbard
-
-    return E_loc
-end
-
-
-"""
-    get_local_energy(model_geometry::ModelGeometry, tight_binding_model::TightBindingModel, 
-                    jastrow1::Jastrow, jastrow2::Jastrow, particle_positions:: )
-
-Calculates the local variational energy. Returns the total local energy and writes to the measurement container.
-
-"""
-function get_local_energy(model_geometry, tight_binding_model, jastrow1, jastrow2, jastrow3, pconfig, particle_positions)
-    # number of sites
-    N = model_geometry.lattice.N
-
-    # generate neighbor table
-    nbr_table = build_neighbor_table(bonds[1],
-                                    model_geometry.unit_cell,
-                                    model_geometry.lattice)
-
-    # gnerate neighbor map
-    nbr_map = map_neighbor_table(nbr_table)
-
-    # particle positions
-    # particle_positions = get_particle_positions(pconfig)
-
-    E_loc_kinetic = 0.0
-    E_loc_hubbard = 0.0
-
-    # calculate electron kinetic energy
-    for β in 1:Np
-        # loop over different electrons k
-        k = particle_positions[β][2] 
-        # loop over nearest neighbors. TBA: loop over different neighbor orders (i.e. nearest and next nearest neighbors)
-        sum_nn = 0.0
-        for l in nbr_map[k][2]
-            # reverse sign if system is particle-hole transformed
-            if pht == true
-                Rⱼ₁ = exp(-get_jastrow_ratio(l, k, jastrow1))
-                Rⱼ₂ = exp(-get_jastrow_ratio(l, k, jastrow2))
-                Rⱼ₃ = exp(-get_jastrow_ratio(l, k, jastrow3))
-            else
-                Rⱼ₁ = exp(get_jastrow_ratio(l, k, jastrow1))
-                Rⱼ₂ = exp(get_jastrow_ratio(l, k, jastrow2))
-                Rⱼ₃ = exp(get_jastrow_ratio(l, k, jastrow3))
-            end
-            sum_nn += Rⱼ₁ * Rⱼ₂ * Rⱼ₃ * W[l, β]
-        end
-
-        # reverse sign if system is particle-hole transformed
-        if pht == true
-            E_loc_kinetic += tight_binding_model.t[1] * sum_nn          
+        if pht
+            dblocc_sum += number_operator(i, pconfig)[1] * (1 - number_operator(i, pconfig)[2])
         else
-            E_loc_kinetic += - tight_binding_model.t[1] * sum_nn
+            dblocc_sum += number_operator(i, pconfig)[1] * number_operator(i, pconfig)[2]
         end
     end
 
-    # calculate Hubbard energy
-    for i in 1:N
-        E_loc_hubbard += U * number_operator(i, pconfig)[1] * (1 - number_operator(i, pconfig)[2])
-    end
-    
+    E_loc_hubbard = U * dblocc_sum
 
-    # calculate total local energy
-    E_loc = E_loc_kinetic + E_loc_hubbard
-
-    return E_loc
+    return E_loc_hubbard
 end
-
 
 
 """
@@ -528,22 +313,30 @@ Measures the total local energy and writes to the measurement container.
 
 """
 # PASSED
-function measure_local_energy!(measurement_container, model_geometry, tight_binding_model, jastrow, pconfig, particle_positions)
+function measure_local_energy!(measurement_container, model_geometry, tight_binding_model, jastrow, pconfig, particle_positions,iter)
     # calculate the current local energy
     E_loc = get_local_energy(model_geometry, tight_binding_model, jastrow, pconfig, particle_positions)
 
-    # record current expectation values
-    local_measurement = measurement_container.scalar_measurements["energy"][2] .+ E_loc
-    current_expectation = local_measurement / measurement_container.N_iterations
+    # current values
+    current_values = measurement_container.scalar_measurements["energy"]
 
-    # write to measurement container
-    push!(measurement_container.scalar_measurements["energy"][3], current_expectation)
-    updated_container = (measurement_container.scalar_measurements["energy"][1], local_measurement, measurement_container.scalar_measurements["energy"][3])
-    measurement_container.scalar_measurements["energy"] = updated_container
+    # update the local value 
+    local_value = current_values[1] + E_loc
+
+    # update the current expectation values 
+    new_expectation_value = local_value / iter
+    current_expectation_value = current_values[2]
+    current_expectation_value[iter] = new_expectation_value
+
+    # combine the updated values 
+    updated_values = (local_value, current_expectation_value)
+
+    # write the new values to the container
+    measurement_container.scalar_measurements["energy"] = updated_values
+
 
     return nothing
 end
-
 
 
 """

@@ -5,8 +5,11 @@ using DelimitedFiles
 using BenchmarkTools
 using Profile
 using Distributions
-using Distances
 using OrderedCollections
+using CSV
+using DataFrames
+using DataStructures
+
 
 # files to include
 include("Hamiltonian.jl")
@@ -15,7 +18,7 @@ include("Jastrow.jl")
 include("Markov.jl")
 include("Utilities.jl")
 include("Greens.jl")
-include("StochasticReconfiguration.jl")
+include("Hessian.jl")
 include("Measurements.jl")
 
 #############################
@@ -40,10 +43,10 @@ t = 1.0
 tp = 0.0
 
 # Hubbard-U
-U = 0.5
+U = 8.0
 
 # (BCS) chemical potential
-μ_BCS = 3.0
+μ_BCS = 0.0
 
 # phonon fugacity
 # μₚₕ = 0.0
@@ -52,18 +55,13 @@ U = 0.5
 ##      VARIATIONAL PARAMETERS       ##
 #######################################
 
-# TBD: how this will be done is a file will be generated with the headers 
-#      being the parameter name followed by values. For non-uniform parameters,
-#      it's indices will also be reported. 
-
 # whether to read-in initial determinantal parameters
 readin_detpars = false
+path_to_detpars = "/path/to/determinantal/parameters/"
 
 # whether to read-in initial Jastrow parameters
-readin_jpars = false    
-
-# filepath
-path_to_vpars = "/path/to/variational/parameters/"
+readin_jpars = false
+path_to_jpars = "/Users/xzt/Documents/VariationalMC/src/jastrow_out.csv"
 
 # parameters to be optimized and initial value
 parameters_to_optimize = ["Δs", "μ_BCS"]        # BCS wavefunction
@@ -99,7 +97,7 @@ seed = abs(rand(Int))
 rng = Xoshiro(seed)
 
 # number of thermalization updates
-N_burnin = 1000
+N_burnin = 3000
 
 # number of simulation updates
 N_updates = 1000
@@ -194,10 +192,10 @@ determinantal_parameters = initialize_determinantal_parameters(parameters_to_opt
 ###########################
 
 # construct mean-field Hamiltonian and return variational operators
-(H_mf, V) = build_mean_field_hamiltonian()
+(H_mf, V) = build_mean_field_hamiltonian(tight_binding_model, determinantal_parameters)
 
 # initialize Slater determinant state and initial particle configuration
-(D, pconfig, ε, ε₀, M, Uₑ) = build_determinantal_state()  
+(D, pconfig, ε, ε₀, M, Uₑ) = build_determinantal_state(H_mf)  
 
 # initialize variational parameter matrices
 A = get_Ak_matrices(V, Uₑ, ε, model_geometry)
@@ -206,10 +204,7 @@ A = get_Ak_matrices(V, Uₑ, ε, model_geometry)
 W = get_equal_greens(M, D)
 
 # construct electron density-density Jastrow factor
-e_den_den_jastrow = build_jastrow_factor("e-den-den", model_geometry, rng, pconfig, readin_jpars)
-
-# initialize variational_parameters
-variational_parameters = cat_vpars(determinantal_parameters, e_den_den_jastrow)
+jastrow = build_jastrow_factor("e-den-den", model_geometry, pconfig, pht, rng, readin_jpars)
 
 # other Jastrow factors
 # construct electron spin-spin Jastrow factor 
@@ -232,10 +227,9 @@ variational_parameters = cat_vpars(determinantal_parameters, e_den_den_jastrow)
 #############################
 
 # initialize measurement container for VMC measurements
-measurement_container = initialize_measurement_container(model_geometry, N_burnin, N_updates, variational_parameters)
+measurement_container = initialize_measurement_container(model_geometry, N_burnin, N_updates, determinantal_parameters, jastrow)
 
-# initialize energy measurements
-initialize_measurements!(measurement_container, "energy")
+# add any additional measurements by using initialize_measurements!()
 
 # initialize correlation measurements
 # initialize_correlation_measurements!(measurement_container, "density")
@@ -254,7 +248,7 @@ end
 # Iterate over burnin/thermalization updates.
 for n in 1:N_burnin
     # perform local update to fermionic dofs
-    (local_acceptance_rate, pconfig, jastrow, W, D) = local_fermion_update!(W, D, Ne, model_geometry, tight_binding_model, e_den_den_jastrow, pconfig, rng, n, n_stab)
+    (local_acceptance_rate, pconfig, jastrow, W, D) = local_fermion_update!(W, D, Ne, model_geometry, tight_binding_model, jastrow, pconfig, rng, n, n_stab)
 
     # record acceptance rate
     additional_info["fermionic_local_acceptance_rate"] += local_acceptance_rate

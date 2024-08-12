@@ -1,7 +1,8 @@
 """
-    Jastrow( jastrow_type::AbstractString, jpar_matrix::Matrix{AbstractFloat}, 
-             jpars::Vector{Float64}, Tvec::Vector{AbstractFloat}, jpar_map::Dict{Any,Any}, 
-             num_jpars::Int )
+
+    Jastrow( jastrow_type::AbstractString, num_jpars::Int, 
+             jpar_map::OrderedDict{Any, Any}, Float64}} 
+             Tvec::Vector{Float64} )
 
 A type defining quantities related to a Jastrow factor.
 
@@ -10,296 +11,203 @@ mutable struct Jastrow
     # type of Jastrow parameter
     jastrow_type::String
 
-    # matrix of Jastrow parameters
-    jpar_matrix::Matrix{Float64}
+    # number of Jastrow parameters
+    num_jpars::Int
 
-    # vector of Jastrow parameters
-    jpars::Vector{Float64}
+    # map of Jastrow parameters
+    jpar_map::OrderedDict{Any, Any}
 
     # T vector
     Tvec::Vector{Float64}
-
-    # Jastrow parameter dictionary
-    jpar_map::OrderedDict{Any, Any}
-
-    # number of Jastrow parameters
-    num_jpars::Int
 end
 
 
 """
-    get_distances() 
 
-Returns a matrix of distances between each and every site 'i' and 'j', is generated with
-each matrix element corresponds to a distance i.e. r₁₂ == distance between sites 1 and 2
-the matrix is symmetric i.e r₁₂ = r₂₁
+    initialize_jpars( model_geometry::ModelGeometry, rng::Xoshiro, readin_jpars::Bool )
 
-            [ r₁₁ r₁₂ r₁₃ r₁₄ ... ]
-            [ r₂₁ r₂₂ r₂₃ r₂₄ ... ]
-distances = [ r₃₁ r₃₂ r₃₃ r₃₄ ... ] 
-            [ r₄₁ r₄₂ r₄₃ r₄₄ ... ]
-            [ ... ... ... ... ... ]
+Generates a dictionary of irreducible indices k which reference a tuple consisting of a vector of lattice index 
+pairs (i,j) which generate k, and Jastrow parameters vᵢⱼ. The parameter corresponding to the 
+largest k is automatically initialized to 0. Parameters are randomly initialized.
+
 """
-function get_distances()
-    # extent of the lattice
+function initialize_jpars(model_geometry::ModelGeometry, rng::Xoshiro, readin_jpars::Bool)
+    # check 
+    @assert readin_jpars == false
+
+    # number of lattice sites
     N = model_geometry.lattice.N
 
-    # initialize matrix
-    dist = zeros(Float64, N, N)
+    # one side of the lattice
+    L = model_geometry.lattice.L[1]
     
-    # precompute locations
-    locations = [site_to_loc(i, model_geometry.unit_cell, model_geometry.lattice)[1] for i in 1:N]
+    # vector to store reduced indices
+    reduced_indices = []
 
-    # compute distances
-    for i in 1:N
-        for j in 1:N
-            dist[i, j] = euclidean(locations[i], locations[j])
+    # initialize map of Jastrow parameters
+    jpar_map = OrderedDict()
+
+    for i in 0:N-1
+        red_idx = reduce_index(0, i, model_geometry)
+        push!(reduced_indices, red_idx)
+        if haskey(jpar_map, red_idx)
+            indices, init_val = jpar_map[red_idx]
+            push!(indices, (0, i))
+            jpar_map[red_idx] = (indices, init_val)
+        else
+            jpar_map[red_idx] = ([(0, i)], 0.0)
         end
     end
 
-    return dist
-end
-
-
-# function set_jpars(model_geometry::ModelGeometry, rng::Xoshiro, readin_jpars::Bool)
-#     if readin_jpars
-#         # read columns of jpars of distances, indices, and parameter values
-#     end
-
-#     # extent of the lattice
-#     L = model_geometry.lattice.N
-
-#     # expected number of Jastrow parameters
-#     num_jpars = div(L * (L + 1), 2)
-
-#     # distance matrix
-#     dist_matrix = get_distances()
-
-#     # Create a dictionary of Jastrow parameters
-#     jpar_map = Dict()
-#     for row in 1:L
-#         for col in row:L
-#             # initialize all Jastrow parameters to random values
-#             jpar_map[(dist_matrix[row, col], (row, col))] = rand(rng)
-#         end
-#     end
-
-#     # sort dictionary
-#     sorted_pairs = sort(collect(jpar_map), by=x->x[1][1])
-#     jpar_map = OrderedDict(sorted_pairs)
-
-#     # fix parameters for the largest distance to 0
-#     first_elements = [key[1] for key in keys(jpar_map)]
-#     unique_first_elements = Set(first_elements)
-#     largest_first_element = maximum(unique_first_elements)
-#     for key in keys(jpar_map)
-#         if key[1] == largest_first_element
-#             jpar_map[key] = 0.0
-#         end
-#     end
-
-#     # verify that we have the correct number of parameters
-#     length(jpar_map) == num_jpars
-
-#     # vector of Jastrow parameters
-#     jpars = collect(values(jpar_map))
-
-#     return jpars, jpar_map, num_jpars
-# end
-
-
-
-
-"""
-    get_jpar_matrix( model_geometry::ModelGeometry, rng::Xoshiro, readin_jpars::Bool )
-
-Generates a matrix of distances and populates them with random initial Jastrow parameter 
-values. Values can also be read-in from file.
-"""
-function get_jpar_matrix(model_geometry::ModelGeometry, rng::Xoshiro, readin_jpars::Bool)::Matrix{Float64}
-    if readin_jpars
-        # read columns of jpars of distances, indices, and parameter values
-    end
-
-    # extent of the lattice
-    N = model_geometry.lattice.N
-
-    # distance matrix
-    jpar_matrix = get_distances()
-
-    # find the largest distance and set it's parameter to 0
-    max_dist = maximum(jpar_matrix)
-    max_indices = findall(x -> x == max_dist, jpar_matrix)
-    for index in max_indices
-        jpar_matrix[Tuple(index)...] = 0.0    
-    end
-
-    for i in 1:N
-        for j in i+1:N
-            if jpar_matrix[i, j] != 0.0
-                # initialize with random values
-                value = rand(rng)
-                jpar_matrix[i, j] = value
-                jpar_matrix[j, i] = value
+    for i in 1:N-1
+        for j in 1:N-1
+            red_idx = reduce_index(i, j, model_geometry)
+            push!(reduced_indices, red_idx)
+            if haskey(jpar_map, red_idx)
+                indices, init_val = jpar_map[red_idx]
+                push!(indices, (i, j))
+                jpar_map[red_idx] = (indices, init_val)
+            else
+                jpar_map[red_idx] = ([(i, j)], 0.0)
             end
         end
     end
 
-    return jpar_matrix
+    # set the parameter corresponding to the maximum distance to 0
+    # max_idx = max_dist(N, L)
+    # if haskey(jpar_map, max_idx)
+    #     indices, _ = jpar_map[max_idx]
+    #     jpar_map[max_idx] = (indices, 0.0)
+    # else
+    #     error("Maximum distance index $max_idx not found in jpar_map")
+    # end
+
+    # DEBUG
+    if debug
+        # check indices
+        irreducible_indices = unique(reduced_indices)
+        println(irreducible_indices)
+    end
+
+    # Sort the dictionary by irreducible indices
+    sorted_jpar_map = OrderedDict(sort(collect(jpar_map)))
+
+    return sorted_jpar_map
 end
 
 
-# another version of get_jpar_matrix for recalculation during simulation
-# function get_jpar_matrix(model_geometry, jpars)
-    # do stuff
-# end
+"""
 
+    initialize_jpars( model_geometry::ModelGeometry, path_to_jpars::String, readin_jpars::Bool )
+
+Generates a dictionary of irreducible indices k which reference a tuple consisting of a vector of lattice index 
+pairs (i,j) which generate k, and Jastrow parameters vᵢⱼ. The parameter corresponding to the 
+largest k is automatically initialized to 0. Parameters are read in from a .csv file.
 
 """
-    get_jpar_map(model_geometry::ModelGeometry, jpar_matrix::Matrix{Float64})
+function initialize_jpars(model_geometry::ModelGeometry, path_to_jpars::String, readin_jpars::Bool)
+    # check
+    @assert readin_jpars == true
 
-Creates a dictionary of Jastrow parameters and their associated distances and indices (i, j),
-such that the dictionary store keys and values of the form: (distance, (i, j)) => jpar_value.
-Also returns vector of parameters 
-"""
-function get_jpar_map(model_geometry::ModelGeometry, jpar_matrix::Matrix{Float64})
-    # extent of the lattice
+    # number of lattice sites
     N = model_geometry.lattice.N
 
-    #  # expected number of Jastrow parameters
-    # num_jpars = div(N * (N + 1), 2) - N
+    # one side of the lattice
+    L = model_geometry.lattice.L[1]
+    
+    # vector to store reduced indices
+    reduced_indices = []
 
-    # distance matrix
-    dist_matrix = get_distances()
+    # initialize map of Jastrow parameters
+    jpar_map = OrderedDict()
 
-    # Create dictionary of parameters
-    jpar_map = Dict()
+    # read the CSV file
+    df = CSV.read(path_to_jpars, DataFrame)
+        
+    # create a dictionary from the CSV data
+    csv_jpar_map = Dict{Any, Float64}()
+    for row in eachrow(df)
+        csv_jpar_map[row.IRR_IDX] = row.MEAN_vij
+    end
 
-    for i in 1:N
-        for j in 1:N
-            if i <= j  
-                jpar_map[dist_matrix[i, j], (i, j)] = jpar_matrix[i, j]
+    # for i in 0:N-1
+    #     red_idx = reduce_index(0, i, model_geometry)
+    #     push!(reduced_indices, red_idx)
+    #     if haskey(jpar_map, red_idx)
+    #         val = jpar_map[red_idx]
+    #         jpar_map[red_idx] = val
+    #     else
+    #         # Use the value from the CSV if it exists
+    #         mean_vij = csv_jpar_map[red_idx]
+    #         jpar_map[red_idx] = mean_vij
+    #     end
+    # end
+
+    for i in 0:N-1
+        red_idx = reduce_index(0, i, model_geometry)
+        push!(reduced_indices, red_idx)
+        if haskey(jpar_map, red_idx)
+            indices, mean_vij = jpar_map[red_idx]
+            push!(indices, (0, i))
+            jpar_map[red_idx] = (indices, mean_vij)
+        else
+            # Use the value from the CSV if it exists
+            mean_vij = csv_jpar_map[red_idx]
+            jpar_map[red_idx] = ([(0, i)], mean_vij)
+        end
+    end
+
+    for i in 1:N-1
+        for j in 1:N-1
+            red_idx = reduce_index(i, j, model_geometry)
+            push!(reduced_indices, red_idx)
+            if haskey(jpar_map, red_idx)
+                indices, mean_vij = jpar_map[red_idx]
+                push!(indices, (i, j))
+                jpar_map[red_idx] = (indices, mean_vij)
+            else
+                # Use the value from the CSV if it exists
+                mean_vij = csv_jpar_map[red_idx]
+                jpar_map[red_idx] = ([(i, j)], mean_vij)
             end
         end
     end
 
-    # Filter out entries with 0 values
-    filtered_pairs = filter(x -> x[2] != 0, collect(jpar_map))
+    # set the parameter corresponding to the maximum distance to 0
+    # technically, the read in values will always have the last Jastrow parameter to be 0
+    # but this is just here for safety reasons.
+    max_idx = max_dist(N, L)
+    if haskey(jpar_map, max_idx)
+        indices, _ = jpar_map[max_idx]
+        jpar_map[max_idx] = (indices, 0.0)
+    else
+        error("Maximum distance index $max_idx not found in jpar_map")
+    end
 
-    # Sort the filtered pairs by the first element of the key tuple
-    sorted_pairs = sort(filtered_pairs, by = x -> x[1][1])
+    # DEBUG
+    if debug
+        # check indices
+        irreducible_indices = unique(reduced_indices)
+        println(irreducible_indices)
+    end
 
-    # Create the ordered dictionary from the sorted pairs
-    jpar_map = OrderedDict(sorted_pairs)
+    # Sort the dictionary by key
+    sorted_jpar_map = OrderedDict(sort(collect(jpar_map)))
 
-    # check number of parameters
-    num_jpars = length(jpar_map)
-
-    # collect all parameters
-    jpars = collect(values(jpar_map))
-
-    return jpar_map, jpars, num_jpars
+    return sorted_jpar_map
 end
 
 
 
-
-
-
-# """
-#     set_jpars( dist_vec::Matrix{AbstractFloat}) 
-
-# Sets entries in the distance matrix to some initial Jastrow parameter value and 
-# sets parameters corresponding to the largest distance to 0.
-
-# """
-# function populate_jpars!(dist_matrix::Matrix{Float64})
-#     jpar_matrix = copy(dist_matrix)
-#     r_max = maximum(dist_matrix)
-
-#     # Update jpar_matrix in place
-#     for i in 1:size(dist_matrix, 1)
-#         for j in 1:size(dist_matrix, 2)
-#             if dist_matrix[i, j] == r_max
-#                 jpar_matrix[i, j] = 0.0
-#             elseif i == j
-#                 jpar_matrix[i, j] = 0.0
-#             else
-#                 jpar_matrix[i, j] = 0.5
-#             end
-#         end
-#     end
-
-#     return jpar_matrix
-# end
-
-# function set_jpars(dist_matrix) 
-#     jpar_matrix = copy(dist_matrix)
-
-#     r_max = maximum(dist_matrix)
-#     for i in 1:model_geometry.lattice.N
-#         for j in 1:model_geometry.lattice.N
-#             if jpar_matrix[i,j] == r_max
-#                 jpar_matrix[i,j] = 0
-#             elseif i == j
-#                 jpar_matrix[i,j] == 0  
-#             else
-#                 jpar_matrix[i,j] = 0.5
-#             end
-#         end
-#     end
-
-#     return jpar_matrix
-# end
-
-
-# """
-#     get_num_jpars( jpar_matrix::Matrix{AbstractFloat} ) 
-
-# Returns the number of Jastrow parameters.
-
-# """
-# function get_num_jpars(jpar_matrix)
-#     return count(i->(i > 0),(jpar_matrix[tril!(trues(size(jpar_matrix)), -1)]))
-# end
-
-
-# """
-#     map_jpars( jpar_matrix::Matrix{AbstractFloat}, dist_matrix::Matrix{AbstractFloat} ) 
-
-# Creates a dictionary of Jastrow parameters vᵢⱼ, and their distances rᵢⱼ
-
-# """
-# function map_jpars(dist_matrix, jpar_matrix)
-#     upper_triangular_dist = UpperTriangular(dist_matrix)
-#     upper_triangular_jpars = UpperTriangular(jpar_matrix)
-#     nrows, ncols = size(dist_matrix)
-    
-#     jpar_dict = Dict()
-    
-#     for i in 1:nrows
-#         for j in i:ncols
-#             distance = upper_triangular_dist[i,j]
-#             jpar = upper_triangular_jpars[i, j]
-#             indices = (i, j)
-#             jpar_dict[indices] = (distance, jpar)
-#         end
-#     end
-
-#     jpar_dist_dict = Dict(key => value for (key, value) in jpar_dict if value[2] != 0.0)
-    
-#     return jpar_dist_dict
-# end
-
-
 """
-    get_Tvec( jpar_matrix::Matrix{AbstractFloat}, jastrow_type::AbstractString, pconfig::Vector{Int64} ) 
+
+    get_Tvec( jastrow_type::AbstractString, jpar_map::Dict{Any,Any}, pconfig::Vector{Int64}, model_geometry::ModelGeometry ) 
 
 Returns vector of T with entries Tᵢ = ∑ⱼ vᵢⱼnᵢ(x) if using density Jastrow or 
 Tᵢ = ∑ⱼ wᵢⱼSᵢ(x) if using spin Jastrow.
 
 """
-function get_Tvec(jpar_matrix::Matrix{Float64}, jastrow_type::String, pconfig::Vector{Int64}, pht::Bool)
+function get_Tvec(jastrow_type::String, jpar_map::OrderedDict{Any,Any}, pconfig::Vector{Int64}, pht::Bool, model_geometry::ModelGeometry)
     # extent of the lattice
     N = model_geometry.lattice.N
 
@@ -307,25 +215,35 @@ function get_Tvec(jpar_matrix::Matrix{Float64}, jastrow_type::String, pconfig::V
     Tvec = Vector{AbstractFloat}(undef, N)
 
     for i in 1:N
-        # sum Jastrow parameters
-        jpar_sum = sum(jpar_matrix[i,:])
+        # track the Jastrow parameter sum
+        jpar_sum = 0.0
+        for j in 1:N
+            # Calculate the reduced index for (i, j)
+            red_idx = reduce_index(i-1, j-1, model_geometry)
+
+            # Add the appropriate value based on the key of the jpar_map
+            if haskey(jpar_map, red_idx)
+                (_, vᵢⱼ) = jpar_map[red_idx]
+                jpar_sum += vᵢⱼ
+            end
+        end
 
         # check particle occupations
-        num_up = number_operator(i,pconfig)[1]
-        num_dn = number_operator(i,pconfig)[2]
+        num_up = number_operator(i, pconfig)[1]
+        num_dn = number_operator(i, pconfig)[2]
 
         # check Jastrow type
         if jastrow_type == "e-den-den"  # electron density-density
             if pht
-                Tvec[i] = jpar_sum * (num_up - num_dn)  
+                Tvec[i] = jpar_sum * (num_up + num_dn - 1)  
             else
                 Tvec[i] = jpar_sum * (num_up + num_dn)  
             end
         elseif jastrow_type == "e-spn-spn"  # electron spin-spin
             if pht 
-                Tvec[i] = 0.5 * jpar_sum * (num_up + num_dn)
+                Tvec[i] = 0.5 * jpar_sum * (num_up + num_dn - 1)
             else
-                Tvec[i] = 0.5 * jpar_sum * (num_up - num_dn)
+                Tvec[i] = 0.5 * jpar_sum * (num_up + num_dn)
             end
         elseif jastrow_type == "eph-den-den" # electron-phonon density-density
             # populate electron-phonon T vector
@@ -335,20 +253,23 @@ function get_Tvec(jpar_matrix::Matrix{Float64}, jastrow_type::String, pconfig::V
             # populate
         end
     end
-
+    
     return Tvec
 end
 
 
 """
-    update_Tvec!( local_acceptance::LocalAcceptance, jastrow::Jastrow, model_geometry::ModelGeometry )
+    update_Tvec!( local_acceptance::LocalAcceptance, jastrow::Jastrow, model_geometry::ModelGeometry, pht::Bool )
 
 Updates elements Tᵢ of the vector T after a Metropolis update.
 
 """
-function update_Tvec!(local_acceptance, jastrow::Jastrow, model_geometry::ModelGeometry)
+function update_Tvec!(local_acceptance, jastrow::Jastrow, model_geometry::ModelGeometry, pht::Bool)
     # T vector
     Tvec = jastrow.Tvec
+
+    # jpar map
+    jpar_map = jastrow.jpar_map
 
     # extent of the lattice
     N = model_geometry.lattice.N
@@ -359,7 +280,25 @@ function update_Tvec!(local_acceptance, jastrow::Jastrow, model_geometry::ModelG
 
     # update
     for i in 1:N
-        Tvec[i] += jastrow.jpar_matrix[i,l] - jastrow.jpar_matrix[i,k] 
+        red_idx_il = reduce_index(i-1, l-1, model_geometry)
+        if haskey(jpar_map, red_idx_il)
+            (_,  vᵢₗ) = jpar_map[red_idx_il]
+        end
+
+        red_idx_ik = reduce_index(i-1, k-1, model_geometry)
+        if haskey(jpar_map, red_idx_ik)
+            (_,  vᵢₖ) = jpar_map[red_idx_ik]
+        end
+
+        if pht
+            if local_acceptance.spin == 2
+               Tvec[i] += - vᵢₗ + vᵢₖ
+            else
+                Tvec[i] += vᵢₗ - vᵢₖ
+            end
+        else
+            Tvec[i] += vᵢₗ - vᵢₖ
+        end
     end
 
     return nothing
@@ -367,52 +306,67 @@ end
 
 
 """
-    get_jastrow_ratio( l::Int, k::Int, Tₗ::Vector{AbstractFloat}, Tₖ::Vector{AbstractFloat}  )
+    get_jastrow_ratio( local_acceptance, jastrow::Jastrow, pht::Bool )
 
 Calculates ratio J(x₂)/J(x₁) = exp[-s(Tₗ - Tₖ) + vₗₗ - vₗₖ ] of Jastrow factors for particle configurations 
 which differ by a single particle hopping from site 'l' (configuration 'x₁') to site 'k' (configuration 'x₂')
 using the corresponding T vectors Tₗ and Tₖ, rsepctively.  
 
 """
-function get_jastrow_ratio(l::Int, k::Int, jastrow::Jastrow)
+function get_jastrow_ratio(l, k, jastrow::Jastrow, pht::Bool, spin::Int)
     # T vector
     Tvec = jastrow.Tvec
 
-    # jpar matrix
-    jpar_matrix = jastrow.jpar_matrix
+    # jpar map
+    jpar_map = jastrow.jpar_map
 
-    # jpar matrix
-    vₗₗ =  jpar_matrix[l,l]
-    vₗₖ = jpar_matrix[l,k]
+    # obtain elements 
+    red_idx_ll = reduce_index(l-1, l-1, model_geometry)
+    if haskey(jpar_map, red_idx_ll)
+        (_,  vₗₗ) = jpar_map[red_idx_ll]
+    end
+
+    red_idx_lk = reduce_index(l-1, k-1, model_geometry)
+    if haskey(jpar_map, red_idx_ll)
+        (_,  vₗₖ) = jpar_map[red_idx_lk]
+    end
 
     # select element for the initial and final sites
     Tₗ = Tvec[l]
     Tₖ = Tvec[k]
 
     # compute ratio
-    jas_ratio = exp(-(Tₗ - Tₖ) + vₗₗ - vₗₖ) 
+    if pht
+        if spin == 2
+            jas_ratio = exp(-((Tₗ - Tₖ) - vₗₗ + vₗₖ)) 
+        else
+            jas_ratio = exp(-((Tₗ - Tₖ) + vₗₗ - vₗₖ)) 
+        end
+    else
+        jas_ratio = exp(-((Tₗ - Tₖ) + vₗₗ - vₗₖ)) 
+    end
 
     return jas_ratio
 end
 
 
 """
-    build_jastrow_factor(jastrow_type::AbstractString)
+    build_jastrow_factor( jastrow_type::String, model_geometry::ModelGeometry, 
+                          pconfig::Vector{Int64}, pht::Bool, rng::Xoshiro, readin_jpars::Bool )
 
 Constructs relevant Jastrow factor and returns intitial T vector, matrix of Jastrow parameters, and
 number of Jastrow parameters. 
 
 """
-function build_jastrow_factor(jastrow_type::String, model_geometry::ModelGeometry, 
-                                rng::Xoshiro, pconfig::Vector{Int64}, readin_jpars::Bool)
-    # generate matrix of ALL Jastrow parameters
-    jpar_matrix = get_jpar_matrix(model_geometry, rng, readin_jpars)
-
+function build_jastrow_factor(jastrow_type::String, model_geometry::ModelGeometry, pconfig::Vector{Int64}, pht::Bool, rng::Xoshiro, readin_jpars::Bool)
     # map Jastrow parameters
-    jpar_map, jpars, num_jpars = get_jpar_map(model_geometry, jpar_matrix)
+    jpar_map = initialize_jpars(model_geometry, rng, readin_jpars)
 
     # generate T vector
-    init_Tvec = get_Tvec(jpar_matrix, jastrow_type, pconfig, pht)
+    init_Tvec = get_Tvec(jastrow_type, jpar_map, pconfig, pht, model_geometry)
+
+    # get number of Jastrow parameters
+    num_jpars = length(jpar_map)
    
     if verbose
         # report the number of Jastrow parameters initialized
@@ -420,7 +374,35 @@ function build_jastrow_factor(jastrow_type::String, model_geometry::ModelGeometr
         println("Type: ", jastrow_type)
     end
 
-    return Jastrow(jastrow_type, jpar_matrix, jpars, init_Tvec, jpar_map, num_jpars)
+    return Jastrow(jastrow_type, num_jpars, jpar_map, init_Tvec)
+end
+
+
+"""
+    build_jastrow_factor( jastrow_type::String, model_geometry::ModelGeometry, 
+                          pconfig::Vector{Int64}, pht::Bool, path_to_jpars::String, readin_jpars::Bool )
+
+Constructs relevant Jastrow factor and returns intitial T vector, matrix of Jastrow parameters, and
+number of Jastrow parameters. 
+
+"""
+function build_jastrow_factor(jastrow_type::String, model_geometry::ModelGeometry, pconfig::Vector{Int64}, pht::Bool, path_to_jpars::String, readin_jpars::Bool)
+    # map Jastrow parameters
+    jpar_map = initialize_jpars(model_geometry, path_to_jpars, readin_jpars)
+
+    # generate T vector
+    init_Tvec = get_Tvec(jastrow_type, jpar_map, pconfig, pht, model_geometry)
+
+    # get number of Jastrow parameters
+    num_jpars = length(jpar_map)
+   
+    if verbose
+        # report the number of Jastrow parameters initialized
+        println(num_jpars," Jastrow parameters initialized")
+        println("Type: ", jastrow_type)
+    end
+
+    return Jastrow(jastrow_type, num_jpars, jpar_map, init_Tvec)
 end
 
 
@@ -430,40 +412,28 @@ end
 Updates Jastrow parameters after Stochastic Reconfiguration.
 
 """
-function update_jastrow!(jastrow::Jastrow, vpars::Vector{Float64})
+function update_jastrow!(jastrow::Jastrow, new_vpars::Vector{Float64})
     # number of Jastrow parameters
     num_jpars = jastrow.num_jpars;
-
-    # number of Jastrow parameters
-    jpars = jastrow.jpars;
 
     # map of Jastrow parameters
     jpar_map = jastrow.jpar_map;
 
-    # number of Jastrow parameters
-    jpar_matrix = jastrow.jpar_matrix;
+    # all new Jastrow parameters except for the last one
+    new_jpars = new_vpars[end-num_jpars+1:end-1]
 
-    # get the new Jastrow parameters by getting the last num_jpars elements of vpars
-    new_jpars = vpars[end-num_jpars+1:end]
+    # get irreducible indices
+    irr_indices = collect(keys(jpar_map))
 
-    # overwrite current jpars 
-    jpars .= new_jpars
-
-    # overwrite jpars in map
-    list_of_keys = collect(keys(jpar_map))
-    for (i, key) in enumerate(list_of_keys)
-        jpar_map[key] = new_jpars[i]
+    # update all parameters except for the last one
+    for i in 1:(num_jpars-1)
+        # Extract the current (indices, jpars) tuple
+        indices, _ = jpar_map[irr_indices[i]]
+        
+        # Update the jpars while maintaining the indices
+        jpar_map[irr_indices[i]] = (indices, new_jpars[i])
     end
-
-    # push new elements to matrix
-    for (key, value) in jpar_map
-        # Extract the indices from the key
-        _, (i, j) = key
-        # Update the matrix at the specified indices
-        jpar_matrix[i, j] = value
-        jpar_matrix[j, i] = value
-    end
-
+    
     return nothing
 end
 
@@ -483,11 +453,10 @@ function recalc_Tvec!(jastrow::Jastrow, δT::Float64)
     Tᵤ = jastrow.Tvec
 
     # get matrix
-    jpar_matrix = jastrow.jpar_matrix
-    # jpar_matrix = get_jpar_matrix(model_geometry, jpars)
+    jpar_map = jastrow.jpar_map
 
     # recomputed T vector
-    Tᵣ = get_Tvec(jpar_matrix, jastrow_type, pconfig, pht)
+    Tᵣ = get_Tvec(jastrow_type, jpar_map, pconfig, pht, model_geometry)
 
     # difference in updated T vector and recalculated T vector
     diff = Tᵤ .- Tᵣ

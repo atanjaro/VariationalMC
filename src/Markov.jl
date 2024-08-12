@@ -73,7 +73,7 @@ function metropolis(W, jastrow, particle_positions, rng)
     # if site is unoccupied by same spin species, hop is possible
     if number_operator(l,pconfig)[beta_spin] == 1
         if verbose == true
-            println("Hop impossible!")  
+            println("Hop impossible! Rejected!")  
         end
         return LocalAcceptance(0, beta, beta_spin, k, l)
     else
@@ -84,7 +84,7 @@ function metropolis(W, jastrow, particle_positions, rng)
         # begin Metropolis algorithm
 
         # get Jastrow ratio (element of T vector)
-        Rⱼ = get_jastrow_ratio(k, l, jastrow)    
+        Rⱼ = get_jastrow_ratio(l, k, jastrow, pht, beta_spin)    
 
         # get wavefunction ratio (correpsonding element of Green's function)
         Rₛ = W[l, beta]  
@@ -92,7 +92,7 @@ function metropolis(W, jastrow, particle_positions, rng)
 
         acceptance_prob = Rⱼ * Rⱼ * Rₛ * Rₛ     
 
-        if acceptance_prob > 1 || rand(rng, Uniform(0, 1), 1)[1] < acceptance_prob
+        if acceptance_prob >= 1 || rand(rng) < acceptance_prob
             if verbose 
                 println("Hop accepted!")
                 println("Rⱼ = $Rⱼ")
@@ -139,15 +139,6 @@ function local_fermion_update!(W, D, Ne, model_geometry, tight_binding_model, ja
         # increment number of proposed hops
         proposed_hops += 1
 
-        # checks for numerical stability
-        if n_iter % n_stab == 0
-            # check stability of Green's function 
-            (W, D) = recalc_equal_greens(W, δW, D, pconfig)
-
-            # check stability of T vector
-            recalc_Tvec!(jastrow::Jastrow, δT::Float64)
-        end
-
         # get particle positions
         particle_positions = get_particle_positions(pconfig, model_geometry)    
 
@@ -191,10 +182,10 @@ function local_fermion_update!(W, D, Ne, model_geometry, tight_binding_model, ja
             update_equal_greens!(met_step, W)   
 
             # update T vector
-            update_Tvec!(met_step, jastrow, model_geometry)         
+            update_Tvec!(met_step, jastrow, model_geometry, pht)        
 
             # update variational parameters
-            sr_update!(measurement_container, determinantal_parameters, jastrow, model_geometry, tight_binding_model, pconfig, particle_positions, Np, W, A, η, dt)
+            sr_update!(measurement_container, determinantal_parameters, jastrow, model_geometry, tight_binding_model, pconfig, particle_positions, Np, W, A, η, dt, n_iter)
         end
         if debug
             @info "After update:"
@@ -204,6 +195,15 @@ function local_fermion_update!(W, D, Ne, model_geometry, tight_binding_model, ja
             println("Length of particle_positions: ", length(particle_positions))
         end
     end
+
+    # # checks for numerical stability
+    # if n_iter % n_stab == 0
+    #     # check stability of Green's function 
+    #     (W, D) = recalc_equal_greens(W, δW, D, pconfig)
+
+    #     # check stability of T vector
+    #     recalc_Tvec!(jastrow::Jastrow, δT::Float64)
+    # end
 
     # compute acceptance rate
     local_acceptance_rate = accepted_hops / proposed_hops     
