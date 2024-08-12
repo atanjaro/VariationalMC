@@ -1,17 +1,4 @@
-(updated 01/19):
-TODO: set initial Jastrow parameters to 0.0, unless read-in values are specified
-TODO: add method to update Jastrow pseudopotentials (specifically update jpar_matrix) and track it's history over N_updates
-TODO: add method to update vparr and track it's history over N_updates
-TODO: need to loop over number of vpars being optimized during local_update!()
-TODO: add test for parameter convergence
-TODO: update neighbor loop in measure_local_energy()
-TODO: change parameters to be optimized to a NamedTuple
-TODO: update get_SR_comatrix() and get_SR_forces(). To do this, may need to update method for derivatives and to get the local energy
-
-------------------------------------------------------------------------------------------------------------------------------
-
-
-Change log (11/30):
+Change log (11/30/2023):
 Updated method of performing variational parameter derivative, slater_derivative() (VMC.jl) 
 Fixed Metropolis updating, metropolis(). propose_random_hop() deprecated (VMC.jl)
 Prototyped measurements (Measurements.jl)
@@ -22,17 +9,17 @@ Updated method of getting variational parameter matrices, get_Ak_matrices() (Ham
 Added VariationalParameter constructor and updated method of variational parameter definition (Hamiltonian.jl)
 Removed optimization flags. If parameter is named in vector, it will be optimized (Hamiltonian.jl)
 
-Change log (12/04):
+Change log (12/04/2023):
 Created Utilities.jl to house various external matrix functions: diagonalize(), is_invertible(), complex_zeros()
 Created the complex_zeros() function to generalize matrices to have complex elements (Utilities.jl)
 
 
-Change log (12/05):
+Change log (12/05/2023):
 Moved all Green's function related functions to Greens.jl
 Moved is_open_shell() to Utilities.jl
 Added method for updating equal-time Green's function (Greens.jl)
 
-Change log (12/07):
+Change log (12/07/2023):
 Fixed bug where matrices when Lx or Ly = 1, 2 and Lx > Ly or Ly > Lx were being written incorrectly.
 Created StochasticReconfiguration.jl to house all functions pertaining to SR. 
 VMC.jl now only has stuff pertaining to local updates.
@@ -40,7 +27,7 @@ Changed build_slater_determinant() to build_determinantal_state(), as this is mo
 Changed local_slater_derivative() to local_determinantal_derivative(), as it is more accurate (StochasticReconfiguration.jl)
 
 
-Change log (01/10):
+Change log (01/10/2024):
 Created function prototypes related to SR/parameter updating including get_SR_matrix(), get_SR_forces(), parameter_gradient(), 
       and parameter_update!() (StochasticReconfiguration.jl)
 Fixed implementation get_Ak_matrices(), which also fixes the scaling issue (Hamiltonian.jl)
@@ -48,20 +35,20 @@ Updated local_determinantal_derivative() and local_jastrow_derivative() methods 
 Created the Jastrow type (Jastrow.jl)
 Updated build_jastrow_factor() method. Function now creates an instance of the Jastrow type (Jastrow.jl)
 
-Change log (01/11):
+Change log (01/11/2024):
 Updated the definition of 'η' to rflect its role as a a stabilization factor. Added 'dt', which is the initial SR optimization rate (run_simulation.jl)
 Upadted measure_double_occ(), measure_local_energy() (Measurements.jl)
 Changed get_SR_matrix() to get_SR_comatrix() (StochasticReconfiguration.jl)
 
-Change log (01/19):
+Change log (01/19/2024):
 Updated do_particle_hop!() (VMC.jl)
 
-Change log (01/24):
+Change log (01/24/2024):
 Updated recalc_equal_greens() and added maximum allowed error in Green's function as a stabilization factor (Greens.jl and run_simulation.jl)
 Added recalc_Tvec() for numerical stabilization (Jastrow.jl)
 Updated measurment initialization (Measurments.jl)
 
-Change log (01/31):
+Change log (01/31/2024):
 Updated methods for performing Green's function floating point error check (Greens.jl)
 Updated methods for performing T vector floating point error check (Greens.jl)
 Changed type VariationalParameter to DeterminantalParameters (Hamiltonian.jl)
@@ -72,28 +59,28 @@ Created method to find total number of variational_parameters get_num_vpars() (U
 Updated get_SR_comatrix() and get_SR_forces() methods (StochasticReconfiguration.jl)
 
 
-Change log (02/12):
+Change log (02/12/2024):
 Changed the name of functions get_SR_matrix(), get_SR_forces(), and parameter_update!() to get_sr_matrix(), get_sr_forces(), and sr_update!(), respectively (StochasticReconfiguration.jl)
 Updated definition of measure_local_energy() to properly loop over nearest neighbors of particle β (Measurements.jl)
 Moved derivative measurements to Measurements.jl, as they make more sense there
 Changed local_determinantal_derivative() and local_jastrow_derivative() to measure_local_detpar_derivative() and measure_local_jpar_derivative(), respectively (Measurements.jl)
 
 
-Change log (02/26):
+Change log (02/26/2024):
 Updated Jastrow type and add function map_jpars(), to more easily track Jastrow parameters (Jastrow.jl)
 
 
-Change log (04/22):
+Change log (04/22/2024):
 Updated some function defintiions in Jastrow.jl
 Updated some measurement schemes in Measurements.jl
 Created src directory
 Created test directory
 
-Change log (04/23):
+Change log (04/23/2024):
 Begin adding unit tests for each module
 Fixed bug in get_particle_numbers() where ndn was being calculated incorrectly
 
-Change log (04/24):
+Change log (04/24/2024):
 Added initialize_measurement_container() and initialize_measurements!() to Measurements.jl
 Updated definitions of measure_local_energy() and get_jastrow_ratio()
 Updated do_particle_hop!() into a mutating function
@@ -102,13 +89,13 @@ Updated local_update!() to local_fermion_update!()
 
 Updated initialize_measurement_container() to also hold measurements of the local derivatives. These are not written to scalar measurements because they are not a usual observable
 
-Change log (05/07):
+Change log (05/07/2024):
 Updated measurements to also record value of variational derivatives
 Updated metropolis() to also have arguments of 'W' and 'jastrow' and created additional versions which accepts mutiple Jastrow factors
 Updated generate_initial_onsite_phonon_configuration() to have the maximum upper bound be typemax(Int) (basically Inf)
 Updated generate_initial_bond_phonon_configuration() to have the maximum upper bound be typemax(Int) (basically Inf)
 
-Change log (05/08):
+Change log (05/08/2024):
 Updated methods for Jastrow factors and associated updates
 Updated metropolis() as previous retrieval of the Green's function element resulted in every proposed hop being rejected
 Added function measure_Δk() which returns all derivatives of all variational parameters
@@ -120,7 +107,7 @@ Need to update_equal_greens!() method as there is currently a dimension mistmatc
 New bug found: need to re-check how the code checks for singular configurations during the initial config step
 Maybe add a new type(s) for performing measurements?
 
-Change log (05/10, 05/21):
+Change log (05/10/2024, 05/21/2024):
 Fixed bug in update_equal_greens!(), as the outer product was not being taken correctly
 Performed test of local_fermion_update!() up to parameter tracking
 Re-updated metropolis() method to also handle multiple jastrow factors
@@ -134,7 +121,7 @@ Upcoming changes:
 Need to factor in binning for the measurment container (should be simple change)
 Need to update SR method accounting for changes in measurements (SR matrix, vector population)
 
-Change log (05/22):
+Change log (05/22/2024):
 Updated method for calculating SR force vector 
 Updated method for calculating SR covariance matrix
 Updated the measure_ΔkΔkp!() method
@@ -146,16 +133,16 @@ Upcoming changes:
 Need to factor in binning for the measurment container (should be simple change)
 Add tracking (measurements) of  variational parameters
 
-Change log (05/23):
+Change log (05/23/2024):
 Added parameter tracking to measurement container
 
 
-Change log (06/05):
+Change log (06/05/2024):
 
 Upcoming changes:
 Need to debug sr_update!() method. There seems to be an issue with the measurement of the local derivatives.
 
-Change log (06/11):
+Change log (06/11/2024):
 Fixed bug in initializing the measurement container, where the initial variational parameters were not initialized correctly.
 Fixed variational parameter derivative initialization in the measurement container.
 Fixed bug in measurement of local derivatives in the sr_update!() method.
@@ -173,7 +160,7 @@ Upcoming changes:
 Check propagation of iterations through the course of all updates.
 
 
-Change log (06/18):
+Change log (06/18/2024):
 Fixed get_sr_forces() method, which had previous issue retrieving the local energy.
 Fixed parameter_gradient() method, which was incorrectly adding the small variaiton for stabilization. Also fixed issue with the solving of the
       matrix equation required to get the variation of the parameters.
@@ -187,7 +174,7 @@ Need to check numerical stabilization routines.
 Need to implement binning!
 Need to add write_measurments!() method
 
-Change log (07/18):
+Change log (07/18/2024):
 Updated Jastrow keys and methods to include electron-phonon density-displacement and phonon density-density Jastrow factors:
       "e-den-den"   - electron density-density 
       "e-spn-spn"   - electron spin-spin
@@ -207,7 +194,7 @@ BUGFIX: There is a new bug in performing SR (sr_update!()) related to the meaasu
 Need to check cases where all updates are rejected?
 
 
-Change log (07/19):
+Change log (07/19/2024):
 Fixed bug in get_local_jpar_derivative() where the Jastrow keys had not yet been updated.
 Updated 'μ' to 'μ_BCS'.
 Added ability to specify charge and spin stripe initial states.
@@ -216,14 +203,14 @@ Upcoming changes:
 Need to check acceptance rates. 
 
 
-Change log (07/22):
+Change log (07/22/2024):
 Re-organized the structure of run_simulation.jl, which now has examples of different wavefunctions.
 
 Upcoming changes:
 BUG: During some simulation runtimes, a particle is mysteriously removed from 'pconfig', causing a reduction 
      in size of 'particle_positions', creating a bounds error. Must figure out why this 'leak' is occuring.
 
-Change log (07/24):
+Change log (07/24/2024):
 Streamlined get_particle_numbers() and get_particle_density() functions.
 
 Upcoming changes:
@@ -232,7 +219,7 @@ BUG: During some simulation runtimes, a particle is mysteriously removed from 'p
      simulations randomly
 BUG: parameter values are NOT being updated during the Monte Carlo cycles.
 
-Change log (07/25):
+Change log (07/25/2024):
 Updated initialize_measurement_container() method to store vectors of variational parameter values in parameter_measurements.
 Updated sr_update!() to push updated variational parameter values during Monte Carlo cycles.
 do_particle_hop!() method moved to ParticleConfiguration.jl.
@@ -245,7 +232,7 @@ Adding binning functionality to measurement container.
 Add write_measurements!() method.
 
 
-Change log (07/26):
+Change log (07/26/2024):
 Optimized and updated Greens.jl
       Optimized get_equal_greens() method.
       Optimzed update_equal_greens!() method.
@@ -271,7 +258,7 @@ Adding binning functionality to measurement container.
 Add write_measurements!() method.
 
 
-Change log (07/30):
+Change log (07/30/2024):
 Begin overhaul of the Jastrow.jl module.
 
 
@@ -326,7 +313,88 @@ Adding binning functionality to measurement container.
 Add write_measurements!() method.
 
 
+Change log (08/06/2024):
+Begin major overhaul of the Measurements module:
+      Fixed a major bug in get_local_energy() method as the energy obtained from summing over different spin sectors was being done incorrectly.
+      Separated get_local_energy() into parts: get_kinetic_energy() and get_hubbard_energy() in anticipation of the 
+            future get_phonon_energy().
+Further overhaul of the Jastrow module:
+      instead of mapping distances, map jastrow site indices to irreducible indices to associate with each Jastrow parameter.
 
+Upcoming changes:
+Continue further overhaul of the Jastrow module:
+      Institute new method for storing Jastrow parameters - the dictionary 'jpar_map' will have irreducible index relations as keys referencing values of 
+            the indices by which they were derived, and their unique Jastrow parameters. Will once again set the parameter corresponding to the 
+            largest distance to be 0.
+Debug Measurements module, specifically to track the number of current iterations during the course of measurements.
+Adding binning functionality to measurement container.
+Add write_measurements!() method.
+
+
+Change log (08/07/2024):
+Removed 'Distances' package from dependencies.
+Continue further overhaul of the Jastrow module:
+      Added initialize_jpars() methods.
+      Redfined the Jastrow struct.
+      Deprecated the get_distances() method
+      Deprecated get_jpar_matrix() method
+      Deprecated get_jpar_map() method
+      Updated get_Tvec() method
+      Updated update_Tvec!() method
+      Updated build_jastrow_factor() method and added an additional version for reading in parameters 
+Added fsgn() method to Greens.jl for determining the Fermion sign.
+Changed 'cat_vpars' to 'all_vpars'.
+
+Upcoming changes:
+Need to change update_jastrow!() and recalc_Tvec() methods.
+Need to ensure that all Jastrow parameters are optimized except for the last one, which should be fixed to 0.
+Debug Measurements module, specifically to track the number of current iterations during the course of measurements.
+Adding binning functionality to measurement container.
+Add write_measurements!() method.
+
+
+Change log (08/08/2024):
+Continue further overhaul of the Jastrow module:
+      Updated update_jastrow!() method. All parameters are updated except for the last one.
+      Updated recalc_Tvec() method
+      Re-updated initialize_jpars() methods to also write indices to the map for later use in finding the derivatives of 
+            Jastrow parameters.
+Moved get_local_jpar_derivative() and get_local_detpar_derivative() to the Hessian module.
+Updated get_local_jpar_derivative() method.
+Continue overhaul of Measurements module:
+      Refreshed initialize_measurement_container() method
+      Refreshed all measurement metheods which includes adding an 'iter' variable that tracks the current iteration
+      Made energy measurements standard in the measurement container
+Added further iteration tracking in Hessian.jl methods.
+Added update_detpars!() method to Hamiltonian module.
+
+Upcoming changes:
+Need to issue with 'Inf's in energy measurements.
+Update pushback of variational parameter values to the measurement container
+Adding binning functionality to measurement container.
+Add write_measurements!() method.
+
+
+Notes: (remove before pushing next version)
+initial energy: sum(ε₀)/model_geometry.lattice.N
+
+Changelog (08/09/2024):
+Instead of random value intialization, updated initialize_jpars() method to start all values are 0.0.
+Cleaned up Hamiltonian module:
+      Updated fields in build_mean_field_hamiltonian() method    
+Fixed bug with checking for singulat configurations:
+      A quick test on a 2 site model produces a finite determinant for matrix D and during local updates, does not become ill-conditioned
+      (i.e. Infs or NaNs in values). This is because the simulation did not start out on a singular configuration.
+Fixed a bug in energy measurments where particle iteration was fixed at 1 (whoops!). Will continue debugging...
+
+Upcoming changes:
+Re-check calculation of detpar derivatives.
+May need to add additional starting configuration method where a certain order is generated. For instance,
+      starting the simulation out in an AFM state.
+Need to track the energy values even if a change is rejected. That is, carry over values from the previous iteration.
+Update pushback of variational parameter values to the measurement container
+Adding binning functionality to measurement container.
+Add write_measurements!() method.
 
 
 

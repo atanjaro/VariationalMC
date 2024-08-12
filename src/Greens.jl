@@ -1,11 +1,11 @@
 """
-    build_determinantal_state() 
+    build_determinantal_state( H_mf::Matrix{AbstractFloat} ) 
 
 Returns initial energies ε₀, matrix M, and Slater matrix D in the many-particle configuration 
 basis.
 
 """
-function build_determinantal_state()
+function build_determinantal_state(H_mf)
     # Diagonalize Hamiltonian
     ε, U = diagonalize(H_mf)
 
@@ -23,13 +23,17 @@ function build_determinantal_state()
     M = hcat(U[:,1:Np])
 
     # Build Slater determinant
-    while true
+    # in case that there is no finite overlap...
+    max_configs = (n, k) -> div(prod(n:-1:(n-k+1)), factorial(k))
+    max_attempts = max_configs(model_geometry.lattice.N, nup)
+    attempt = 0
+    while attempt < max_attempts
         pconfig = generate_initial_fermion_configuration()
         config_indices = findall(x -> x == 1, pconfig)
         D = M[config_indices, :]
 
         # Check that starting configuration is not singular
-        if is_invertible(D)
+        if is_invertible(D) 
             # Write matrices to file if needed
             if write
                 writedlm("H_mf.csv", H_mf)
@@ -40,6 +44,8 @@ function build_determinantal_state()
 
             return D, pconfig, ε, ε₀, M, U
         end
+        # Increment attempt counter
+        attempt += 1
     end    
 end
 
@@ -127,5 +133,21 @@ function recalc_equal_greens(Wᵤ::Matrix{Float64}, δW::Float64, D::Matrix{Floa
         return Wᵤ, D
     end  
 end
+
+
+"""
+
+    fsgn( W::Matrix{Float64} )
+
+Given the equal time Green's function, returns the value of the Fermion sign.
+
+"""
+function fsgn(W::Matrix{Float64})
+    M_up = W[1:N, :]
+    M_dn = W[N+1:2*N, :]
+
+    return sign(det(M_up) * det(M_dn))
+end
+
 
 

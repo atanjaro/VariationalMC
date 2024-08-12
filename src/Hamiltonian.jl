@@ -1,19 +1,8 @@
-using LatticeUtilities
-using LinearAlgebra
-using Test
-
-# export ModelGeometry
-# export TightBindingModel
-# export initialize_determinantal_parameters
-# export build_mean_field_hamiltonian
-# export build_slater_determinant
-# export get_Ak_matrices
-
-
 """
+
     ModelGeometry( unit_cell::UnitCell, lattice::Lattice )
 
-A type defining model geometry
+A type defining model geometry.
 
 """
 struct ModelGeometry
@@ -24,6 +13,7 @@ struct ModelGeometry
     # lattice bonds
     bond::Vector{Vector{Bond{2}}}
 end
+
 
 
 """
@@ -42,10 +32,11 @@ end
 
 
 """
+
     DeterminantalParameters( pars::Vector{AbstractString}, 
                         vals::Vector{AbstractFloat}, num_detpars::Int )
 
-A type defining a set of variational parameters.
+A type defining a set of variational parameters obtained from the fermionic determinant.
 
 """
 struct DeterminantalParameters
@@ -59,6 +50,7 @@ end
 
 
 """
+
     initialize_determinantal_parameters(pars:;Vector{AbstractString}, vals::Vector{AbstractFloat} ) 
 
 Constructor for the variational parameters type.
@@ -70,6 +62,26 @@ function initialize_determinantal_parameters(pars, vals)
 
     return DeterminantalParameters(pars, vals, num_detpars)
 end
+
+
+"""
+
+    update_detpars!( determinantal_parameters::DeterminantalParameters, new_vpars::Vector{AbstractFloat} )
+
+Updates determinantal_parameters.
+
+"""
+function update_detpars!(determinantal_parameters, new_vpars)
+    num_detpars = determinantal_parameters.num_detpars
+    current_vals = determinantal_parameters.vals
+
+    new_detpars = new_vpars[1:num_detpars]
+
+    current_vals .= new_detpars
+
+    return nothing
+end
+
 
 
 """
@@ -89,9 +101,10 @@ end
 
 
 """
+
     build_tight_binding_model( tight_binding_model::TightBindingModel ) 
 
-Constructs a 2⋅n⋅N by 2⋅n⋅N Hamiltonian matrix, where n is the
+Constructs a 2 × n × N by 2 × n × N Hamiltonian matrix, where n is the
 number of orbitals per unit cell and N is the number of lattice sites,
 given tight binding parameters t, t', and μ. TODO: change tight binding
 parameters to tx,ty,t' for future SSH model functionality.
@@ -299,9 +312,10 @@ end
 
 
 """
+
     build_variational_terms( determinantal_parameters::DeterminantalParameters ) 
 
-Constructs a 2⋅n⋅N by 2⋅n⋅N matrices to be added to the non-interacting tight binding
+Constructs a 2 × n × N by 2 × n × N matrices to be added to the non-interacting tight binding
 Hamiltonian for each variational parameter. Returns a vector of the sum of
 matrices and a vector of individual matrix terms.
 
@@ -474,15 +488,15 @@ function build_variational_terms(determinantal_parameters)
 end
 
 
-
 """
-    build_mean_field_hamiltonian() 
+
+    build_mean_field_hamiltonian( tight_binding_model::TightBindingModel, determinantal_parameters::DeterminantalParameters ) 
 
 Constructs a matrix by combining the non-interacting Hamiltonian with
 matrix of variational terms.
 
 """
-function build_mean_field_hamiltonian()
+function build_mean_field_hamiltonian(tight_binding_model::TightBindingModel, determinantal_parameters::DeterminantalParameters)
     if verbose
         println("Building mean-field Hamiltonian...")
     end
@@ -491,6 +505,7 @@ end
 
 
 """
+
     get_Ak_matrices( V::Vector{Matrix{AbstractFloat}}, U::Matrix{AbstractFloat}, ε::Vector{AbstractFloat}, model_geometry::ModelGeometry ) 
     
 Returns variational parameter matrices Aₖ from the corresponding Vₖ. Computes Qₖ = (U⁺VₖU)_(ην) / (ε_η - ε_ν), for η > Nₚ and ν ≤ Nₚ and is 0 otherwise

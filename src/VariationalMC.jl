@@ -6,6 +6,11 @@ using LinearAlgebra
 using DelimitedFiles
 using BenchmarkTools
 using Profile
+using Distributions
+using OrderedCollections
+using CSV
+using DataFrames
+using DataStructures
 
 
 include("Hamiltonian.jl") 
