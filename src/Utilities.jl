@@ -28,22 +28,28 @@ function is_invertible(D)
 
     # check the determinant is non-zero
     det_D = det(D)
-    det_check = abs(det_D) > ϵ * norm(D)
+    norm_D = norm(D)
+    det_check = abs(det_D) > ϵ * norm_D
 
     if !det_check
         if verbose
             println("Singular configuration detected! Generating new configuration...")
+            println("Non-zero determinant detected:")
+            println("|$det_D| < $ϵ × $norm_D")
         end
         return false
     end
 
     # check the condition number
     cond_D = cond(D)
-    cond_check = cond_D < 1/ϵ
+    inv_eps = 1/ϵ
+    cond_check = cond_D < inv_eps
 
     if !cond_check
         if verbose
             println("Singular configuration detected! Generating new configuration...")
+            println("Condition number test failed:")
+            println("$cond_D > $inv_eps")
         end
         return false
     end
@@ -51,11 +57,13 @@ function is_invertible(D)
     # check for singular values
     singular_values = svdvals(D)
     smallest_singular_value = minimum(singular_values)
-    sing_check = smallest_singular_value > ϵ * norm(D)
+    sing_check = smallest_singular_value > ϵ * norm_D
 
     if !sing_check
         if verbose
             println("Singular configuration detected! Generating new configuration...")
+            println("Singular values detected:")
+            println("$smallest_singular_value < $ϵ × norm_D")
         end
         return false
     end
@@ -71,11 +79,13 @@ function is_invertible(D)
 
     # Find the minimum absolute value of the diagonal of U
     min_pivot = minimum(abs.(U_diag))
-    pivot_check = min_pivot > ϵ * norm(D)
+    pivot_check = min_pivot > ϵ * norm_D
 
     if !pivot_check
         if verbose
             println("Singular configuration detected! Generating new configuration...")
+            println("LU partial pivoting check failed:")
+            println("$min_pivot < $ϵ × $norm_D")
         end
         return false
     end
@@ -116,25 +126,10 @@ end
 Returns the total number of variational parameters.
 
 """
-function get_num_vpars()
-    num_jpars = 0
-
+function get_num_vpars(determinantal_parameters, jastrow)
     num_detpars = determinantal_parameters.num_detpars
 
-    # check if density Jastrow is defined
-    if isdefined(Main, :density_jastrow)
-        num_jpars += density_jastrow.num_jpars
-    end
-
-    # check if spin Jastrow is defined
-    if isdefined(Main, :spin_jastrow)
-        num_jpars += spin_jastrow.num_jpars
-    end
-
-    # check if e-ph Jastrow is defined
-    if isdefined(Main, :eph_jastrow)
-        num_jpars += eph_jastrow.num_jpars
-    end
+    num_jpars = jastrow.num_jpars
 
     num_vpars = num_detpars + num_jpars
 

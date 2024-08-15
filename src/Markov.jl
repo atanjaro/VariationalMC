@@ -1,8 +1,3 @@
-using LinearAlgebra
-using Distributions
-
-include("ParticleConfiguration.jl")
-
 """
     LocalAcceptance( acceptance::Bool, particle::Int, spin::Int, isite::Int, fsite::Int )
 
@@ -89,10 +84,13 @@ function metropolis(W, jastrow, particle_positions, rng)
         # get wavefunction ratio (correpsonding element of Green's function)
         Rₛ = W[l, beta]  
                           
-
         acceptance_prob = Rⱼ * Rⱼ * Rₛ * Rₛ     
 
-        if acceptance_prob >= 1 || rand(rng) < acceptance_prob
+        if debug
+            println(acceptance_prob)
+        end
+
+        if acceptance_prob >= 1 || rand(rng, Uniform(0,1)) < acceptance_prob
             if verbose 
                 println("Hop accepted!")
                 println("Rⱼ = $Rⱼ")
@@ -113,14 +111,14 @@ end
 
 
 """
-    local_fermion_update!(Ne::Int, model_geometry::ModelGeometry, tight_binding_model::TightBindingModel, 
+    local_fermion_update!(Ne::Int, model_geometry::ModelGeometry, 
                         jastrow::Jastrow, pconfig::Vector{Int64}, rng::Xoshiro)
 
 Perform a local MC update. Proposes moves and accept/rejects via Metropolis algorithm,
-if accepted, updates particle positions, T vector, Green's function (W matrix), and variational parameters.
+if accepted, updates particle positions, T vector, and Green's function (W matrix).
 
 """
-function local_fermion_update!(W, D, Ne, model_geometry, tight_binding_model, jastrow, pconfig, rng, n_iter, n_stab)
+function local_fermion_update!(W, D, Ne, model_geometry, jastrow, pconfig, rng, n_iter, n_stab)
     if verbose
         println("Starting new Monte Carlo cycle...")
     end
@@ -131,87 +129,85 @@ function local_fermion_update!(W, D, Ne, model_geometry, tight_binding_model, ja
     accepted_hops = 0
 
     # perform number of metropolis steps equal to the number of electrons
+    # for help in decorrelation
     for s in 1:Ne
         if verbose
             println("Metropolis step = $s")
         end
-
+    
         # increment number of proposed hops
         proposed_hops += 1
-
+    
         # get particle positions
         particle_positions = get_particle_positions(pconfig, model_geometry)    
-
+    
         # accept/reject (Metropolis) step
         met_step = metropolis(W, jastrow, particle_positions, rng)    
-
+    
         # whether hop was accepted
         acceptance = met_step.acceptance
-
+    
         # DEBUG
         if debug
             prop_particle = met_step.particle
             prop_spin = met_step.spin
             prop_isite = met_step.isite
             prop_fsite = met_step.fsite
-
+    
             println("Particle: $prop_particle")
             println("Spin: $prop_spin")
             println("initial site: $prop_isite")
             println("final site: $prop_fsite")
-
+    
             @info "Before update:"
             @info "particle_positions: $particle_positions"
             @info "pconfig: $pconfig"
         end
-
+    
         # if hop is accepted 
         if acceptance == 1
             accepted_hops += 1
-
+    
             # perform hop   
             do_particle_hop!(met_step, pconfig, model_geometry)                 
-
+    
             # update particle positions
             update_particle_position!(met_step, particle_positions)     
-
-            # # update particle positions 
-            # particle_positions = get_particle_positions(pconfig)  
-
+    
             # update Green's function
             update_equal_greens!(met_step, W)   
-
+    
             # update T vector
-            update_Tvec!(met_step, jastrow, model_geometry, pht)        
-
-            # update variational parameters
-            sr_update!(measurement_container, determinantal_parameters, jastrow, model_geometry, tight_binding_model, pconfig, particle_positions, Np, W, A, η, dt, n_iter)
+            update_Tvec!(met_step, jastrow, model_geometry, pht)  
         end
+        # DEBUG
         if debug
             @info "After update:"
             @info "particle_positions: $particle_positions"
             @info "pconfig: $pconfig"
-
+    
             println("Length of particle_positions: ", length(particle_positions))
         end
     end
 
-    # # checks for numerical stability
-    # if n_iter % n_stab == 0
-    #     # check stability of Green's function 
-    #     (W, D) = recalc_equal_greens(W, δW, D, pconfig)
+    
+    # check for numerical stability after a certain number of iterations
+    if n_iter % n_stab == 0
+        # check stability of Green's function 
+        (W, D) = recalc_equal_greens(W, δW, D, pconfig)
 
-    #     # check stability of T vector
-    #     recalc_Tvec!(jastrow::Jastrow, δT::Float64)
-    # end
+        # check stability of T vector
+        recalc_Tvec!(jastrow::Jastrow, δT::Float64)
+    end
 
-    # compute acceptance rate
+    # compute local acceptance rate
     local_acceptance_rate = accepted_hops / proposed_hops     
 
     return local_acceptance_rate, pconfig, jastrow, W, D
 end
 
 
-
+# # update variational parameters
+# sr_update!(measurement_container, determinantal_parameters, jastrow, model_geometry, tight_binding_model, pconfig, particle_positions, Np, W, A, η, dt, n_iter)
 
 

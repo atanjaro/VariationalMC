@@ -292,6 +292,10 @@ Redo reporting of acceptance/acceptance rates.
 Numerical stabilzation should be done about every 500 iterations, need to 
 find a way to incorporate this during MC cycle.
 
+------------------------------------------------------------
+                  WEEK OF AUGUST 05, 2024
+------------------------------------------------------------
+
 Change log (08/05/2024):
 Fixed bug in update_jastrow!() method involving inability to parse jpar_map keys.
 Updated LocalAcceptance constructor.
@@ -374,11 +378,7 @@ Update pushback of variational parameter values to the measurement container
 Adding binning functionality to measurement container.
 Add write_measurements!() method.
 
-
-Notes: (remove before pushing next version)
-initial energy: sum(ε₀)/model_geometry.lattice.N
-
-Changelog (08/09/2024):
+Change log (08/09/2024):
 Instead of random value intialization, updated initialize_jpars() method to start all values are 0.0.
 Cleaned up Hamiltonian module:
       Updated fields in build_mean_field_hamiltonian() method    
@@ -398,4 +398,79 @@ Add write_measurements!() method.
 
 
 
+------------------------------------------------------------
+                  WEEK OF AUGUST 12, 2024
+------------------------------------------------------------
 
+Change log (08/12/2024):
+
+Upcoming changes:
+Performed debug of Jastrow module
+      Check computation of all Jastrow related quantities.
+      Check updates of Jastrow parameters.
+
+
+Re-check calculation of detpar derivatives.
+May need to add additional starting configuration method where a certain order is generated. For instance,
+      starting the simulation out in an AFM state.
+Need to track the energy values even if a change is rejected. That is, carry over values from the previous iteration.
+Update pushback of variational parameter values to the measurement container
+Adding binning functionality to measurement container.
+Add write_measurements!() method.
+
+
+Change log (08/13/2024):
+Updated local_fermion_update!() method by changing the order sr_update!() and update_Tvec!().
+Commented out 'measure_Δk!(measurement_container, determinantal_parameters, jastrow, model_geometry, pconfig, particle_positions,Np, W, A,iter)' in 
+      get_force_vector() method as this would double measure the derivative which would have been done prior in the get_hessian_matrix() method.
+
+Upcoming changes:
+Need to redo thermalization/equilibration method. Rather than starting to measure everything off the bat, run through a certain number of 
+      configurations first then, begin measurements. This may solve the issue with parameter instability so far.
+May need to add additional starting configuration method where a certain order is generated. For instance,
+      starting the simulation out in an AFM state: pconfig(4x4) = [1,0,1,0,0,1,0,1,1,0,1,0,0,1,0,1,0,1,0,1,1,0,1,0,0,1,0,1,1,0,1,0]
+Update pushback of variational parameter values to the measurement container
+Adding binning functionality to measurement container.
+Add write_measurements!() method.
+
+Change log (08/14/2024):
+Major overhaul of thermalization/optimization algorithm:
+      1. For thermalization/equilibration updates, no measurements are to be taken. The only quantities that should be updated are the particle configuration,
+            the Green's function, and the T vector.
+      2. After theramlization is complete, we begin optimization updates and begin measuring quantities for Stochastic Reconfiguration.
+      3. At the end, another Monte Carlo cycle is initiated to take measurements of various observables.
+      4. Write all measurements to file.
+
+      Updated local_fermion_update!() method to not include SR updates. This will allow it to be used correctly for doing thermalization updates.
+      Updated is_invertible() information printing.
+      Re-re-updated the initialize_measurement_container() method. Binning is now incorporated into the measurement container.
+      Updated the initialize_measurements!() method for the intialization of observable measurements.
+      Updated measure_Δk!() and measure_ΔkE!() methods.
+
+Upcoming changes:
+add an 'update_container!()' method?
+Change method of parameter updating in sr_update!() method.
+Need a better way to tracking the current number of visited configurations for measurements. Initially we start by doing N_equil*Np + n. Need some kind of accumulator
+      for configurations.
+May need to add additional starting configuration method where a certain order is generated. For instance,
+      starting the simulation out in an AFM state: pconfig(4x4) = [1,0,1,0,0,1,0,1,1,0,1,0,0,1,0,1,0,1,0,1,1,0,1,0,0,1,0,1,1,0,1,0]
+Add write_measurements!() method.
+
+
+
+Change log (08/15/2024):
+Added 'N_configs' to measurement container to track the number of vsited configurations.
+Updated measurement function definitions to take n, bin, N_configs for the nth bin and current number of configurations visited along the 
+      Markov chain. Update includes functions in Hessian.jl.
+Fixed minor BUG in get_hessian_matrix() method where the incorrect value of Δk from the measurement container.
+Fixed minor BUG in measurement container initialization, where the inocrrect bin sizes for the "ΔkE" were being initialized.
+Fixed minor BUG in measurement container where the incorrect number of parameters initializes vectors of the wrong size.
+Added parameter updating to measurement container in sr_update!() method.
+
+Upcoming changes:
+BUG: derivative and parameter updating. Information is being written to the measurement container incorrectly, thus 
+      the optimization step does not function properly.
+add an 'update_container!()' method?
+May need to add additional starting configuration method where a certain order is generated. For instance,
+      starting the simulation out in an AFM state: pconfig(4x4) = [1,0,1,0,0,1,0,1,1,0,1,0,0,1,0,1,0,1,0,1,1,0,1,0,0,1,0,1,1,0,1,0]
+Add write_measurements!() method.

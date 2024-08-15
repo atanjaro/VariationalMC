@@ -9,7 +9,7 @@ using OrderedCollections
 using CSV
 using DataFrames
 using DataStructures
-
+using Distributions
 
 # files to include
 include("Hamiltonian.jl")
@@ -26,8 +26,8 @@ include("Measurements.jl")
 #############################
 
 # define the size of the lattice
-Lx = 4
-Ly = 4
+Lx = 2
+Ly = 1
 
 # define initial electron density
 n̄ = 1.0
@@ -43,7 +43,7 @@ t = 1.0
 tp = 0.0
 
 # Hubbard-U
-U = 8.0
+U = 0.5
 
 # (BCS) chemical potential
 μ_BCS = 0.0
@@ -64,8 +64,8 @@ readin_jpars = false
 path_to_jpars = "/Users/xzt/Documents/VariationalMC/src/jastrow_out.csv"
 
 # parameters to be optimized and initial value
-parameters_to_optimize = ["Δs", "μ_BCS"]        # BCS wavefunction
-parameter_values = [0.3, μ_BCS]                 # pht = true
+parameters_to_optimize = ["Δs"]        # BCS wavefunction
+parameter_values = [0.3]                 # pht = true
 
 # parameters to be optimized and initial value
 # parameters_to_optimize = ["Δcs", "Δss"]       # stripe wavefunction
@@ -96,11 +96,11 @@ seed = abs(rand(Int))
 # initialize random number generator
 rng = Xoshiro(seed)
 
-# number of thermalization updates
-N_burnin = 3000
+# number of equilibration/thermalization updates (really N_equil × Np)
+N_equil = 100
 
-# number of simulation updates
-N_updates = 1000
+# number of optimization/simulation updates (really N_updates × Np)
+N_updates = 300
 
 # number of bins
 N_bins = 100
@@ -137,7 +137,7 @@ additional_info = Dict(
     "δW" => δW,
     "δT" => δT,
     "time" => 0.0,
-    "N_burnin" => N_burnin,
+    "N_equil" => N_equil,
     "N_updates" => N_updates,
     "N_bins" => N_bins,
     "bin_size" => bin_size,
@@ -204,36 +204,20 @@ A = get_Ak_matrices(V, Uₑ, ε, model_geometry)
 W = get_equal_greens(M, D)
 
 # construct electron density-density Jastrow factor
-jastrow = build_jastrow_factor("e-den-den", model_geometry, pconfig, pht, rng, readin_jpars)
+jastrow = build_jastrow_factor("e-den-den", model_geometry, pconfig, pht, readin_jpars)
 
-# other Jastrow factors
-# construct electron spin-spin Jastrow factor 
-# e_spn_spn_jastrow = build_jastrow_factor("e-spn-spn")
-
-# construct electron-phonon density-density Jastrow factor 
-# eph_den_den_jastrow = build_jastrow_factor("eph-den-den")
-
-# construct electron-phonon density-displacement Jastrow factor
-# eph_den_dsp_jastrow = build_jastrow_factor("eph-den-dsp")
-
-# construct phonon displacement-displacement Jastrow factor
-# ph_dps_dsp_jastrow = build_jastrow_factor("eph-dsp-dsp")
-
-# initialize uncorrelated phonon state and initial particle configuration
-# (P, phconfig) = build_phonon_state()
+# initialize all variational parameters to be optimized
+variational_parameters = all_vpars(determinantal_parameters, jastrow)
 
 #############################
 ## INITIALIZE MEASUREMENTS ##
 #############################
 
 # initialize measurement container for VMC measurements
-measurement_container = initialize_measurement_container(model_geometry, N_burnin, N_updates, determinantal_parameters, jastrow)
+measurement_container = initialize_measurement_container(model_geometry, variational_parameters, Np, N_equil, N_bins, bin_size)
 
-# add any additional measurements by using initialize_measurements!()
-
-# initialize correlation measurements
-# initialize_correlation_measurements!(measurement_container, "density")
-
+# initialize energy measurements
+initialize_measurements!(measurement_container, "energy")
 
 ###########################################
 ## PERFORM BURNIN/THERMALIZATION UPDATES ##
@@ -245,49 +229,63 @@ if verbose
     println("|| START OF VMC SIMULATION ||")
 end
 
-# Iterate over burnin/thermalization updates.
-for n in 1:N_burnin
+# Iterate over equilibration/thermalization updates.
+for n in 1:N_equil
+    if verbose
+        println("|| BEGIN EQUILIBRATION ||")
+    end
+
     # perform local update to fermionic dofs
-    (local_acceptance_rate, pconfig, jastrow, W, D) = local_fermion_update!(W, D, Ne, model_geometry, tight_binding_model, jastrow, pconfig, rng, n, n_stab)
+    (local_acceptance_rate, pconfig, jastrow, W, D) = local_fermion_update!(W, D, Ne, model_geometry, jastrow, pconfig, rng, n, n_stab)
 
     # record acceptance rate
     additional_info["fermionic_local_acceptance_rate"] += local_acceptance_rate
 
-    # perform local updates to phonon dofs
-    # local_phonon_update!(model_geometry, electron_phonon_model, jastrow, phconfig)
+    if verbose
+        println("|| END EQUILIBRATION ||")
+    end
 
-    # additional_info["phononic_local_acceptance_rate"] += acceptance_rate
 end
 
 
-##################################################################
-## PERFORM SIMULATION/MEASUREMENT UPDATES AND MAKE MEASUREMENTS ##
-##################################################################
+#######################################################
+## PERFORM OPTMIZATION UPDATES AND MAKE MEASUREMENTS ##
+#######################################################
+
+if verbose
+    println("|| BEGIN OPTIMIZATION ||")
+end
 
 # Iterate over the number of bins, i.e. the number of measurements will be dumped to file.
 for bin in 1:N_bins
 
-    # Iterate over the number of updates and measurements performed in the current bin.
+    if verbose
+        println("Populating bin $bin")
+    end
+
+    # Iterate over the number of optimizations/updates performed in the current bin.
     for n in 1:bin_size
         # perform local update to fermionic dofs
-        (acceptance_rate, pconfig, jastrow, W, D) = local_fermion_update!(W, D, Ne, model_geometry, tight_binding_model, e_den_den_jastrow, pconfig, rng, n, n_stab)
+        (acceptance_rate, pconfig, jastrow, W, D) = local_fermion_update!(W, D, Ne, model_geometry, jastrow, pconfig, rng, n, n_stab)
 
         # record acceptance rate
         additional_info["fermionic_local_acceptance_rate"] += acceptance_rate
 
-        # perform local updates to phonon dofs
-        # local_phonon_update!(model_geometry, electron_phonon_model, jastrow, phconfig)
-
-        # additional_info["phononic_local_acceptance_rate"] += acceptance_rates
+        # perform stochastic reconfiguration
+        measurement_container = sr_update!(measurement_container, determinantal_parameters, jastrow, model_geometry, tight_binding_model, pconfig, Np, W, A, η, dt, n, bin)
     end
 
-    # Write the average measurements for the current bin to file.
-    write_measurements!(
-            measurement_container = measurement_container,
-            model_geometry = model_geometry,
-            bin = bin,
-            bin_size = bin_size
-    )
+    # # Write the average measurements for the current bin to file.
+    # write_measurements!(
+    #         measurement_container = measurement_container,
+    #         model_geometry = model_geometry,
+    #         bin = bin,
+    #         bin_size = bin_size
+    # )
+end
+
+if verbose
+    println("|| END OPTIMIZATION ||")
 end
 
 # end time for simulation
@@ -298,9 +296,6 @@ end
 
 # record simulation runtime
 additional_info["time"] += t_end - t_start
-
-# normalize acceptance rate measurements
-additional_info["local_acceptance_rate"] /= (N_burnin + N_updates)
 
 # write simulation information to file
 # save_simulation_info(simulation_info, additional_info)

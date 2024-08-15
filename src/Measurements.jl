@@ -1,43 +1,38 @@
 """
 
-    initialize_measurement_container( model_geometry::ModelGeometry, N_burnin::Int, N_updates::Int )
+    initialize_measurement_container( model_geometry::ModelGeometry0 )
 
 Creates dictionaries of generic arrays for storing measurements. Each dictionary in the container
-has (keys => values): observable_name => local_values (i.e. ∑ O_loc(x)), measured_values (i.e. ⟨O⟩≈(N)⁻¹local_values)
+has (keys => values): observable_name => local_values (i.e. ∑ O_loc(x)), binned_values (i.e. ⟨O⟩≈(N)⁻¹local_values)
 
 """
-function initialize_measurement_container(model_geometry::ModelGeometry, N_burnin::Int, N_updates::Int, determinantal_parameters, jastrow)
+function initialize_measurement_container(model_geometry::ModelGeometry, variational_parameters, Np, N_equil, N_bins, bin_size)
     # one side of the lattice
     L = model_geometry.lattice.L
 
     # total number of lattice sites
     N = model_geometry.lattice.N
 
-    # number of orbitals per unit cell
-    norbs = model_geometry.unit_cell.n
+    # number of variational parameters to be optimized
+    num_vpars = length(variational_parameters)
 
-    # total number of MC iterations
-    N_iter = N_burnin + N_updates
-
-    # initialize parameter values
-    vpars = all_vpars(determinantal_parameters, jastrow)
-
-    # number of parameters
-    num_vpars = length(vpars)
+    # number of initial visited configurations
+    N_configs = N_equil * Np
 
     # dictionary to store scalar measurements
     scalar_measurements = Dict{String, Any}([
         ("density", 0.0),        # average density per orbital species
         ("double_occ", 0.0),     # average double occupancy per orbital species
-        ("parameters", Vector{Vector{AbstractFloat}}(undef, N_iter)),       # variational parameters
-        ("energy", (sum(ε₀)/N,  Vector{AbstractFloat}(undef, N_iter)))          # energy
+        ("parameters", (variational_parameters, [[zeros(num_vpars) for _ in 1:bin_size] for _ in 1:N_bins])),       # variational parameters
+        ("energy", (0.0,  [zeros(bin_size) for _ in 1:N_bins])),          # energy
+        ("pconfig", (0.0, [zeros(bin_size) for _ in 1:N_bins]))           # particle configurations
     ])                     
 
     # dictionary to store derivative measurmements
     derivative_measurements = Dict{String, Any}([
-        ("Δk", (zeros(Float64, num_vpars), Vector{Vector{Float64}}(undef, N_iter))),               
-        ("ΔkΔkp", (zeros(Float64, num_vpars), Vector{Matrix{Float64}}(undef, N_iter))),            
-        ("ΔkE", (zeros(Float64, num_vpars), Vector{Vector{Float64}}(undef, N_iter)))      
+        ("Δk", (zeros(num_vpars), [[zeros(num_vpars) for _ in 1:bin_size] for _ in 1:N_bins])),               
+        ("ΔkΔkp", (zeros(num_vpars,num_vpars), [[zeros(num_vpars,num_vpars) for _ in 1:bin_size] for _ in 1:N_bins])),            
+        ("ΔkE", (zeros(num_vpars), [[zeros(num_vpars) for _ in 1:bin_size] for _ in 1:N_bins]))      
     ])      
 
     # dictionary to store correlation measurements
@@ -50,8 +45,10 @@ function initialize_measurement_container(model_geometry::ModelGeometry, N_burni
         correlation_measurements  = correlation_measurements,                       
         L                         = L,
         N                         = N,
-        norbs                     = norbs,
-        N_iter                    = N_iter                          
+        N_configs                 = N_configs,
+        N_bins                    = N_bins,
+        bin_size                  = bin_size,
+        num_vpars                 = num_vpars                      
     )
 
     return measurement_container
@@ -67,9 +64,17 @@ necessary to store measurements in respective bins.
 
 """
 function initialize_measurements!(measurement_container, observable)
-    (; scalar_measurements, N_iter, N, norbs) = measurement_container
+    (; scalar_measurements, N) = measurement_container
 
-    if observable == "site_dependent_density"
+    if observable == "energy"
+        # initialize with the initial energy per site
+        init_energy = sum(ε₀) / N
+
+        # update the energy container
+        init_econt = measurement_container.scalar_measurements["energy"]
+        new_econt = (init_energy, init_econt[2])
+        measurement_container.scalar_measurements["energy"] = new_econt
+    elseif observable == "site_dependent_density"
         scalar_measurements["site_dependent_density"] = (zeros(AbstractFloat, norbs*N),Vector{Vector{AbstractFloat}}(undef, N_iter))    # charge stripe 
     elseif observable == "site_dependent_spin"
         scalar_measurements["site_dependent_spin"] = (zeros(AbstractFloat, norbs*N),Vector{Vector{AbstractFloat}}(undef, N_iter))       # spin stripe
@@ -108,25 +113,25 @@ determinantal parameters and the rest are derivatives of Jastrow parameters. Mea
 to the measurement container.
 
 """
-function measure_Δk!(measurement_container, determinantal_parameters, jastrow, model_geometry, pconfig, particle_positions, Np, W, A, iter)
+function measure_Δk!(measurement_container, determinantal_parameters, jastrow, model_geometry, pconfig, particle_positions, Np, W, A, n, bin, N_configs)
     # perform parameter derivatives
     detpar_derivatives = get_local_detpar_derivative(determinantal_parameters, model_geometry, particle_positions, Np, W, A)
     jpar_derivatives = get_local_jpar_derivative(jastrow, pconfig, pht)
     Δk = vcat(detpar_derivatives,jpar_derivatives)
 
     # current values
-    current_values = measurement_container.derivative_measurements["Δk"]
+    current_container = measurement_container.derivative_measurements["Δk"]
 
     # update the local value 
-    local_value = current_values[1] .+ Δk
+    new_local_value = current_container[1] .+ Δk
 
     # update the current expectation values 
-    new_expectation_value = local_value / iter
-    current_expectation_value = current_values[2]
-    current_expectation_value[iter] = new_expectation_value
+    new_expectation_value = new_local_value / N_configs
+    current_expectation_value = current_container[2]
+    current_expectation_value[bin][n] .= new_expectation_value
 
     # combine the updated values 
-    updated_values = (local_value, current_expectation_value)
+    updated_values = (new_local_value, current_expectation_value)
 
     # write the new values to the container
     measurement_container.derivative_measurements["Δk"] = updated_values
@@ -143,7 +148,7 @@ to the measurement container.
 
 """
 # PASSED
-function measure_ΔkE!(measurement_container, determinantal_parameters, jastrow, model_geometry, tight_binding_model, pconfig, particle_positions,  Np, W, A, iter)
+function measure_ΔkE!(measurement_container, determinantal_parameters, jastrow, model_geometry, tight_binding_model, pconfig, particle_positions,  Np, W, A, n, bin, N_configs)
     # perform derivatives
     detpar_derivatives = get_local_detpar_derivative(determinantal_parameters, model_geometry, particle_positions, Np, W, A)
     jpar_derivatives = get_local_jpar_derivative(jastrow,pconfig,pht)
@@ -156,18 +161,19 @@ function measure_ΔkE!(measurement_container, determinantal_parameters, jastrow,
     ΔkE = Δk * E
 
     # current values
-    current_values = measurement_container.derivative_measurements["ΔkE"]
+    current_container = measurement_container.derivative_measurements["ΔkE"]
 
     # update the local value 
-    local_value = current_values[1] .+ ΔkE
+    new_local_value = current_container[1] .+ ΔkE
 
     # update the current expectation values 
-    new_expectation_value = local_value / iter
-    current_expectation_value = current_values[2]
-    current_expectation_value[iter] = new_expectation_value
+    N_configs = n + N_equil * Np
+    new_expectation_value = new_local_value / N_configs
+    current_expectation_value = current_container[2]
+    current_expectation_value[bin][n] .= new_expectation_value
 
     # combine the updated values 
-    updated_values = (local_value, current_expectation_value)
+    updated_values = (new_local_value, current_expectation_value)
 
     # write the new values to the container
     measurement_container.derivative_measurements["ΔkE"] = updated_values
@@ -183,28 +189,28 @@ Measures the product of variational derivatives with other variational derivativ
 to the measurement container.
 
 """
-function measure_ΔkΔkp!(measurement_container, determinantal_parameters, jastrow, model_geometry, pconfig, particle_positions, Np, W, A, iter)
+function measure_ΔkΔkp!(measurement_container, determinantal_parameters, jastrow, model_geometry, pconfig, particle_positions, Np, W, A, n, bin, N_configs)
     # perform derivatives
     detpar_derivatives = get_local_detpar_derivative(determinantal_parameters, model_geometry, particle_positions, Np, W, A)
     jpar_derivatives = get_local_jpar_derivative(jastrow,pconfig, pht)
     Δk = vcat(detpar_derivatives,jpar_derivatives)
 
     # inner product of Δk and Δk′
-    ΔkΔkp = Δk * Δk'
+    ΔkΔkp = Δk .* Δk'
 
     # current values
-    current_values = measurement_container.derivative_measurements["ΔkΔkp"]
+    current_container = measurement_container.derivative_measurements["ΔkΔkp"]
 
     # update the local value 
-    local_value = current_values[1] .+ ΔkΔkp
+    new_local_value = current_container[1] .+ ΔkΔkp
 
     # update the current expectation values 
-    new_expectation_value = local_value / iter
-    current_expectation_value = current_values[2]
-    current_expectation_value[iter] = new_expectation_value
+    new_expectation_value = new_local_value / N_configs
+    current_expectation_value = current_container[2]
+    current_expectation_value[bin][n] = new_expectation_value
 
     # combine the updated values 
-    updated_values = (local_value, current_expectation_value)
+    updated_values = (new_local_value, current_expectation_value)
 
     # write the new values to the container
     measurement_container.derivative_measurements["ΔkΔkp"] = updated_values
@@ -221,6 +227,8 @@ Calculates the local variational energy. Returns the total local energy and writ
 """
 function get_local_energy(model_geometry, tight_binding_model, jastrow, pconfig, particle_positions)
 
+    N = model_geometry.lattice.N
+
     E_k = get_local_kinetic_energy(model_geometry, tight_binding_model, jastrow, pconfig, particle_positions)
 
     E_hubb = get_local_hubbard_energy(U, model_geometry, pconfig)
@@ -228,7 +236,7 @@ function get_local_energy(model_geometry, tight_binding_model, jastrow, pconfig,
     # calculate total local energy
     E_loc = E_k + E_hubb
 
-    return E_loc
+    return E_loc / N
 end
 
 
@@ -313,23 +321,23 @@ Measures the total local energy and writes to the measurement container.
 
 """
 # PASSED
-function measure_local_energy!(measurement_container, model_geometry, tight_binding_model, jastrow, pconfig, particle_positions,iter)
+function measure_local_energy!(measurement_container, model_geometry, tight_binding_model, jastrow, pconfig, particle_positions, n, bin, N_configs)
     # calculate the current local energy
     E_loc = get_local_energy(model_geometry, tight_binding_model, jastrow, pconfig, particle_positions)
 
     # current values
-    current_values = measurement_container.scalar_measurements["energy"]
+    current_container = measurement_container.scalar_measurements["energy"]
 
     # update the local value 
-    local_value = current_values[1] + E_loc
+    new_local_value = current_container[1] + E_loc
 
-    # update the current expectation values 
-    new_expectation_value = local_value / iter
-    current_expectation_value = current_values[2]
-    current_expectation_value[iter] = new_expectation_value
+    # update the current expectation values
+    new_expectation_value = new_local_value / N_configs
+    current_expectation_value = current_container[2]
+    current_expectation_value[bin][n] = new_expectation_value
 
     # combine the updated values 
-    updated_values = (local_value, current_expectation_value)
+    updated_values = (new_local_value, current_expectation_value)
 
     # write the new values to the container
     measurement_container.scalar_measurements["energy"] = updated_values
@@ -337,6 +345,8 @@ function measure_local_energy!(measurement_container, model_geometry, tight_bind
 
     return nothing
 end
+
+
 
 
 """
@@ -453,3 +463,6 @@ end
 # end
 
 
+function write_measurements!()
+    return nothing
+end
