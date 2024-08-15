@@ -24,10 +24,10 @@ function build_determinantal_state(H_mf)
 
     # Build Slater determinant
     # in case that there is no finite overlap...
-    max_configs = (n, k) -> div(prod(n:-1:(n-k+1)), factorial(k))
-    max_attempts = max_configs(model_geometry.lattice.N, nup)
-    attempt = 0
-    while attempt < max_attempts
+    # max_configs = (n, k) -> div(prod(n:-1:(n-k+1)), factorial(k))
+    # max_attempts = max_configs(model_geometry.lattice.N, nup)
+    # attempt = 0
+    while true
         pconfig = generate_initial_fermion_configuration()
         config_indices = findall(x -> x == 1, pconfig)
         D = M[config_indices, :]
@@ -44,8 +44,8 @@ function build_determinantal_state(H_mf)
 
             return D, pconfig, ε, ε₀, M, U
         end
-        # Increment attempt counter
-        attempt += 1
+        # # Increment attempt counter
+        # attempt += 1
     end    
 end
 

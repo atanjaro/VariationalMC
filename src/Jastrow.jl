@@ -31,7 +31,7 @@ pairs (i,j) which generate k, and Jastrow parameters vᵢⱼ. The parameter corr
 largest k is automatically initialized to 0. Parameters are randomly initialized.
 
 """
-function initialize_jpars(model_geometry::ModelGeometry, rng::Xoshiro, readin_jpars::Bool)
+function initialize_jpars(model_geometry::ModelGeometry, readin_jpars::Bool)
     # check 
     @assert readin_jpars == false
 
@@ -217,7 +217,7 @@ function get_Tvec(jastrow_type::String, jpar_map::OrderedDict{Any,Any}, pconfig:
     for i in 1:N
         # track the Jastrow parameter sum
         jpar_sum = 0.0
-        for j in 1:N
+        for j in 1:N 
             # Calculate the reduced index for (i, j)
             red_idx = reduce_index(i-1, j-1, model_geometry)
 
@@ -358,9 +358,9 @@ Constructs relevant Jastrow factor and returns intitial T vector, matrix of Jast
 number of Jastrow parameters. 
 
 """
-function build_jastrow_factor(jastrow_type::String, model_geometry::ModelGeometry, pconfig::Vector{Int64}, pht::Bool, rng::Xoshiro, readin_jpars::Bool)
+function build_jastrow_factor(jastrow_type::String, model_geometry::ModelGeometry, pconfig::Vector{Int64}, pht::Bool, readin_jpars::Bool)
     # map Jastrow parameters
-    jpar_map = initialize_jpars(model_geometry, rng, readin_jpars)
+    jpar_map = initialize_jpars(model_geometry, readin_jpars)
 
     # generate T vector
     init_Tvec = get_Tvec(jastrow_type, jpar_map, pconfig, pht, model_geometry)
