@@ -55,7 +55,7 @@ function initialize_jpars(model_geometry::ModelGeometry, readin_jpars::Bool)
             push!(indices, (0, i))
             jpar_map[red_idx] = (indices, init_val)
         else
-            jpar_map[red_idx] = ([(0, i)], 0.0)
+            jpar_map[red_idx] = ([(0, i)], 0.0001)
         end
     end
 
@@ -68,19 +68,19 @@ function initialize_jpars(model_geometry::ModelGeometry, readin_jpars::Bool)
                 push!(indices, (i, j))
                 jpar_map[red_idx] = (indices, init_val)
             else
-                jpar_map[red_idx] = ([(i, j)], 0.0)
+                jpar_map[red_idx] = ([(i, j)], 0.0001)
             end
         end
     end
 
     # set the parameter corresponding to the maximum distance to 0
-    # max_idx = max_dist(N, L)
-    # if haskey(jpar_map, max_idx)
-    #     indices, _ = jpar_map[max_idx]
-    #     jpar_map[max_idx] = (indices, 0.0)
-    # else
-    #     error("Maximum distance index $max_idx not found in jpar_map")
-    # end
+    max_idx = maximum(keys(jpar_map))
+    if haskey(jpar_map, max_idx)
+        indices, _ = jpar_map[max_idx]
+        jpar_map[max_idx] = (indices, 0.0)
+    else
+        error("Maximum distance index $max_idx not found in jpar_map")
+    end
 
     # DEBUG
     if debug
@@ -176,7 +176,7 @@ function initialize_jpars(model_geometry::ModelGeometry, path_to_jpars::String, 
     # set the parameter corresponding to the maximum distance to 0
     # technically, the read in values will always have the last Jastrow parameter to be 0
     # but this is just here for safety reasons.
-    max_idx = max_dist(N, L)
+    max_idx = maximum(keys(jpar_map))
     if haskey(jpar_map, max_idx)
         indices, _ = jpar_map[max_idx]
         jpar_map[max_idx] = (indices, 0.0)
@@ -309,11 +309,11 @@ end
     get_jastrow_ratio( local_acceptance, jastrow::Jastrow, pht::Bool )
 
 Calculates ratio J(x₂)/J(x₁) = exp[-s(Tₗ - Tₖ) + vₗₗ - vₗₖ ] of Jastrow factors for particle configurations 
-which differ by a single particle hopping from site 'l' (configuration 'x₁') to site 'k' (configuration 'x₂')
-using the corresponding T vectors Tₗ and Tₖ, rsepctively.  
+which differ by a single particle hopping from site 'k' (configuration 'x₁') to site 'l' (configuration 'x₂')
+using the corresponding T vectors Tₖ and Tₗ, rsepctively.  
 
 """
-function get_jastrow_ratio(l, k, jastrow::Jastrow, pht::Bool, spin::Int)
+function get_jastrow_ratio(k, l, jastrow::Jastrow, pht::Bool, spin::Int)
     # T vector
     Tvec = jastrow.Tvec
 
@@ -452,7 +452,7 @@ function recalc_Tvec!(jastrow::Jastrow, δT::Float64)
     # T vector that has been updated during MC cycles
     Tᵤ = jastrow.Tvec
 
-    # get matrix
+    # map of Jastrow parameters
     jpar_map = jastrow.jpar_map
 
     # recomputed T vector

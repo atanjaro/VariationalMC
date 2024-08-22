@@ -72,30 +72,26 @@ function metropolis(W, jastrow, particle_positions, rng)
         end
         return LocalAcceptance(0, beta, beta_spin, k, l)
     else
-        if verbose == true
-            println("Hop possible!")
-        end
-
         # begin Metropolis algorithm
 
         # get Jastrow ratio (element of T vector)
-        Rⱼ = get_jastrow_ratio(l, k, jastrow, pht, beta_spin)    
+        Rⱼ = get_jastrow_ratio(k, l, jastrow, pht, beta_spin)    
 
         # get wavefunction ratio (correpsonding element of Green's function)
         Rₛ = W[l, beta]  
                           
-        acceptance_prob = Rⱼ * Rⱼ * Rₛ * Rₛ     
+        acceptance_prob = Rⱼ^2 * Rₛ^2    
 
-        if debug
-            println(acceptance_prob)
+        if verbose == true
+            println("Hop possible! =>")
+            println("Rⱼ = $Rⱼ")
+            println("Rₛ = $Rₛ")
+            println("accept prob. = $acceptance_prob")
         end
 
-        if acceptance_prob >= 1 || rand(rng, Uniform(0,1)) < acceptance_prob
+        if acceptance_prob >= 1.0 || rand(rng, Uniform(0.0,1.0)) < acceptance_prob
             if verbose 
                 println("Hop accepted!")
-                println("Rⱼ = $Rⱼ")
-                println("Rₛ = $Rₛ")
-                println("accept prob. = $acceptance_prob")
             end
             
             return LocalAcceptance(1, beta, beta_spin, k, l)  # acceptance, particle number, particle spin, initial site, final site

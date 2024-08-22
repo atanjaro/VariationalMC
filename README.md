@@ -16,7 +16,6 @@ TBA
 
 ## External Dependencies
 
-- [Distances.jl](https://github.com/JuliaStats/Distances.jl): Package used to evaluate distances (metrics) between vectors. 
 - [Distributions.jl](https://github.com/JuliaStats/Distributions.jl): Package used for probability distributions and associated functions. 
 - [JLD2.jl](https://github.com/JuliaIO/JLD2.jl.git): Package used to write data to binary files in an HDF5 compatible format. 
 

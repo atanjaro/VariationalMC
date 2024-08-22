@@ -11,7 +11,7 @@ struct ModelGeometry
     # extent of the lattice
     lattice::Lattice
     # lattice bonds
-    bond::Vector{Vector{Bond{2}}}
+    bond::Vector{Vector{Any}}
 end
 
 

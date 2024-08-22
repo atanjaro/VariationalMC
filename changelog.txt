@@ -470,7 +470,81 @@ Added parameter updating to measurement container in sr_update!() method.
 Upcoming changes:
 BUG: derivative and parameter updating. Information is being written to the measurement container incorrectly, thus 
       the optimization step does not function properly.
-add an 'update_container!()' method?
+Need to DEBUG T vector stabilization method.
+Add an 'update_container!()' method?
 May need to add additional starting configuration method where a certain order is generated. For instance,
+      starting the simulation out in an AFM state: pconfig(4x4) = [1,0,1,0,0,1,0,1,1,0,1,0,0,1,0,1,0,1,0,1,1,0,1,0,0,1,0,1,1,0,1,0]
+Add write_measurements!() method.
+
+
+Change log (08/16/2024):
+Reinstated the push back of Jastrow and determinantal parameters to their respective places, since the calculation of the derivatives
+      relies on this. 
+
+
+Upcoming changes:
+Need to change order of optimization updates:
+      For N bins
+            For n times, where n is the size of each bin:
+                  1. Perform local update (local_fermion_update!())
+                  2. Measure local values of observables i.e. energy and derivatives (this is pushed to binned_local_values)
+                  3. Get bin average (the binned average is done by doing the sum of the values divded the the bin size)
+                  4. Perform stochastic reconfiguration (take the bin averages to do SR)
+      To reiterate, the structure of the measurement container is: "key" => (current_bin_average, binned_local_values)
+Write a make_measurements!() function for obtaining various observables. This might also be useful for measuring after optimization.
+BUG: derivative and parameter updating. Information is being written to the measurement container incorrectly, thus 
+      the optimization step does not function properly.
+Need to DEBUG T vector stabilization method.
+Add an 'update_container!()' method?
+May need to add additional starting configuration method where a certain order is generated. For instance,
+      starting the simulation out in an AFM state: pconfig(4x4) = [1,0,1,0,0,1,0,1,1,0,1,0,0,1,0,1,0,1,0,1,1,0,1,0,0,1,0,1,1,0,1,0]
+Add write_measurements!() method.
+
+
+------------------------------------------------------------
+                  WEEK OF AUGUST 19, 2024
+------------------------------------------------------------
+
+Change log (08/20/2024):
+Added make_measurments!() method, which measures the local energy and parameter derivatives for each bin.
+Changed sequence of optmization updates:  
+      For bin in N_bins 
+            For n in 1:bin_size
+                  1. Perform local fermion update [local_fermion_update!()]
+                  2. Record acceptance rate
+                  3. Make measurements of observables in the current bin [make_measurements!()]
+            Perform Stochastic Reconfiguration for the current bin.
+Updated writing to measurement container in each measurement method.
+Updated get_force_vector() method.
+Updated get_hessian_matrix(), get_force_vector(), and sr_update!() methods.
+Updated the parameter container in the measurement container.
+Fixed bug where energy measurements were being written to the derivative container.
+
+
+
+Upcoming changes:
+BUG: REALLY low acceptance rates for Metropolis step e.g. fermionic_local_acceptance_rate = 0.0015
+      Possibel issue with Green's function updating?
+Need to DEBUG the local energy calculator? Need to check if there is possible double counting in the neighbor sum.
+      Note: for a 1D system, the neighbor table and resulting map differs from that for a 2D system in that 'self' values are reported.
+Need to DEBUG T vector stabilization method.
+Add an 'update_container!()' method?
+May need to add additional starting configuration method where a certain order is generated. For instance,
+      starting the simulation out in an AFM state: pconfig(4x4) = [1,0,1,0,0,1,0,1,1,0,1,0,0,1,0,1,0,1,0,1,1,0,1,0,0,1,0,1,1,0,1,0]
+Add write_measurements!() method.
+
+
+Change log (08/21/2024):
+Fixed major BUG in the updating of the Green's function:
+      The previous updating scheme was done incorrectly and resulted in zero columns in the Green's function. This would slow/prevent acceptance
+            during the MC cycle.
+      Updating the Green's function now uses the BLAS (s/d)ger method for rank 1 updating.
+      Example new acceptance rates are ~0.21 for 2x2 lattice and ~0.459 for a 2 site chain.
+Fixed BUG in get_jastrow_ratio() method where the identity of intial and final sites k and l, respectively, were flipped.
+
+Upcoming changes:
+MAJOR ALGORITHM UPDATE: the algorithm for performing the optimization and simulation updates will be changed in the next update.
+DEBUG T vector stabilization method.
+Add additional starting configuration method where a certain order is generated. For instance,
       starting the simulation out in an AFM state: pconfig(4x4) = [1,0,1,0,0,1,0,1,1,0,1,0,0,1,0,1,0,1,0,1,1,0,1,0,0,1,0,1,1,0,1,0]
 Add write_measurements!() method.
