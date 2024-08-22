@@ -21,13 +21,14 @@ include("Greens.jl")
 include("Hessian.jl")
 include("Measurements.jl")
 
+
 #############################
 ## DEFINE MODEL PARAMETERS ##
 #############################
 
 # define the size of the lattice
 Lx = 2
-Ly = 1
+Ly = 2
 
 # define initial electron density
 n̄ = 1.0
@@ -45,7 +46,7 @@ tp = 0.0
 # Hubbard-U
 U = 0.5
 
-# (BCS) chemical potential
+# chemical potential
 μ_BCS = 0.0
 
 # phonon fugacity
@@ -63,9 +64,9 @@ path_to_detpars = "/path/to/determinantal/parameters/"
 readin_jpars = false
 path_to_jpars = "/Users/xzt/Documents/VariationalMC/src/jastrow_out.csv"
 
-# parameters to be optimized and initial value
-parameters_to_optimize = ["Δs"]        # BCS wavefunction
-parameter_values = [0.3]                 # pht = true
+# # parameters to be optimized and initial value
+# parameters_to_optimize = ["Δs"]        # BCS wavefunction
+# parameter_values = [0.0001]                 # pht = true
 
 # parameters to be optimized and initial value
 # parameters_to_optimize = ["Δcs", "Δss"]       # stripe wavefunction
@@ -76,8 +77,8 @@ parameter_values = [0.3]                 # pht = true
 # parameter_values = [0.3, 0.3]                 # pht = true
 
 # parameters to be optimized and initial value
-# parameters_to_optimize = ["Δa"]               # AFM (Neél) wavefunction
-# parameter_values = [0.3]                      # pht = false
+parameters_to_optimize = ["Δa"]               # AFM (Neél) wavefunction
+parameter_values = [0.0001]                      # pht = false
 
 # parameters to be optimized and initial value
 # parameters_to_optimize = ["Δc"]               # CDW wavefunction
@@ -88,7 +89,7 @@ parameter_values = [0.3]                 # pht = true
 ##################################
 
 # whether model is particle-hole transformed 
-pht = true
+pht = false
        
 # initialize random seed
 seed = abs(rand(Int))
@@ -96,14 +97,14 @@ seed = abs(rand(Int))
 # initialize random number generator
 rng = Xoshiro(seed)
 
-# number of equilibration/thermalization updates (really N_equil × Np)
-N_equil = 100
+# number of equilibration/thermalization updates 
+N_equil = 1000
 
-# number of optimization/simulation updates (really N_updates × Np)
-N_updates = 300
+# number of optimization/simulation updates 
+N_updates = 1000
 
 # number of bins
-N_bins = 100
+N_bins = 10
 
 # bin size
 bin_size = div(N_updates, N_bins)
@@ -121,7 +122,7 @@ n_stab = 500
 η = 1e-4      # 10⁻⁴ is probably good for the Hubbard model
 
 # initial SR optimization rate
-dt = 0.1        # dt must be of sufficient size such that convergence is rapid and the algorithm remains stable
+dt = 1.0        # dt must be of sufficient size such that convergence is rapid and the algorithm remains stable
 
 # whether to output to terminal during runtime
 verbose = true
@@ -155,9 +156,16 @@ additional_info = Dict(
 ## DEFINE MODEL ##
 ##################
 
+# # chain unit cell
+# unit_cell = UnitCell(lattice_vecs = [[1.0]],
+#                             basis_vecs   = [[0.0]])
+
 # square unit cell
 unit_cell = UnitCell([[1.0,0.0], [0.0,1.0]],           # lattice vectors
                                [[0.0,0.0]])            # basis vectors 
+
+# # build a chain
+# lattice = Lattice([Lx],[true])
 
 # build square lattice
 lattice = Lattice([Lx,Ly],[true,true])
@@ -169,7 +177,11 @@ bond_y = Bond((1,1), [0,1])
 bond_xy = Bond((1,1), [1,1])
 bond_yx = Bond((1,1), [1,-1])
 
-# vector of 2D bonds
+# # define nearest enighbor bonds
+# bond = Bond(orbitals = (1,1), displacement = [1])
+
+# vector of all bonds
+# bonds = [[bond]]
 bonds = [[bond_x, bond_y], [bond_xy, bond_yx]]
 
 # define model geometry
@@ -216,9 +228,6 @@ variational_parameters = all_vpars(determinantal_parameters, jastrow)
 # initialize measurement container for VMC measurements
 measurement_container = initialize_measurement_container(model_geometry, variational_parameters, Np, N_equil, N_bins, bin_size)
 
-# initialize energy measurements
-initialize_measurements!(measurement_container, "energy")
-
 ###########################################
 ## PERFORM BURNIN/THERMALIZATION UPDATES ##
 ###########################################
@@ -252,10 +261,6 @@ end
 ## PERFORM OPTMIZATION UPDATES AND MAKE MEASUREMENTS ##
 #######################################################
 
-if verbose
-    println("|| BEGIN OPTIMIZATION ||")
-end
-
 # Iterate over the number of bins, i.e. the number of measurements will be dumped to file.
 for bin in 1:N_bins
 
@@ -271,9 +276,12 @@ for bin in 1:N_bins
         # record acceptance rate
         additional_info["fermionic_local_acceptance_rate"] += acceptance_rate
 
-        # perform stochastic reconfiguration
-        measurement_container = sr_update!(measurement_container, determinantal_parameters, jastrow, model_geometry, tight_binding_model, pconfig, Np, W, A, η, dt, n, bin)
+        # make measurements in the current bin
+        make_measurements!(measurement_container, determinantal_parameters, jastrow, model_geometry, tight_binding_model, pconfig, Np, W, A, n, bin)
     end
+
+    # perform stochastic reconfiguration
+    measurement_container = sr_update!(measurement_container, determinantal_parameters, jastrow, η, dt, bin)
 
     # # Write the average measurements for the current bin to file.
     # write_measurements!(
@@ -282,10 +290,6 @@ for bin in 1:N_bins
     #         bin = bin,
     #         bin_size = bin_size
     # )
-end
-
-if verbose
-    println("|| END OPTIMIZATION ||")
 end
 
 # end time for simulation
@@ -297,6 +301,8 @@ end
 # record simulation runtime
 additional_info["time"] += t_end - t_start
 
+additional_info["fermionic_local_acceptance_rate"] /= (N_equil + N_updates)
+
 # write simulation information to file
 # save_simulation_info(simulation_info, additional_info)
 
@@ -305,3 +311,31 @@ additional_info["time"] += t_end - t_start
 
 
 
+# # Flatten the nested vectors
+# flattened_data = collect(Iterators.flatten(measurement_container.scalar_measurements["energy"][2]))
+
+# # Convert the flattened data to a DataFrame with one column
+# df = DataFrame(energy = flattened_data)
+
+# # Define the file path
+# file_path = "energy_measurements.csv"
+
+# # Write the DataFrame to a CSV file
+# CSV.write(file_path, df)
+
+# println("Data successfully written as a single column to $file_path")
+
+
+# # Flatten the nested vectors
+# flattened_data = collect(Iterators.flatten(measurement_container.scalar_measurements["parameters"][2]))
+
+# # Convert the flattened data to a DataFrame with one column
+# df = DataFrame(parameters = flattened_data)
+
+# # Define the file path
+# file_path = "parameter_measurements.csv"
+
+# # Write the DataFrame to a CSV file
+# CSV.write(file_path, df)
+
+# println("Data successfully written as a single column to $file_path")

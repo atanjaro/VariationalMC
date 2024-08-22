@@ -78,21 +78,23 @@ Perform in-place update of the equal-time Green's function.
 
 """
 function update_equal_greens!(local_acceptance::LocalAcceptance, W::Matrix{Float64})
-    # Get the indices
-    fsite = local_acceptance.fsite
-    particle = local_acceptance.particle
-    
-    # Get rₗ, the lth row of W
-    rₗ = view(W, fsite, :)
-    
-    # Get cᵦ, the βth column vector of W
-    cᵦ = view(W, :, particle)
-    
-    # Subtract 1 from the βth component of rₗ
-    rₗ[particle] -= 1
+    # final site of the hopping particle
+    l = local_acceptance.fsite
 
-    # Update W in place
-    W .-= cᵦ * rₗ' / W[fsite, particle]
+    # particle number
+    β = local_acceptance.particle
+
+    # get lth row of the Green's function
+    rₗ = W[l, :]
+
+    # subtract 1 from the βth element of 
+    rₗ[β] -=1
+
+    # get the βth column of the Green's function
+    cᵦ = W[:,β]
+
+    # perform rank 1 update of the Green's function
+    BLAS.ger!(-1.0 / W[l,β], cᵦ, rₗ, W)
 
     return nothing
 end

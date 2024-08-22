@@ -16,14 +16,11 @@ function initialize_measurement_container(model_geometry::ModelGeometry, variati
     # number of variational parameters to be optimized
     num_vpars = length(variational_parameters)
 
-    # number of initial visited configurations
-    N_configs = N_equil * Np
-
     # dictionary to store scalar measurements
     scalar_measurements = Dict{String, Any}([
         ("density", 0.0),        # average density per orbital species
         ("double_occ", 0.0),     # average double occupancy per orbital species
-        ("parameters", (variational_parameters, [[zeros(num_vpars) for _ in 1:bin_size] for _ in 1:N_bins])),       # variational parameters
+        ("parameters", (zeros(num_vpars), [zeros(num_vpars)  for _ in 1:N_bins])),       # variational parameters
         ("energy", (0.0,  [zeros(bin_size) for _ in 1:N_bins])),          # energy
         ("pconfig", (0.0, [zeros(bin_size) for _ in 1:N_bins]))           # particle configurations
     ])                     
@@ -45,7 +42,6 @@ function initialize_measurement_container(model_geometry::ModelGeometry, variati
         correlation_measurements  = correlation_measurements,                       
         L                         = L,
         N                         = N,
-        N_configs                 = N_configs,
         N_bins                    = N_bins,
         bin_size                  = bin_size,
         num_vpars                 = num_vpars                      
@@ -106,6 +102,31 @@ end
 
 """
 
+    make_measurements!(measurement_container,determinantal_parameters, jastrow, model_geometry,
+                        tight_binding_model, pconfig, particle_positions,  Np, W, A, n, bin)
+
+Measure the local energy and logarithmic derivatives for a particular bin.
+
+"""
+function make_measurements!(measurement_container,determinantal_parameters, jastrow, model_geometry, 
+                            tight_binding_model, pconfig,  Np, W, A, n, bin)
+    # get current particle positions
+    particle_positions = get_particle_positions(pconfig, model_geometry)
+
+    # measure the energy
+    measure_local_energy!(measurement_container,model_geometry,tight_binding_model,jastrow,pconfig,particle_positions,n,bin)
+
+    # measure the lograithmic derivatives
+    measure_Δk!(measurement_container, determinantal_parameters, jastrow, model_geometry,pconfig, particle_positions, Np, W, A, n, bin)
+    measure_ΔkΔkp!(measurement_container, determinantal_parameters,jastrow, model_geometry, pconfig, particle_positions,Np,W,A,n,bin)
+    measure_ΔkE!(measurement_container,determinantal_parameters,jastrow,model_geometry,tight_binding_model,pconfig, particle_positions,Np,W,A,n,bin)
+
+    return nothing
+end
+
+
+"""
+
     measure_Δk!(measurement_container, determinantal_parameters, jastrow, model_geometry, pconfig, Np, W, A)
 
 Measures logarithmic derivatives for all variational parameters. The first 'p' are derivatives of 
@@ -113,25 +134,24 @@ determinantal parameters and the rest are derivatives of Jastrow parameters. Mea
 to the measurement container.
 
 """
-function measure_Δk!(measurement_container, determinantal_parameters, jastrow, model_geometry, pconfig, particle_positions, Np, W, A, n, bin, N_configs)
+function measure_Δk!(measurement_container, determinantal_parameters, jastrow, model_geometry, pconfig, particle_positions, Np, W, A, n, bin)
     # perform parameter derivatives
     detpar_derivatives = get_local_detpar_derivative(determinantal_parameters, model_geometry, particle_positions, Np, W, A)
     jpar_derivatives = get_local_jpar_derivative(jastrow, pconfig, pht)
     Δk = vcat(detpar_derivatives,jpar_derivatives)
 
-    # current values
+    # get current values from the container
     current_container = measurement_container.derivative_measurements["Δk"]
 
-    # update the local value 
-    new_local_value = current_container[1] .+ Δk
+    # update value for the current bin
+    current_bin_values = current_container[2]
+    current_bin_values[bin][n] .= Δk
 
-    # update the current expectation values 
-    new_expectation_value = new_local_value / N_configs
-    current_expectation_value = current_container[2]
-    current_expectation_value[bin][n] .= new_expectation_value
+    # update accumuator for average measurements
+    new_avg_value = current_container[1] .+ Δk
 
     # combine the updated values 
-    updated_values = (new_local_value, current_expectation_value)
+    updated_values = (new_avg_value, current_bin_values)
 
     # write the new values to the container
     measurement_container.derivative_measurements["Δk"] = updated_values
@@ -140,15 +160,30 @@ function measure_Δk!(measurement_container, determinantal_parameters, jastrow, 
 end
 
 
+# # function prototype for updating the measurement container
+# function update_container!(current_container, updated_values, n, bin)
+#     new_values = current_container[1] .+ updated_values
+
+#     current_binned_values = current_container[2]
+#     current_binned_value[bin][n] .= new_values
+
+#     updated_container = (new_values, current_binned_values)
+
+#     current_container = updated_container
+
+#     return current_container
+# end
+
+
 """
-    measure_ΔkE( determinantal_parameters, jastrow, model_geometry, tight_binding_model, pconfig, Np, W, A )
+    measure_ΔkE!( determinantal_parameters, jastrow, model_geometry, tight_binding_model, pconfig, Np, W, A )
 
 Measures the product of variational derivatives with the local energy. Measurments are then written
 to the measurement container.
 
 """
 # PASSED
-function measure_ΔkE!(measurement_container, determinantal_parameters, jastrow, model_geometry, tight_binding_model, pconfig, particle_positions,  Np, W, A, n, bin, N_configs)
+function measure_ΔkE!(measurement_container, determinantal_parameters, jastrow, model_geometry, tight_binding_model, pconfig, particle_positions,  Np, W, A, n, bin)
     # perform derivatives
     detpar_derivatives = get_local_detpar_derivative(determinantal_parameters, model_geometry, particle_positions, Np, W, A)
     jpar_derivatives = get_local_jpar_derivative(jastrow,pconfig,pht)
@@ -160,26 +195,25 @@ function measure_ΔkE!(measurement_container, determinantal_parameters, jastrow,
     # compute product of local derivatives with the local energy
     ΔkE = Δk * E
 
-    # current values
+    # get current values from the container
     current_container = measurement_container.derivative_measurements["ΔkE"]
 
-    # update the local value 
-    new_local_value = current_container[1] .+ ΔkE
+    # update value for the current bin
+    current_bin_values = current_container[2]
+    current_bin_values[bin][n] .= ΔkE
 
-    # update the current expectation values 
-    N_configs = n + N_equil * Np
-    new_expectation_value = new_local_value / N_configs
-    current_expectation_value = current_container[2]
-    current_expectation_value[bin][n] .= new_expectation_value
+    # update accumuator for average measurements
+    new_avg_value = current_container[1] .+ ΔkE
 
     # combine the updated values 
-    updated_values = (new_local_value, current_expectation_value)
+    updated_values = (new_avg_value, current_bin_values)
 
     # write the new values to the container
     measurement_container.derivative_measurements["ΔkE"] = updated_values
 
     return nothing
 end
+
 
 
 """
@@ -189,7 +223,7 @@ Measures the product of variational derivatives with other variational derivativ
 to the measurement container.
 
 """
-function measure_ΔkΔkp!(measurement_container, determinantal_parameters, jastrow, model_geometry, pconfig, particle_positions, Np, W, A, n, bin, N_configs)
+function measure_ΔkΔkp!(measurement_container, determinantal_parameters, jastrow, model_geometry, pconfig, particle_positions, Np, W, A, n, bin)
     # perform derivatives
     detpar_derivatives = get_local_detpar_derivative(determinantal_parameters, model_geometry, particle_positions, Np, W, A)
     jpar_derivatives = get_local_jpar_derivative(jastrow,pconfig, pht)
@@ -198,19 +232,18 @@ function measure_ΔkΔkp!(measurement_container, determinantal_parameters, jastr
     # inner product of Δk and Δk′
     ΔkΔkp = Δk .* Δk'
 
-    # current values
+    # get current values from the container
     current_container = measurement_container.derivative_measurements["ΔkΔkp"]
 
-    # update the local value 
-    new_local_value = current_container[1] .+ ΔkΔkp
+    # update value for the current bin
+    current_bin_values = current_container[2]
+    current_bin_values[bin][n] .= ΔkΔkp
 
-    # update the current expectation values 
-    new_expectation_value = new_local_value / N_configs
-    current_expectation_value = current_container[2]
-    current_expectation_value[bin][n] = new_expectation_value
+    # update accumuator for average measurements
+    new_avg_value = current_container[1] .+ ΔkΔkp
 
     # combine the updated values 
-    updated_values = (new_local_value, current_expectation_value)
+    updated_values = (new_avg_value, current_bin_values)
 
     # write the new values to the container
     measurement_container.derivative_measurements["ΔkΔkp"] = updated_values
@@ -222,15 +255,17 @@ end
 """
     get_local_energy(model_geometry::ModelGeometry, tight_binding_model::TightBindingModel, jastrow::Jastrow, particle_positions:: )
 
-Calculates the local variational energy. Returns the total local energy and writes to the measurement container.
+Calculates the local variational energy per site E/N, where N is the number fo sites.
 
 """
 function get_local_energy(model_geometry, tight_binding_model, jastrow, pconfig, particle_positions)
-
+    # number of lattice sites
     N = model_geometry.lattice.N
 
+    # calculate kinetic energy
     E_k = get_local_kinetic_energy(model_geometry, tight_binding_model, jastrow, pconfig, particle_positions)
 
+    # calculate Hubbard energy
     E_hubb = get_local_hubbard_energy(U, model_geometry, pconfig)
     
     # calculate total local energy
@@ -270,7 +305,7 @@ function get_local_kinetic_energy(model_geometry, tight_binding_model, jastrow, 
         for l in nbr_map[k][2]
             # check that neighboring sites are unoccupied
             if number_operator(l, pconfig)[β_spin] == 0
-                Rⱼ = get_jastrow_ratio(l, k, jastrow, pht, β_spin)
+                Rⱼ = get_jastrow_ratio(k, l, jastrow, pht, β_spin)
                 sum_nn += Rⱼ * W[l, β]
             end
         end
@@ -321,27 +356,25 @@ Measures the total local energy and writes to the measurement container.
 
 """
 # PASSED
-function measure_local_energy!(measurement_container, model_geometry, tight_binding_model, jastrow, pconfig, particle_positions, n, bin, N_configs)
+function measure_local_energy!(measurement_container, model_geometry, tight_binding_model, jastrow, pconfig, particle_positions, n, bin)
     # calculate the current local energy
     E_loc = get_local_energy(model_geometry, tight_binding_model, jastrow, pconfig, particle_positions)
 
-    # current values
+    # get current values from the container
     current_container = measurement_container.scalar_measurements["energy"]
 
-    # update the local value 
-    new_local_value = current_container[1] + E_loc
+    # update value for the current bin
+    current_bin_values = current_container[2]
+    current_bin_values[bin][n] = E_loc
 
-    # update the current expectation values
-    new_expectation_value = new_local_value / N_configs
-    current_expectation_value = current_container[2]
-    current_expectation_value[bin][n] = new_expectation_value
+    # update accumuator for average measurements
+    new_avg_value = current_container[1] .+ E_loc
 
     # combine the updated values 
-    updated_values = (new_local_value, current_expectation_value)
+    updated_values = (new_avg_value, current_bin_values)
 
     # write the new values to the container
     measurement_container.scalar_measurements["energy"] = updated_values
-
 
     return nothing
 end
@@ -357,11 +390,13 @@ Measure the global variational energy ⟨E⟩. This is intended to used at the e
 """
 function measure_global_energy(model_geometry, N_bins, bin_size)
 
+    # number of lattice sites
+    N = model_geometry.lattice.N
     # binned energies
     # E_binned
 
     # average over all sites
-    E_global = E_binned / model_geometry.lattice.N
+    E_global = E_binned / N
 
     return E_global
 end

@@ -113,25 +113,24 @@ end
 
 """
 
-    get_hessian_matrix(measurement_container, determinantal_parameters, 
-                    jastrow, model_geometry, tight_binding_model, pconfig, 
-                    Np, W, A )
+    get_hessian_matrix( measurement_container, bin )
 
 Generates the covariance (Hessian) matrix S, for Stochastic Reconfiguration
 
 The matrix S has elements S_kk' = <Δ_kΔk'> - <Δ_k><Δ_k'>
 
 """
-function get_hessian_matrix(measurement_container, determinantal_parameters, jastrow, model_geometry, pconfig, particle_positions,Np, W, A, n, bin, N_configs)
+function get_hessian_matrix(measurement_container, bin)
+    # get size of bin
+    bin_size = measurement_container.bin_size
 
-    # measure local parameters derivatives ⟨Δₖ⟩ (also ⟨Δₖ'⟩), for this configuration
-    measure_Δk!(measurement_container, determinantal_parameters, jastrow, model_geometry, pconfig, particle_positions, Np, W, A, n, bin, N_configs)
-    Δk = measurement_container.derivative_measurements["Δk"][2][bin][n]       
-
-    measure_ΔkΔkp!(measurement_container, determinantal_parameters, jastrow, model_geometry, pconfig, particle_positions, Np, W, A, n, bin, N_configs)
-    ΔkΔkp = measurement_container.derivative_measurements["ΔkΔkp"][2][bin][n] 
+    # measure local parameters derivatives ⟨Δₖ⟩ for the current bin
+    Δk = sum(measurement_container.derivative_measurements["Δk"][2][bin])/bin_size
     
-    # calculate the product of local derivatives ⟨Δk⟩⟨Δkp⟩
+    # measure the product of local derivatives ⟨ΔₖΔₖ'⟩ for the current bin
+    ΔkΔkp = sum(measurement_container.derivative_measurements["ΔkΔkp"][2][bin])/bin_size
+    
+    # calculate the product of local derivatives ⟨Δₖ⟩⟨Δₖ'⟩
     ΔkΔk = Δk * Δk'  
 
     # generate covariance matrix
@@ -143,33 +142,30 @@ end
 
 """
 
-    get_force_vector(measurement_container, determinantal_parameters, 
-                jastrow, model_geometry, tight_binding_model, pconfig,
-                 Np, W, A )
+    get_force_vector( measurement_container, bin )
 
 Generates the force vector f, for Stochastic Reconfiguration.
 
 The vector f has elements f_k = <Δ_k><H> - <Δ_kH>
 
 """
-function get_force_vector(measurement_container, determinantal_parameters, jastrow, model_geometry, tight_binding_model, pconfig, particle_positions, Np, W, A, n, bin, N_configs)
+function get_force_vector(measurement_container, bin)
+    # get size of bin
+    bin_size = measurement_container.bin_size
     
     # initialize force vector
     f = [] 
 
-    # measure local parameters derivatives ⟨Δₖ⟩, for this configuration
-    # measure_Δk!(measurement_container, determinantal_parameters, jastrow, model_geometry, pconfig, particle_positions,Np, W, A,iter)
-    Δk = measurement_container.derivative_measurements["Δk"][2][bin][n]         
+    # measure local parameters derivatives ⟨Δₖ⟩ for the current bin
+    Δk = sum(measurement_container.derivative_measurements["Δk"][2][bin])/bin_size
 
-    # measure local energy E = ⟨H⟩, for this configuration
-    measure_local_energy!(measurement_container, model_geometry, tight_binding_model, jastrow, pconfig, particle_positions,n, bin, N_configs)
-    E = measurement_container.scalar_measurements["energy"][2][bin][n]      
+    # measure local energy E = ⟨H⟩ for the current bin
+    E = sum(measurement_container.scalar_measurements["energy"][2][bin])/bin_size
 
-    # measure product of local derivatives with energy ⟨ΔkE⟩, for this configuration
-    measure_ΔkE!(measurement_container, determinantal_parameters, jastrow, model_geometry, tight_binding_model, pconfig, particle_positions, Np, W, A,n, bin, N_configs)
-    ΔkE = measurement_container.derivative_measurements["ΔkE"][2][bin][n]       
+    # measure product of local derivatives with energy ⟨ΔkE⟩ for the current bin
+    ΔkE = sum(measurement_container.derivative_measurements["ΔkE"][2][bin])/bin_size         
 
-    # product of local derivative with the local energy ⟨Δk⟩⟨H⟩
+    # calculate product of local derivative with the local energy ⟨Δk⟩⟨H⟩
     ΔktE = Δk * E
     
     for (i,j) in zip(ΔktE,ΔkE)
@@ -213,51 +209,50 @@ end
 Update variational parameters through stochastic optimization.
 
 """
-function sr_update!(measurement_container, determinantal_parameters, jastrow, model_geometry, tight_binding_model, pconfig, Np, W, A, η, dt, n, bin)
-    # get particle positions
-    particle_positions = get_particle_positions(pconfig, model_geometry)
-
-    # current number of visited configurations
-    N_configs = measurement_container.N_configs
-    N_configs += n
-    # update number of visited configurations
-    measurement_container = merge(measurement_container, (N_configs = N_configs,))
+function sr_update!(measurement_container, determinantal_parameters, jastrow, η, dt, bin)
+    if verbose
+        println("Begin optimization step...")
+    end
 
     # get covariance (Hessian) matrix
-    S = get_hessian_matrix(measurement_container, determinantal_parameters, jastrow, model_geometry, pconfig, particle_positions, Np, W, A, n, bin, N_configs)
+    S = get_hessian_matrix(measurement_container, bin)
+
     # get force vector
-    f = get_force_vector(measurement_container, determinantal_parameters, jastrow, model_geometry, tight_binding_model, pconfig, particle_positions, Np, W, A, n, bin, N_configs)
+    f = get_force_vector(measurement_container, bin)
 
     # perform gradient descent
     δvpars = parameter_gradient(S,f,η)     
 
-    # # update parameters
-    # # get parameters from measurement container
-    # vpars = measurement_container.scalar_measurements["parameters"][1]
-    # vpars += dt * δvpars    # TODO: start with a large dt and reduce as energy is minimized
+    # new varitaional parameters
+    vpars = all_vpars(determinantal_parameters, jastrow)
+    vpars += dt * δvpars
 
-    # push back all parameters to container
+    # push back Jastrow parameters
+    update_jastrow!(jastrow, vpars)
+
+    # push back determinantal_parameters
+    update_detpars!(determinantal_parameters, vpars)
+
+    # measure parameters
+    # get current values from the container
     current_container = measurement_container.scalar_measurements["parameters"]
-    current_local_parameters = current_container[1]
-    current_local_parameters += dt * δvpars
-    current_parameter_values = current_container[2]
-    current_parameter_values[bin][n] .= current_local_parameters
+
+    # update value for the current bin
+    current_bin_values = current_container[2]
+    current_bin_values[bin] .= vpars 
+
+    # update accumuator for average measurements
+    new_avg_value = current_container[1] .+ vpars
 
     # combine the updated values 
-    updated_values = (current_local_parameters, current_parameter_values)
+    updated_values = (new_avg_value, current_bin_values)
 
     # write the new values to the container
     measurement_container.scalar_measurements["parameters"] = updated_values
 
-    # # push back Jastrow parameters
-    # update_jastrow!(jastrow, vpars)
-
-    # # push back determinantal_parameters
-    # update_detpars!(determinantal_parameters, vpars)
-
-    # update measurement container
-    # current_values = measurement_container.scalar_measurements["parameters"][1]
-    # current_values[iter] = vpars
+    if verbose
+        println("End optimization step")
+    end
 
     return measurement_container
 end
