@@ -31,7 +31,7 @@ pairs (i,j) which generate k, and Jastrow parameters vᵢⱼ. The parameter corr
 largest k is automatically initialized to 0. Parameters are randomly initialized.
 
 """
-function initialize_jpars(model_geometry::ModelGeometry, readin_jpars::Bool)
+function initialize_jpars(model_geometry::ModelGeometry, rng::Xoshiro, readin_jpars::Bool)
     # check 
     @assert readin_jpars == false
 
@@ -55,7 +55,7 @@ function initialize_jpars(model_geometry::ModelGeometry, readin_jpars::Bool)
             push!(indices, (0, i))
             jpar_map[red_idx] = (indices, init_val)
         else
-            jpar_map[red_idx] = ([(0, i)], 0.0001)
+            jpar_map[red_idx] = ([(0, i)], 0.01*rand(rng))
         end
     end
 
@@ -68,7 +68,7 @@ function initialize_jpars(model_geometry::ModelGeometry, readin_jpars::Bool)
                 push!(indices, (i, j))
                 jpar_map[red_idx] = (indices, init_val)
             else
-                jpar_map[red_idx] = ([(i, j)], 0.0001)
+                jpar_map[red_idx] = ([(i, j)], 0.01*rand(rng))
             end
         end
     end
@@ -358,9 +358,9 @@ Constructs relevant Jastrow factor and returns intitial T vector, matrix of Jast
 number of Jastrow parameters. 
 
 """
-function build_jastrow_factor(jastrow_type::String, model_geometry::ModelGeometry, pconfig::Vector{Int64}, pht::Bool, readin_jpars::Bool)
+function build_jastrow_factor(jastrow_type::String, model_geometry::ModelGeometry, pconfig::Vector{Int64}, pht::Bool, rng::Xoshiro, readin_jpars::Bool)
     # map Jastrow parameters
-    jpar_map = initialize_jpars(model_geometry, readin_jpars)
+    jpar_map = initialize_jpars(model_geometry, rng, readin_jpars)
 
     # generate T vector
     init_Tvec = get_Tvec(jastrow_type, jpar_map, pconfig, pht, model_geometry)

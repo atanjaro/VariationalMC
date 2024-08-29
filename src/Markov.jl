@@ -107,14 +107,84 @@ end
 
 
 """
+    metropolis( jastrow, phconf, rng )
+
+Perform accept/reject step of proposed addition/removal of a particle using the Metropolis algorithm. If move is
+accepted, returns acceptance, site, and whether a particle was added or removed.
+
+"""
+function metropolis(phconfig, model_geometry, rng)
+    # randomly select a site on the lattice
+    N = model_geometry.lattice.N
+    rnd_site = rand(rng, 1:N)
+
+    # deciede whether a particle will be added or removed
+    tryrand = rand(rng)
+    cran = tryrand > 0.5 ? -1 : 1
+
+    # if tryrand > 0.5
+    #     sgn = 0
+    # else
+    #     sgn = 1
+    # end
+
+    # if sgn == 0
+    #     cran = -1
+    # else
+    #     cran = 1
+    # end
+
+    if cran == -1 || phconfig[rnd_site] == 0
+        # do nothing, since this is the floor of the ladder operator
+        println("Removal impossible! Rejected!") 
+    else
+        # get phonon-phonon and electon-phonon Jastrow ratios
+        Rⱼₚₕ = get_jastrow_ratio()   # TODO: add Jastrow ratio methods for both of these Jastrow factors
+        Rⱼₑₚₕ = get_jastrow_ratio()
+
+        # get phononic amplitudes
+        if cran == -1
+            phnorm = sqrt(phconfig[rand_site])
+        else
+            phnorm = 1.0 / sqrt(phconfig[rand_site] + 1)
+        end
+
+        acceptance_prob = Rⱼₚₕ^2 * Rⱼₑₚₕ^2 * exp(2 * μₚₕ * cran) * phnorm^2
+
+        if verbose == true
+            println("Change possible! =>")
+            println("Rⱼₚₕ = $Rⱼₚₕ")
+            println("Rⱼₑₚₕ = $Rⱼₑₚₕ")
+            println("norm = $phnorm")
+            println("accept prob. = $acceptance_prob")
+        end
+
+        if acceptance_prob > rand(rng)
+            if verbose 
+                println("Change accepted!")
+            end
+
+            return 1, cran, rand_site
+        else
+            if verbose 
+                println("Change rejected!")
+             end
+ 
+             return 0, cran, rand_site
+        end
+    end
+end
+
+
+"""
     local_fermion_update!(Ne::Int, model_geometry::ModelGeometry, 
                         jastrow::Jastrow, pconfig::Vector{Int64}, rng::Xoshiro)
 
-Perform a local MC update. Proposes moves and accept/rejects via Metropolis algorithm,
+Performs a local MC update. Proposes moves and accept/rejects via Metropolis algorithm,
 if accepted, updates particle positions, T vector, and Green's function (W matrix).
 
 """
-function local_fermion_update!(W, D, Ne, model_geometry, jastrow, pconfig, rng, n_iter, n_stab)
+function local_fermion_update!(W, D, model_geometry, jastrow, pconfig, rng, n_iter, n_stab, mc_meas_freq)
     if verbose
         println("Starting new Monte Carlo cycle...")
     end
@@ -126,7 +196,7 @@ function local_fermion_update!(W, D, Ne, model_geometry, jastrow, pconfig, rng, 
 
     # perform number of metropolis steps equal to the number of electrons
     # for help in decorrelation
-    for s in 1:Ne
+    for s in 1:mc_meas_freq
         if verbose
             println("Metropolis step = $s")
         end
@@ -137,7 +207,7 @@ function local_fermion_update!(W, D, Ne, model_geometry, jastrow, pconfig, rng, 
         # get particle positions
         particle_positions = get_particle_positions(pconfig, model_geometry)    
     
-        # accept/reject (Metropolis) step
+        # Metropolis step
         met_step = metropolis(W, jastrow, particle_positions, rng)    
     
         # whether hop was accepted
@@ -196,14 +266,51 @@ function local_fermion_update!(W, D, Ne, model_geometry, jastrow, pconfig, rng, 
         recalc_Tvec!(jastrow::Jastrow, δT::Float64)
     end
 
-    # compute local acceptance rate
-    local_acceptance_rate = accepted_hops / proposed_hops     
+    # # compute local acceptance rate
+    # local_acceptance_rate = accepted_hops / proposed_hops     
 
-    return local_acceptance_rate, pconfig, jastrow, W, D
+    return pconfig, jastrow, W, D #local_acceptance_rate, 
 end
 
 
-# # update variational parameters
-# sr_update!(measurement_container, determinantal_parameters, jastrow, model_geometry, tight_binding_model, pconfig, particle_positions, Np, W, A, η, dt, n_iter)
+"""
+    local_boson_update!( )
 
+Performs a local MC update. Proposes moves and accept/rejects via Metropolis algorithm,
+if accepted, updates phonon configurations and phonon number.
+
+"""
+function local_boson_update!(phconfig, model_geometry, rng)
+    # counts number of proposed additions/removals
+    proposed_addrs = 0
+    # counts number of accepted additions/removals
+    accepted_addrs = 0
+
+    for s in 1:mc_meas_freq
+        if verbose
+            println("Metropolis step = $s")
+        end
+
+        # increment number of proposed additions/removals
+        proposed_addrs += 1
+
+        # Metropolis step
+        met_step = metropolis(phconfig, model_geometry, rng)    
+
+        # whether change was accepted
+        acceptance = met_step.acceptance
+
+        if acceptance == 1
+            accepted_addrs += 1
+    
+            # perform change
+            change_particle_number!(met_step, phconfig, model_geometry)                   
+    
+            # update T vector
+            update_Tvec!(met_step, jastrow, model_geometry, pht)  
+        end
+    end
+
+    return nothing
+end
 

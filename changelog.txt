@@ -544,7 +544,69 @@ Fixed BUG in get_jastrow_ratio() method where the identity of intial and final s
 
 Upcoming changes:
 MAJOR ALGORITHM UPDATE: the algorithm for performing the optimization and simulation updates will be changed in the next update.
+Change Jastrow initialization to random values of the form 0.01*rand(rng)
 DEBUG T vector stabilization method.
 Add additional starting configuration method where a certain order is generated. For instance,
       starting the simulation out in an AFM state: pconfig(4x4) = [1,0,1,0,0,1,0,1,1,0,1,0,0,1,0,1,0,1,0,1,1,0,1,0,0,1,0,1,1,0,1,0]
 Add write_measurements!() method.
+
+
+Change log (08/22/2024):
+Changed N_equil to N_opts to correctly reflect optmization updates.
+Split time measurements into optimization and simulation times.
+Updated additional info dictionary entries.
+Change Jastrow initialization to random values of the form 0.01*rand(rng) (if not reading in from file).
+Added exit condiion if an open shell is detected.
+Updated generate_initial_onsite_phonon_configuration() and generate_initial_bond_phonon_configuration() methods.
+Added local_boson_update!() method to Markov module.
+Added additional metropolis() method to ParticleConfiguration module for doing bosonic updates.
+
+Upcoming changes:
+MAJOR ALGORITHM UPDATE: the algorithm for performing the optimization and simulation updates will be changed in the next update.
+Combine local updates into a single function?
+DEBUG T vector stabilization method.
+Add additional starting configuration method where a certain order is generated. For instance,
+      starting the simulation out in an AFM state: pconfig(4x4) = [1,0,1,0,0,1,0,1,1,0,1,0,0,1,0,1,0,1,0,1,1,0,1,0,0,1,0,1,1,0,1,0]
+Add write_measurements!() method.
+
+------------------------------------------------------------
+                  WEEK OF AUGUST 26, 2024
+------------------------------------------------------------
+
+Chnage log (08/26/2024):
+Updated measurement container to reflect new quantities: N_opts, opt_bin_size, N_updates, N_bins, bin_size.
+Updated definition of local_fermion_update() method by removing Ne ( no longer needed) and added mc_meas_freq to arguments.
+Changed structure of measurement container:
+      Removed the derivative_measurements container and instead added an optimization_measurements container which contains both the parameters and their derivatives
+      Added additional storage of energy measurments during optimization
+      Added storage of particle configurations during optimization and simulation in scalar_measurements container
+      Appropriately updated various measurement methods as a result of this change
+
+Upcoming changes:
+Need a way to distinguish within the measurement container, whcih energies to take. Perhaps we just create another energy container within the optimization container,
+      then, the optimization functions i.e. sr_update() will only call the energy values from the optimization container
+A similar thing need to be accounted for when doing different bin sizes
+Will change the measurement container (AGAIN) such that it merely holds measurements for each bin in escrow before writing to a JLD2 file. Once the bin is complete,
+      the write_measurements!() function is called to write the data before overriding the current container with 0s
+Combine local updates into a single function?
+DEBUG T vector stabilization method.
+Add additional starting configuration method where a certain order is generated. For instance,
+      starting the simulation out in an AFM state: pconfig(4x4) = [1,0,1,0,0,1,0,1,1,0,1,0,0,1,0,1,0,1,0,1,1,0,1,0,0,1,0,1,1,0,1,0]
+Add write_measurements!() method.
+
+
+Change log (08/29/2024):
+Updates to measurement container:
+      Changed the structure of the container such that each key points to a tuple which consists of: an accumulator for current bin (1/N_updates) * ∑_n^N_bins ⟨O⟩_n,
+            where N_updates is either N_updates or N_opts and n is the bin number, and current measurement values while going through each bin.
+   Made appropraite updates to all measurement methods in light of this change.
+Added SimulationInfo.jl, which will cover most file handling tasks.
+      Added SimulationInfo type and constructor.
+      Added intialize_datafolder() method.
+      Added write_measurements!() method.
+
+Upcoming changes:ß
+DEBUG T vector stabilization method.
+Add additional starting configuration method where a certain order is generated. For instance,
+      starting the simulation out in an AFM state: pconfig(4x4) = [1,0,1,0,0,1,0,1,1,0,1,0,0,1,0,1,0,1,0,1,1,0,1,0,0,1,0,1,1,0,1,0]
+

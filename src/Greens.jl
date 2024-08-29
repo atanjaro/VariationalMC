@@ -12,6 +12,7 @@ function build_determinantal_state(H_mf)
     # Check for open shell configuration
     if is_openshell(ε, Np)
         verbose && println("WARNING! Open shell detected")
+        exit(1)
     else
         verbose && println("Generating shell...")
     end
@@ -43,6 +44,59 @@ function build_determinantal_state(H_mf)
             end
 
             return D, pconfig, ε, ε₀, M, U
+        end
+        # # Increment attempt counter
+        # attempt += 1
+    end    
+end
+
+
+"""
+    build_determinantal_state( H_mf::Matrix{AbstractFloat}, init_pconfig ) 
+
+Given a initial particle configuration, returns initial energies ε₀, matrix M, and Slater matrix D in 
+the many-particle configuration basis.
+
+"""
+function build_determinantal_state(H_mf, init_pconfig)
+    # Diagonalize Hamiltonian
+    ε, Uₑ = diagonalize(H_mf)
+
+    # Check for open shell configuration
+    if is_openshell(ε, Np)
+        verbose && println("WARNING! Open shell detected")
+        exit(1)
+    else
+        verbose && println("Generating shell...")
+    end
+
+    # Store energies
+    ε₀ = ε[1:Np]
+
+    # Store M matrix
+    M = hcat(U[:,1:Np])
+
+    # Build Slater determinant
+    # in case that there is no finite overlap...
+    # max_configs = (n, k) -> div(prod(n:-1:(n-k+1)), factorial(k))
+    # max_attempts = max_configs(model_geometry.lattice.N, nup)
+    # attempt = 0
+    while true
+        pconfig = init_pconfig
+        config_indices = findall(x -> x == 1, pconfig)
+        D = M[config_indices, :]
+
+        # Check that starting configuration is not singular
+        if is_invertible(D) 
+            # Write matrices to file if needed
+            if write
+                writedlm("H.csv", H_mf)
+                # writedlm("D.csv", D)
+                # writedlm("M.csv", M)
+                # writedlm("Ue.csv", Uₑ)
+            end
+
+            return D, pconfig, ε, ε₀, M, Uₑ
         end
         # # Increment attempt counter
         # attempt += 1

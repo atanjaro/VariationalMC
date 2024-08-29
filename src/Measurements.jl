@@ -5,8 +5,12 @@
 Creates dictionaries of generic arrays for storing measurements. Each dictionary in the container
 has (keys => values): observable_name => local_values (i.e. ∑ O_loc(x)), binned_values (i.e. ⟨O⟩≈(N)⁻¹local_values)
 
+observable_name => (sum_of_local_vals, [opt_bin_size],...,[opt_bin_size])
+
+observable_name => (sum_of_local_vals, [opt_bin_size],...(N_opts)...,[opt_bin_size], [bin_size],...(N_bins)...,[bin_size])
+
 """
-function initialize_measurement_container(model_geometry::ModelGeometry, variational_parameters, Np, N_equil, N_bins, bin_size)
+function initialize_measurement_container(model_geometry::ModelGeometry, variational_parameters, N_opts, opt_bin_size, N_bins, bin_size)
     # one side of the lattice
     L = model_geometry.lattice.L
 
@@ -16,32 +20,42 @@ function initialize_measurement_container(model_geometry::ModelGeometry, variati
     # number of variational parameters to be optimized
     num_vpars = length(variational_parameters)
 
-    # dictionary to store scalar measurements
-    scalar_measurements = Dict{String, Any}([
-        ("density", 0.0),        # average density per orbital species
-        ("double_occ", 0.0),     # average double occupancy per orbital species
-        ("parameters", (zeros(num_vpars), [zeros(num_vpars)  for _ in 1:N_bins])),       # variational parameters
-        ("energy", (0.0,  [zeros(bin_size) for _ in 1:N_bins])),          # energy
-        ("pconfig", (0.0, [zeros(bin_size) for _ in 1:N_bins]))           # particle configurations
+    # container to store optimization measurements
+    optimization_measurements = Dict{String, Any}([
+        ("parameters", (variational_parameters, zeros(num_vpars))),                     # variational parameters
+        ("Δk", (zeros(num_vpars), zeros(num_vpars))),                             # log derivative of variational parameters
+        ("ΔkΔkp", (zeros(num_vpars,num_vpars), zeros(num_vpars,num_vpars))),      # product between log derivatives        
+        ("ΔkE", (zeros(num_vpars), zeros(num_vpars))),                          # product of log derivatives and energy
+    ])      
+
+    # dictionary to store simulation measurements
+    simulation_measurements = Dict{String, Any}([
+        ("density", 0.0),                      # average density per orbital species
+        ("double_occ", 0.0),                   # average double occupancy per orbital species
+        ("energy", (0.0,  zeros(bin_size))),   # local energy
+        ("pconfig", zeros(bin_size))           # particle configurations
     ])                     
 
-    # dictionary to store derivative measurmements
-    derivative_measurements = Dict{String, Any}([
-        ("Δk", (zeros(num_vpars), [[zeros(num_vpars) for _ in 1:bin_size] for _ in 1:N_bins])),               
-        ("ΔkΔkp", (zeros(num_vpars,num_vpars), [[zeros(num_vpars,num_vpars) for _ in 1:bin_size] for _ in 1:N_bins])),            
-        ("ΔkE", (zeros(num_vpars), [[zeros(num_vpars) for _ in 1:bin_size] for _ in 1:N_bins]))      
-    ])      
+    # # dictionary to store derivative measurmements
+    # derivative_measurements = Dict{String, Any}([
+    #     ("Δk", (zeros(num_vpars), [[zeros(num_vpars) for _ in 1:bin_size] for _ in 1:N_bins])),               
+    #     ("ΔkΔkp", (zeros(num_vpars,num_vpars), [[zeros(num_vpars,num_vpars) for _ in 1:bin_size] for _ in 1:N_bins])),            
+    #     ("ΔkE", (zeros(num_vpars), [[zeros(num_vpars) for _ in 1:bin_size] for _ in 1:N_bins]))      
+    # ])      
 
     # dictionary to store correlation measurements
     correlation_measurements = Dict{String, Any}()
 
     # create container
     measurement_container = (
-        scalar_measurements       = scalar_measurements,
-        derivative_measurements   = derivative_measurements,         
+        simulation_measurements   = simulation_measurements,
+        optimization_measurements = optimization_measurements,         
         correlation_measurements  = correlation_measurements,                       
         L                         = L,
         N                         = N,
+        N_opts                    = N_opts,
+        opt_bin_size              = opt_bin_size,
+        N_updates                 = N_updates,
         N_bins                    = N_bins,
         bin_size                  = bin_size,
         num_vpars                 = num_vpars                      
@@ -55,29 +69,29 @@ end
 
     initialize_measurements!( measurement_container, observable::String )
 
-For a certain type of measurment (scalar or correlation), initializes the arrays
+For a certain type of measurment (simulation or correlation), initializes the arrays
 necessary to store measurements in respective bins.
 
 """
 function initialize_measurements!(measurement_container, observable)
-    (; scalar_measurements, N) = measurement_container
+    (; simulation_measurements, N) = measurement_container
 
     if observable == "energy"
         # initialize with the initial energy per site
         init_energy = sum(ε₀) / N
 
         # update the energy container
-        init_econt = measurement_container.scalar_measurements["energy"]
+        init_econt = measurement_container.simulation_measurements["energy"]
         new_econt = (init_energy, init_econt[2])
-        measurement_container.scalar_measurements["energy"] = new_econt
+        measurement_container.simulation_measurements["energy"] = new_econt
     elseif observable == "site_dependent_density"
-        scalar_measurements["site_dependent_density"] = (zeros(AbstractFloat, norbs*N),Vector{Vector{AbstractFloat}}(undef, N_iter))    # charge stripe 
+        simulation_measurements["site_dependent_density"] = (zeros(AbstractFloat, norbs*N),Vector{Vector{AbstractFloat}}(undef, N_iter))    # charge stripe 
     elseif observable == "site_dependent_spin"
-        scalar_measurements["site_dependent_spin"] = (zeros(AbstractFloat, norbs*N),Vector{Vector{AbstractFloat}}(undef, N_iter))       # spin stripe
+        simulation_measurements["site_dependent_spin"] = (zeros(AbstractFloat, norbs*N),Vector{Vector{AbstractFloat}}(undef, N_iter))       # spin stripe
     elseif observable == "phonon_number"
-        scalar_measurements["phonon_number"] = (0.0,  Vector{AbstractFloat}(undef, N_iter))                     # phonon number nₚₕ
+        simulation_measurements["phonon_number"] = (0.0,  Vector{AbstractFloat}(undef, N_iter))                     # phonon number nₚₕ
     elseif observable == "displacement"
-        scalar_measurements["displacement"] = (0.0,  Vector{AbstractFloat}(undef, N_iter))                      # phonon displacement X
+        simulation_measurements["displacement"] = (0.0,  Vector{AbstractFloat}(undef, N_iter))                      # phonon displacement X
     end
 
     return nothing
@@ -109,17 +123,54 @@ Measure the local energy and logarithmic derivatives for a particular bin.
 
 """
 function make_measurements!(measurement_container,determinantal_parameters, jastrow, model_geometry, 
-                            tight_binding_model, pconfig,  Np, W, A, n, bin)
+                            tight_binding_model, pconfig,  Np, W, A)
     # get current particle positions
     particle_positions = get_particle_positions(pconfig, model_geometry)
 
     # measure the energy
-    measure_local_energy!(measurement_container,model_geometry,tight_binding_model,jastrow,pconfig,particle_positions,n,bin)
+    measure_local_energy!(measurement_container,model_geometry,tight_binding_model,jastrow,pconfig,particle_positions)
 
     # measure the lograithmic derivatives
-    measure_Δk!(measurement_container, determinantal_parameters, jastrow, model_geometry,pconfig, particle_positions, Np, W, A, n, bin)
-    measure_ΔkΔkp!(measurement_container, determinantal_parameters,jastrow, model_geometry, pconfig, particle_positions,Np,W,A,n,bin)
-    measure_ΔkE!(measurement_container,determinantal_parameters,jastrow,model_geometry,tight_binding_model,pconfig, particle_positions,Np,W,A,n,bin)
+    measure_Δk!(measurement_container, determinantal_parameters, jastrow, model_geometry,pconfig, particle_positions, Np, W, A)
+    measure_ΔkΔkp!(measurement_container, determinantal_parameters,jastrow, model_geometry, pconfig, particle_positions,Np,W,A)
+    measure_ΔkE!(measurement_container,determinantal_parameters,jastrow,model_geometry,tight_binding_model,pconfig, particle_positions,Np,W,A)
+
+    return nothing
+end
+
+
+"""
+
+    write_measurements!( )
+
+Writes current measurements in the current bin to a JLD2 file 
+
+"""
+function write_measurements!(measurement_container, simulation_info, bin)
+
+    (; datafolder, pID) = simulation_info
+
+    # construct filename
+    fn = @sprintf "bin-%d_pID-%d.jld2" bin pID
+
+    # write optimization measurements to file
+    optimization_measurements = measurement_container.optimization_measurements
+    save(joinpath(datafolder, "optimization", fn), optimization_measurements)
+
+    # write simulation measurements to file
+    simulation_measurements = measurement_container.simulation_measurements
+    save(joinpath(datafolder, "simulation", fn), simulation_measurements)
+
+    # reset optimization measurements to zero
+    for measurement in keys(optimization_measurements)
+        fill!(local_measurements[measurement], zero(Complex{E}))
+    end
+
+
+    # reset simulation measurements to zero
+    for measurement in keys(simulation_measurements)
+        fill!(local_measurements[measurement], zero(Complex{E}))
+    end
 
     return nothing
 end
@@ -134,18 +185,18 @@ determinantal parameters and the rest are derivatives of Jastrow parameters. Mea
 to the measurement container.
 
 """
-function measure_Δk!(measurement_container, determinantal_parameters, jastrow, model_geometry, pconfig, particle_positions, Np, W, A, n, bin)
+function measure_Δk!(measurement_container, determinantal_parameters, jastrow, model_geometry, pconfig, particle_positions, Np, W, A)
     # perform parameter derivatives
     detpar_derivatives = get_local_detpar_derivative(determinantal_parameters, model_geometry, particle_positions, Np, W, A)
     jpar_derivatives = get_local_jpar_derivative(jastrow, pconfig, pht)
     Δk = vcat(detpar_derivatives,jpar_derivatives)
 
     # get current values from the container
-    current_container = measurement_container.derivative_measurements["Δk"]
+    current_container = measurement_container.optimization_measurements["Δk"]
 
     # update value for the current bin
     current_bin_values = current_container[2]
-    current_bin_values[bin][n] .= Δk
+    current_bin_values .= Δk
 
     # update accumuator for average measurements
     new_avg_value = current_container[1] .+ Δk
@@ -154,7 +205,7 @@ function measure_Δk!(measurement_container, determinantal_parameters, jastrow, 
     updated_values = (new_avg_value, current_bin_values)
 
     # write the new values to the container
-    measurement_container.derivative_measurements["Δk"] = updated_values
+    measurement_container.optimization_measurements["Δk"] = updated_values
 
     return nothing
 end
@@ -183,7 +234,7 @@ to the measurement container.
 
 """
 # PASSED
-function measure_ΔkE!(measurement_container, determinantal_parameters, jastrow, model_geometry, tight_binding_model, pconfig, particle_positions,  Np, W, A, n, bin)
+function measure_ΔkE!(measurement_container, determinantal_parameters, jastrow, model_geometry, tight_binding_model, pconfig, particle_positions,  Np, W, A)
     # perform derivatives
     detpar_derivatives = get_local_detpar_derivative(determinantal_parameters, model_geometry, particle_positions, Np, W, A)
     jpar_derivatives = get_local_jpar_derivative(jastrow,pconfig,pht)
@@ -196,11 +247,11 @@ function measure_ΔkE!(measurement_container, determinantal_parameters, jastrow,
     ΔkE = Δk * E
 
     # get current values from the container
-    current_container = measurement_container.derivative_measurements["ΔkE"]
+    current_container = measurement_container.optimization_measurements["ΔkE"]
 
     # update value for the current bin
     current_bin_values = current_container[2]
-    current_bin_values[bin][n] .= ΔkE
+    current_bin_values .= ΔkE
 
     # update accumuator for average measurements
     new_avg_value = current_container[1] .+ ΔkE
@@ -209,7 +260,7 @@ function measure_ΔkE!(measurement_container, determinantal_parameters, jastrow,
     updated_values = (new_avg_value, current_bin_values)
 
     # write the new values to the container
-    measurement_container.derivative_measurements["ΔkE"] = updated_values
+    measurement_container.optimization_measurements["ΔkE"] = updated_values
 
     return nothing
 end
@@ -223,7 +274,7 @@ Measures the product of variational derivatives with other variational derivativ
 to the measurement container.
 
 """
-function measure_ΔkΔkp!(measurement_container, determinantal_parameters, jastrow, model_geometry, pconfig, particle_positions, Np, W, A, n, bin)
+function measure_ΔkΔkp!(measurement_container, determinantal_parameters, jastrow, model_geometry, pconfig, particle_positions, Np, W, A)
     # perform derivatives
     detpar_derivatives = get_local_detpar_derivative(determinantal_parameters, model_geometry, particle_positions, Np, W, A)
     jpar_derivatives = get_local_jpar_derivative(jastrow,pconfig, pht)
@@ -233,11 +284,11 @@ function measure_ΔkΔkp!(measurement_container, determinantal_parameters, jastr
     ΔkΔkp = Δk .* Δk'
 
     # get current values from the container
-    current_container = measurement_container.derivative_measurements["ΔkΔkp"]
+    current_container = measurement_container.optimization_measurements["ΔkΔkp"]
 
     # update value for the current bin
     current_bin_values = current_container[2]
-    current_bin_values[bin][n] .= ΔkΔkp
+    current_bin_values .= ΔkΔkp
 
     # update accumuator for average measurements
     new_avg_value = current_container[1] .+ ΔkΔkp
@@ -246,10 +297,42 @@ function measure_ΔkΔkp!(measurement_container, determinantal_parameters, jastr
     updated_values = (new_avg_value, current_bin_values)
 
     # write the new values to the container
-    measurement_container.derivative_measurements["ΔkΔkp"] = updated_values
+    measurement_container.optimization_measurements["ΔkΔkp"] = updated_values
 
     return nothing
 end 
+
+
+"""
+    measure_local_energy!( measurement_container, model_geometry::ModelGeometry, tight_binding_model::TightBindingModel, 
+                jastrow::Jastrow, particle_positions:: )
+
+Measures the total local energy and writes to the measurement container.
+
+"""
+function measure_local_energy!(measurement_container, model_geometry, tight_binding_model, jastrow, pconfig, particle_positions)
+    # calculate the current local energy
+    E_loc = get_local_energy(model_geometry, tight_binding_model, jastrow, pconfig, particle_positions)
+
+    # get current values from the container
+    current_container = measurement_container.simulation_measurements["energy"]
+
+    # update value for the current bin
+    current_bin_values = current_container[2]
+    current_bin_values = E_loc
+
+    # update accumuator for average measurements
+    new_avg_value = current_container[1] .+ E_loc
+
+    # combine the updated values 
+    updated_values = (new_avg_value, current_bin_values)
+
+    # write the new values to the container
+    measurement_container.simulation_measurements["energy"] = updated_values
+
+    return nothing
+end
+
 
 
 """
@@ -346,40 +429,6 @@ function get_local_hubbard_energy(U, model_geometry, pconfig)
 
     return E_loc_hubbard
 end
-
-
-"""
-    measure_local_energy!( measurement_container, model_geometry::ModelGeometry, tight_binding_model::TightBindingModel, 
-                jastrow::Jastrow, particle_positions:: )
-
-Measures the total local energy and writes to the measurement container.
-
-"""
-# PASSED
-function measure_local_energy!(measurement_container, model_geometry, tight_binding_model, jastrow, pconfig, particle_positions, n, bin)
-    # calculate the current local energy
-    E_loc = get_local_energy(model_geometry, tight_binding_model, jastrow, pconfig, particle_positions)
-
-    # get current values from the container
-    current_container = measurement_container.scalar_measurements["energy"]
-
-    # update value for the current bin
-    current_bin_values = current_container[2]
-    current_bin_values[bin][n] = E_loc
-
-    # update accumuator for average measurements
-    new_avg_value = current_container[1] .+ E_loc
-
-    # combine the updated values 
-    updated_values = (new_avg_value, current_bin_values)
-
-    # write the new values to the container
-    measurement_container.scalar_measurements["energy"] = updated_values
-
-    return nothing
-end
-
-
 
 
 """
@@ -497,7 +546,3 @@ end
 #     return nothing
 # end
 
-
-function write_measurements!()
-    return nothing
-end
