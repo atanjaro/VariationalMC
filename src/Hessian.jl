@@ -120,15 +120,15 @@ Generates the covariance (Hessian) matrix S, for Stochastic Reconfiguration
 The matrix S has elements S_kk' = <Δ_kΔk'> - <Δ_k><Δ_k'>
 
 """
-function get_hessian_matrix(measurement_container, bin)
+function get_hessian_matrix(measurement_container)
     # get size of bin
-    bin_size = measurement_container.bin_size
+    bin_size = measurement_container.opt_bin_size
 
     # measure local parameters derivatives ⟨Δₖ⟩ for the current bin
-    Δk = sum(measurement_container.derivative_measurements["Δk"][2][bin])/bin_size
+    Δk = measurement_container.optimization_measurements["Δk"][2]/bin_size
     
     # measure the product of local derivatives ⟨ΔₖΔₖ'⟩ for the current bin
-    ΔkΔkp = sum(measurement_container.derivative_measurements["ΔkΔkp"][2][bin])/bin_size
+    ΔkΔkp = measurement_container.optimization_measurements["ΔkΔkp"][2]/bin_size
     
     # calculate the product of local derivatives ⟨Δₖ⟩⟨Δₖ'⟩
     ΔkΔk = Δk * Δk'  
@@ -149,21 +149,21 @@ Generates the force vector f, for Stochastic Reconfiguration.
 The vector f has elements f_k = <Δ_k><H> - <Δ_kH>
 
 """
-function get_force_vector(measurement_container, bin)
+function get_force_vector(measurement_container)
     # get size of bin
-    bin_size = measurement_container.bin_size
+    bin_size = measurement_container.opt_bin_size
     
     # initialize force vector
     f = [] 
 
     # measure local parameters derivatives ⟨Δₖ⟩ for the current bin
-    Δk = sum(measurement_container.derivative_measurements["Δk"][2][bin])/bin_size
+    Δk = measurement_container.optimization_measurements["Δk"][2]/bin_size
 
     # measure local energy E = ⟨H⟩ for the current bin
-    E = sum(measurement_container.scalar_measurements["energy"][2][bin])/bin_size
+    E = measurement_container.simulation_measurements["energy"][2]/bin_size
 
     # measure product of local derivatives with energy ⟨ΔkE⟩ for the current bin
-    ΔkE = sum(measurement_container.derivative_measurements["ΔkE"][2][bin])/bin_size         
+    ΔkE = measurement_container.optimization_measurements["ΔkE"][2]/bin_size         
 
     # calculate product of local derivative with the local energy ⟨Δk⟩⟨H⟩
     ΔktE = Δk * E
@@ -209,16 +209,16 @@ end
 Update variational parameters through stochastic optimization.
 
 """
-function sr_update!(measurement_container, determinantal_parameters, jastrow, η, dt, bin)
+function sr_update!(measurement_container, determinantal_parameters, jastrow, η, dt)
     if verbose
         println("Begin optimization step...")
     end
 
     # get covariance (Hessian) matrix
-    S = get_hessian_matrix(measurement_container, bin)
+    S = get_hessian_matrix(measurement_container)
 
     # get force vector
-    f = get_force_vector(measurement_container, bin)
+    f = get_force_vector(measurement_container)
 
     # perform gradient descent
     δvpars = parameter_gradient(S,f,η)     
@@ -235,11 +235,11 @@ function sr_update!(measurement_container, determinantal_parameters, jastrow, η
 
     # measure parameters
     # get current values from the container
-    current_container = measurement_container.scalar_measurements["parameters"]
+    current_container = measurement_container.optimization_measurements["parameters"]
 
     # update value for the current bin
     current_bin_values = current_container[2]
-    current_bin_values[bin] .= vpars 
+    current_bin_values .= vpars 
 
     # update accumuator for average measurements
     new_avg_value = current_container[1] .+ vpars
@@ -248,12 +248,12 @@ function sr_update!(measurement_container, determinantal_parameters, jastrow, η
     updated_values = (new_avg_value, current_bin_values)
 
     # write the new values to the container
-    measurement_container.scalar_measurements["parameters"] = updated_values
+    measurement_container.optimization_measurements["parameters"] = updated_values
 
     if verbose
         println("End optimization step")
     end
 
-    return measurement_container
+    return nothing
 end
 

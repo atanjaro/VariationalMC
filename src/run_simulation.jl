@@ -10,6 +10,7 @@ using CSV
 using DataFrames
 using DataStructures
 using Distributions
+using Printf
 
 # files to include
 include("Hamiltonian.jl")
@@ -20,6 +21,7 @@ include("Utilities.jl")
 include("Greens.jl")
 include("Hessian.jl")
 include("Measurements.jl")
+include("SimulationInfo.jl")
 
 
 #############################
@@ -27,8 +29,7 @@ include("Measurements.jl")
 #############################
 
 # define the size of the lattice
-Lx = 2
-Ly = 2
+L = 6
 
 # define initial electron density
 n̄ = 1.0
@@ -49,8 +50,23 @@ U = 0.5
 # chemical potential
 μ_BCS = 0.0
 
-# phonon fugacity
-# μₚₕ = 0.0
+# phonon chemical potential (fugacity)
+μₚₕ = 0.01
+
+# phonon frequency
+Ω = 1.0
+
+# microscopic electron-phonon coupling
+g = 1.0
+
+# # microscopic electron phonon coupling
+# α = g * sqrt(2 * Ω)
+
+# dimensionless electron-phonon coupling (g definition)
+λ = (2 * g^2) / (Ω * 8)
+
+# # dimensionless electron-phonon coupling (α defintion)
+# λ = α^2 / (Ω^2 * 8)
 
 #######################################
 ##      VARIATIONAL PARAMETERS       ##
@@ -64,32 +80,70 @@ path_to_detpars = "/path/to/determinantal/parameters/"
 readin_jpars = false
 path_to_jpars = "/Users/xzt/Documents/VariationalMC/src/jastrow_out.csv"
 
+# parameters to be optimized and initial value
+parameters_to_optimize = ["Δs"]                      # BCS wavefunction
+parameter_values = [0.01]                            # pht = true
+
+# parameters to be optimized and initial value
+# parameters_to_optimize = ["Δcs", "Δss"]            # stripe wavefunction
+# parameter_values = [0.01, 0.01]                    # pht = false
+
+# parameters to be optimized and initial value
+# parameters_to_optimize = ["Δd", "Δa"]              # uniform d-wave wavefunction
+# parameter_values = [0.01, 0.01]                    # pht = true
+
 # # parameters to be optimized and initial value
-# parameters_to_optimize = ["Δs"]        # BCS wavefunction
-# parameter_values = [0.0001]                 # pht = true
+# parameters_to_optimize = ["Δa"]                    # AFM (Neél) wavefunction
+# parameter_values = [0.01]                          # pht = false
 
 # parameters to be optimized and initial value
-# parameters_to_optimize = ["Δcs", "Δss"]       # stripe wavefunction
-# parameter_values = [0.3, 0.3]                 # pht = false
+# parameters_to_optimize = ["Δc"]                    # CDW wavefunction
+# parameter_values = [0.0.1]                         # pht = false
 
 # parameters to be optimized and initial value
-# parameters_to_optimize = ["Δd", "Δa"]         # uniform d-wave wavefunction
-# parameter_values = [0.3, 0.3]                 # pht = true
+# parameters_to_optimize = ["Δs", "μₚₕ"]              # BCS wavefunction + phonons
+# parameter_values = [0.01, μₚₕ]                      # pht = true          
 
 # parameters to be optimized and initial value
-parameters_to_optimize = ["Δa"]               # AFM (Neél) wavefunction
-parameter_values = [0.0001]                      # pht = false
+# parameters_to_optimize = ["Δcs", "Δss", "μₚₕ"]      # stripe wavefunction + phonons
+# parameter_values = [0.01, 0.01, μₚₕ]                # pht = false        
 
-# parameters to be optimized and initial value
-# parameters_to_optimize = ["Δc"]               # CDW wavefunction
-# parameter_values = [0.3]                      # pht = false
+
+###################
+## FILE HANDLING ##
+###################
+
+# specify filepath
+filepath = "."
+
+# simulation ID number
+sID = 1
+
+# processor ID number
+pID = 0
+
+# construct the foldername the data will be written to
+# note that the simulation ID `sID`` will be appended to this foldername as `*-sID`
+datafolder_prefix = @sprintf "hubbard_square_U%.2f_n%.2f_L%d_delS" U n̄ L 
+
+# initialize an instance of the SimulationInfo type
+# this type helps keep track of where data will be written to
+simulation_info = SimulationInfo(
+                filepath = filepath, 
+                datafolder_prefix = datafolder_prefix,
+                sID = sID
+)
+
+# initialize the directory the data will be written to.
+initialize_datafolder(simulation_info)
+
 
 ##################################
 ## DEFINE SIMULATION PARAMETERS ##
 ##################################
 
 # whether model is particle-hole transformed 
-pht = false
+pht = true
        
 # initialize random seed
 seed = abs(rand(Int))
@@ -97,17 +151,23 @@ seed = abs(rand(Int))
 # initialize random number generator
 rng = Xoshiro(seed)
 
-# number of equilibration/thermalization updates 
-N_equil = 1000
+# number of optimization updates
+N_opts = 3000
 
-# number of optimization/simulation updates 
-N_updates = 1000
+# optimization bin size
+opt_bin_size = 1000 #6000
 
-# number of bins
-N_bins = 10
+# number of simulation updates 
+N_updates = 6000    #10000
 
-# bin size
+# number of simulation bins
+N_bins = 100
+
+# simulation bin size
 bin_size = div(N_updates, N_bins)
+
+# number of MC cycles until measurement
+mc_meas_freq = 2 #300
 
 # number of iterations until check for numerical stability 
 n_stab = 500
@@ -119,16 +179,16 @@ n_stab = 500
 δT = 1e-3
 
 # SR stabilization factor
-η = 1e-4      # 10⁻⁴ is probably good for the Hubbard model
+η = 1e-4      
 
-# initial SR optimization rate
-dt = 1.0        # dt must be of sufficient size such that convergence is rapid and the algorithm remains stable
+# SR optimization rate
+dt = 0.03        
 
 # whether to output to terminal during runtime
 verbose = true
 
 # debugging (this will be removed later)
-debug = false
+debug = true
 
 # whether to output matrices to file
 write = false
@@ -137,19 +197,18 @@ write = false
 additional_info = Dict(
     "δW" => δW,
     "δT" => δT,
-    "time" => 0.0,
-    "N_equil" => N_equil,
+    "total_time" => 0.0,
+    "simulation_time" => 0.0,
+    "optimization_time" => 0.0,
+    "N_opts" => N_opts,
     "N_updates" => N_updates,
     "N_bins" => N_bins,
     "bin_size" => bin_size,
-    "fermionic_local_acceptance_rate" => 0.0,
-    "initial_dt" => dt,
-    "final_dt" => 0.0,
+    "dt" => dt,
     "seed" => seed,
     "n_bar" => n̄,
     "global_energy" => 0.0,
     "μ_BCS" => 0.0,
-    "Δs" => 0.0
 )
 
 ##################
@@ -168,7 +227,7 @@ unit_cell = UnitCell([[1.0,0.0], [0.0,1.0]],           # lattice vectors
 # lattice = Lattice([Lx],[true])
 
 # build square lattice
-lattice = Lattice([Lx,Ly],[true,true])
+lattice = Lattice([L, L],[true,true])
 
 # define nearest neighbor bonds
 bond_x = Bond((1,1), [1,0])
@@ -216,7 +275,10 @@ A = get_Ak_matrices(V, Uₑ, ε, model_geometry)
 W = get_equal_greens(M, D)
 
 # construct electron density-density Jastrow factor
-jastrow = build_jastrow_factor("e-den-den", model_geometry, pconfig, pht, readin_jpars)
+jastrow = build_jastrow_factor("e-den-den", model_geometry, pconfig, pht, rng, readin_jpars)
+
+# # construct electron spin-spin Jastrow factor
+# jastrow = build_jastrow_factor("e-spn-spn", model_geometry, pconfig, pht, rng, readin_jpars)
 
 # initialize all variational parameters to be optimized
 variational_parameters = all_vpars(determinantal_parameters, jastrow)
@@ -226,40 +288,53 @@ variational_parameters = all_vpars(determinantal_parameters, jastrow)
 #############################
 
 # initialize measurement container for VMC measurements
-measurement_container = initialize_measurement_container(model_geometry, variational_parameters, Np, N_equil, N_bins, bin_size)
+measurement_container = initialize_measurement_container(model_geometry, variational_parameters, N_opts, opt_bin_size, N_bins, bin_size)
 
-###########################################
-## PERFORM BURNIN/THERMALIZATION UPDATES ##
-###########################################
+##################################
+## PERFORM OPTIMIZATION UPDATES ##
+##################################
+
+# start time for optimization
+t_start_opt = time()
+
+# iterate over number optimization updates
+for bin in 1:N_opts
+
+    # iterate over size of optimization bins
+    for n in 1:opt_bin_size
+
+        # perform local update to fermionic degrees of freedom
+        (pconfig, jastrow, W, D) = local_fermion_update!(W, D, model_geometry, jastrow, pconfig, rng, n, n_stab, mc_meas_freq)
+
+        # # perform local update to bosonic degrees of freedom
+        # (bosonic_acceptance_rate, phconfig, jastrow) = local_boson_update!(phconfig, model_geometry, rng)
+
+        # make measurements
+        make_measurements!(measurement_container, determinantal_parameters, jastrow, model_geometry, tight_binding_model, pconfig, Np, W, A)
+
+        # perform Stochastic Reconfiguration
+        sr_update!(measurement_container, determinantal_parameters, jastrow, η, dt)
+
+        # write the average measurements for the current bin to file.
+        write_measurements!(
+                measurement_container, 
+                model_geometry, 
+                bin, 
+                bin_size
+        )
+    end
+end
+
+# end time for optimization
+t_end_opt = time()
+
+
+#######################################################
+## PERFORM SIIMULATION UPDATES AND MAKE MEASUREMENTS ##
+#######################################################
 
 # start time for simulation
-t_start = time()
-if verbose
-    println("|| START OF VMC SIMULATION ||")
-end
-
-# Iterate over equilibration/thermalization updates.
-for n in 1:N_equil
-    if verbose
-        println("|| BEGIN EQUILIBRATION ||")
-    end
-
-    # perform local update to fermionic dofs
-    (local_acceptance_rate, pconfig, jastrow, W, D) = local_fermion_update!(W, D, Ne, model_geometry, jastrow, pconfig, rng, n, n_stab)
-
-    # record acceptance rate
-    additional_info["fermionic_local_acceptance_rate"] += local_acceptance_rate
-
-    if verbose
-        println("|| END EQUILIBRATION ||")
-    end
-
-end
-
-
-#######################################################
-## PERFORM OPTMIZATION UPDATES AND MAKE MEASUREMENTS ##
-#######################################################
+t_start_sim = time()
 
 # Iterate over the number of bins, i.e. the number of measurements will be dumped to file.
 for bin in 1:N_bins
@@ -268,20 +343,17 @@ for bin in 1:N_bins
         println("Populating bin $bin")
     end
 
-    # Iterate over the number of optimizations/updates performed in the current bin.
+    # Iterate over the number of simulation updates performed in the current bin.
     for n in 1:bin_size
         # perform local update to fermionic dofs
         (acceptance_rate, pconfig, jastrow, W, D) = local_fermion_update!(W, D, Ne, model_geometry, jastrow, pconfig, rng, n, n_stab)
 
-        # record acceptance rate
-        additional_info["fermionic_local_acceptance_rate"] += acceptance_rate
-
         # make measurements in the current bin
-        make_measurements!(measurement_container, determinantal_parameters, jastrow, model_geometry, tight_binding_model, pconfig, Np, W, A, n, bin)
+        make_measurements!(measurement_container, determinantal_parameters, jastrow, model_geometry, tight_binding_model, pconfig, Np, W, A)
     end
 
     # perform stochastic reconfiguration
-    measurement_container = sr_update!(measurement_container, determinantal_parameters, jastrow, η, dt, bin)
+    measurement_container = sr_update!(measurement_container, determinantal_parameters, jastrow, η, dt)
 
     # # Write the average measurements for the current bin to file.
     # write_measurements!(
@@ -293,15 +365,17 @@ for bin in 1:N_bins
 end
 
 # end time for simulation
-t_end = time()
-if verbose
-    println("|| END OF VMC SIMULATION ||")
-end
+t_end_sim = time()
+
+# record optmization runtime
+additional_info["optimization_time"] += t_end_opt - t_start_opt
 
 # record simulation runtime
-additional_info["time"] += t_end - t_start
+additional_info["simulation_time"] += t_end_sim - t_start_sim
 
-additional_info["fermionic_local_acceptance_rate"] /= (N_equil + N_updates)
+# record total runtime
+addition_info["total_time"] += additional_info["optimization_time"] + additional_info["simulation_time"]
+
 
 # write simulation information to file
 # save_simulation_info(simulation_info, additional_info)
@@ -310,32 +384,3 @@ additional_info["fermionic_local_acceptance_rate"] /= (N_equil + N_updates)
 # process_measurements(simulation_info.datafolder, 20)
 
 
-
-# # Flatten the nested vectors
-# flattened_data = collect(Iterators.flatten(measurement_container.scalar_measurements["energy"][2]))
-
-# # Convert the flattened data to a DataFrame with one column
-# df = DataFrame(energy = flattened_data)
-
-# # Define the file path
-# file_path = "energy_measurements.csv"
-
-# # Write the DataFrame to a CSV file
-# CSV.write(file_path, df)
-
-# println("Data successfully written as a single column to $file_path")
-
-
-# # Flatten the nested vectors
-# flattened_data = collect(Iterators.flatten(measurement_container.scalar_measurements["parameters"][2]))
-
-# # Convert the flattened data to a DataFrame with one column
-# df = DataFrame(parameters = flattened_data)
-
-# # Define the file path
-# file_path = "parameter_measurements.csv"
-
-# # Write the DataFrame to a CSV file
-# CSV.write(file_path, df)
-
-# println("Data successfully written as a single column to $file_path")

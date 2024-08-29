@@ -61,40 +61,55 @@ end
 
 
 """
-    generate_initial_onsite_phonon_configuration() 
 
-Returns a randomly generated initial configuration of onsite optical phonons.
-This would apply to Holstein and optical-SSH models.
+    generate_initial_onsite_phonon_configuration( )
+
+Returns initial vector to store onsite phonon configurations.
 
 """
 function generate_initial_onsite_phonon_configuration()
-    init_phconfig = zeros(Int, model_geometry.lattice.N)  
+    init_phconfig = zeros(Int, model_geometry.lattice.N)
+ 
+    return init_phconfig
+end
 
-    for i in 1:model_geometry.lattice.N
-        init_phconfig[i] = rand(rng, -typemax(Int):typemax(Int)) 
+
+"""
+
+    generate_initial_bond_phonon_configuration( )
+
+Returns initial vector to store bond phonon configurations.
+
+"""
+function generate_initial_bond_phonon_configuration()
+    # create neighbor table
+    nbr_table = build_neighbor_table(bonds[1],
+                                    model_geometry.unit_cell,
+                                    model_geometry.lattice)
+
+    # maps neighbor table to dictionary of bonds and neighbors                                
+    nbrs = map_neighbor_table(nbr_table)
+
+    # Collect all bonds into a Set to ensure uniqueness
+    unique_bonds = Set{Int}()
+
+    for (site, bond_info) in nbrs
+        # Add bonds to the set (automatically handles duplicates)
+        for bond in bond_info.bonds
+            push!(unique_bonds, bond)
+        end
     end
+
+    # The total number of unique bonds is the length of the set
+    total_bonds = length(unique_bonds)
+
+    init_phconfig = zeros(Int, total_bonds)
 
     return init_phconfig
 end
 
 
-# """
-#     generate_initial_bond_phonon_configuration() 
 
-# Returns a randomly generated initial configuration of bond optical phonons.
-# This would apply only to the bond-SSH model.
-
-# """
-# function generate_initial_bond_phonon_configuration()
-#     init_phconfig = zeros(Int, 2 * model_geometry.lattice.N)  
-
-#     for i in 1:2 * model_geometry.lattice.N
-#         upper_bound = rand(rng, 1:typemax(Int))
-#         init_phconfig[i] = rand(rng, 0:upper_bound) 
-#     end
-
-#     return init_phconfig
-# end
 
 
 
