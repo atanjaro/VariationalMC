@@ -89,7 +89,7 @@ function metropolis(W, jastrow, particle_positions, rng)
             println("accept prob. = $acceptance_prob")
         end
 
-        if acceptance_prob >= 1.0 || rand(rng, Uniform(0.0,1.0)) < acceptance_prob
+        if rand(rng) < acceptance_prob
             if verbose 
                 println("Hop accepted!")
             end

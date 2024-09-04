@@ -21,20 +21,20 @@ mutable struct SimulationInfo
     # data directory including filepath
     datafolder::String
 
+    # process ID number (for MPI)
+    pID::Int
+
     # simulation ID number
     sID::Int
 
-    # processor ID number
-    pID::Int
-
-    # whether the simulation is resuming
+    # whether previous simulation is being resumed or a new one is begininning
     resuming::Bool
 end
 
 
 """
 
-    SimulationInfo( )
+    SimulationInfo( ; datafolder_prefix::String, filepath::String = ".", sID::Int=0, pID::Int=0 )
 
 Creates an instance of the SimulationInfo type.
 
@@ -61,6 +61,43 @@ function SimulationInfo(; datafolder_prefix::String, filepath::String = ".", sID
 end
 
 
+# print struct info as TOML format
+function Base.show(io::IO, ::MIME"text/plain", sim_info::SimulationInfo)
+
+    @printf io "[simulation_info]\n\n"
+    @printf io "name  = \"%s\"\n" sim_info.datafolder_prefix
+    @printf io "sID   = %d\n" sim_info.sID
+    @printf io "pID   = %d\n" sim_info.pID
+    @printf io "julia_version     = \"%s\"" VERSION
+
+    return nothing
+end
+
+
+"""
+
+    save_simulation_info( sim_info::SimulationInfo, additional_info = nothing )
+
+Save the contents `sim_info` to a TOML file, and add an optional additional table to the
+output file based on the contents of a dictionary `additional_info`.
+
+"""
+function save_simulation_info(sim_info::SimulationInfo, additional_info = nothing)
+
+    (; datafolder, pID, sID) = sim_info
+    fn = @sprintf "simulation_info_pID%d_sID%d.toml" pID sID
+    open(joinpath(datafolder, fn), "w") do fout
+        show(fout, "text/plain", sim_info)
+        if !isnothing(additional_info)
+            @printf fout "\n\n"
+            TOML.print(fout, Dict("additional_info" => additional_info), sorted = true)
+        end
+    end
+
+    return nothing
+end
+
+
 """
 
     initialize_datafolder( sim_info::SimulationInfo )
@@ -80,4 +117,45 @@ function initialize_datafolder(sim_info::SimulationInfo)
     end
 
     return nothing
+end
+
+
+function model_summary(;
+        n̄::Float64,
+        nup::Int,
+        ndn::Int,
+        simulation_info::SimulationInfo, 
+        model_geometry::ModelGeometry, 
+        tight_binding_model::TightBindingModel, 
+        parameters::Tuple)
+
+    # if process ID is 1
+    if iszero(simulation_info.pID)
+
+        # construct full filename, including filepath
+        fn = joinpath(simulation_info.datafolder, "model_summary.toml")
+
+        # open file to write to
+        open(fn, "w") do fout
+            # write n̄
+            @printf fout "n̄ = %.6f\n\n" n̄
+            # write nup
+            @printf fout "nup = %.6f\n\n" nup
+            # write ndn
+            @printf fout "ndn = %d\n\n" ndn
+
+            # write model geometry out to file
+            show(fout, "text/plain", model_geometry)
+
+            # write tight-binding model to file assuming spin symmetry
+            show(fout, MIME("text/plain"), tight_binding_model)
+
+            # write various parameters to file
+            for parameter in parameters
+                show(fout, "text/plain", interaction)
+            end
+        end
+
+
+    end
 end

@@ -605,8 +605,33 @@ Added SimulationInfo.jl, which will cover most file handling tasks.
       Added intialize_datafolder() method.
       Added write_measurements!() method.
 
-Upcoming changes:ß
+Upcoming changes:
 DEBUG T vector stabilization method.
 Add additional starting configuration method where a certain order is generated. For instance,
       starting the simulation out in an AFM state: pconfig(4x4) = [1,0,1,0,0,1,0,1,1,0,1,0,0,1,0,1,0,1,0,1,1,0,1,0,0,1,0,1,1,0,1,0]
 
+------------------------------------------------------------
+                  WEEK OF SEPTEMBER 02, 2024
+------------------------------------------------------------
+
+Change log (09/04/2024):
+Removed LatticeUtilities from main directory.
+Updated SimulationInfo module:
+      Updated initialize_datafolder() method to create top level directory for storing all simualtion information.
+      Added save_simulation_info() method.
+      Prototyped the model_summary() method for writing model information to a .TOML file.
+Added initialize_measurement_directories() method for creating subdirectories for storing measurements.
+Added VariationalParameter type and constructor.
+Added num_detpars and num_jpars to measurement container.
+Updated the write_measurements!() method.
+      
+
+
+Upcoming changes:
+DEBUG T vector stabilization method.
+Update stripe wavefunction.
+Add d-wave wavefunction.
+Add FFLO wavefunction.
+Add additional starting configuration method where a certain order is generated. For instance,
+      starting the simulation out in an AFM state: pconfig(4x4) = [1,0,1,0,0,1,0,1,1,0,1,0,0,1,0,1,0,1,0,1,1,0,1,0,0,1,0,1,1,0,1,0]
+Add backflow correlations for SSH phonons.

@@ -17,23 +17,29 @@ function initialize_measurement_container(model_geometry::ModelGeometry, variati
     # total number of lattice sites
     N = model_geometry.lattice.N
 
+    # number of determinantal_parameters
+    num_detpars = variational_parameters.num_detpars
+
+    # number of Jastrow parameters
+    num_jpars = variational_parameters.num_jpars
+
     # number of variational parameters to be optimized
-    num_vpars = length(variational_parameters)
+    num_vpars = num_detpars + num_jpars
 
     # container to store optimization measurements
     optimization_measurements = Dict{String, Any}([
-        ("parameters", (variational_parameters, zeros(num_vpars))),                     # variational parameters
-        ("Δk", (zeros(num_vpars), zeros(num_vpars))),                             # log derivative of variational parameters
-        ("ΔkΔkp", (zeros(num_vpars,num_vpars), zeros(num_vpars,num_vpars))),      # product between log derivatives        
-        ("ΔkE", (zeros(num_vpars), zeros(num_vpars))),                          # product of log derivatives and energy
+        ("parameters", (variational_parameters.variational_parameters, zeros(num_vpars))),                     # variational parameters
+        ("Δk", (zeros(num_vpars), zeros(num_vpars))),                                                          # log derivative of variational parameters
+        ("ΔkΔkp", (zeros(num_vpars,num_vpars), zeros(num_vpars,num_vpars))),                                   # product between log derivatives        
+        ("ΔkE", (zeros(num_vpars), zeros(num_vpars))),                                                         # product of log derivatives and energy
     ])      
 
     # dictionary to store simulation measurements
     simulation_measurements = Dict{String, Any}([
-        ("density", 0.0),                      # average density per orbital species
-        ("double_occ", 0.0),                   # average double occupancy per orbital species
-        ("energy", (0.0,  zeros(bin_size))),   # local energy
-        ("pconfig", zeros(bin_size))           # particle configurations
+        ("density", 0.0),          # average density
+        ("double_occ", 0.0),       # average double occupancy 
+        ("energy", (0.0,  0.0)),   # local energy
+        ("pconfig", zeros(N))      # particle configurations
     ])                     
 
     # # dictionary to store derivative measurmements
@@ -58,7 +64,9 @@ function initialize_measurement_container(model_geometry::ModelGeometry, variati
         N_updates                 = N_updates,
         N_bins                    = N_bins,
         bin_size                  = bin_size,
-        num_vpars                 = num_vpars                      
+        num_vpars                 = num_vpars,
+        num_detpars               = num_detpars,
+        num_jpars                 = num_jpars                      
     )
 
     return measurement_container
@@ -135,13 +143,19 @@ function make_measurements!(measurement_container,determinantal_parameters, jast
     measure_ΔkΔkp!(measurement_container, determinantal_parameters,jastrow, model_geometry, pconfig, particle_positions,Np,W,A)
     measure_ΔkE!(measurement_container,determinantal_parameters,jastrow,model_geometry,tight_binding_model,pconfig, particle_positions,Np,W,A)
 
+    # measure double occupancy
+    measure_double_occ!(measurement_container, pconfig, model_geometry)
+
+    # record the current configuration
+    measurement_container.simulation_measurements["pconfig"] = pconfig
+
     return nothing
 end
 
 
 """
 
-    write_measurements!( )
+    write_measurements!( measurement_container, simulation_info, bin )
 
 Writes current measurements in the current bin to a JLD2 file 
 
@@ -150,26 +164,66 @@ function write_measurements!(measurement_container, simulation_info, bin)
 
     (; datafolder, pID) = simulation_info
 
+    (; optimization_measurements, simulation_measurements, num_detpars) = measurement_container
+
     # construct filename
-    fn = @sprintf "bin-%d_pID-%d.jld2" bin pID
+    fn = @sprintf "bin-%d_pID-%d.jld2" bin pID  
+    file_path_detpar = joinpath(datafolder, "optimization", "determinantal", fn)        
+    file_path_jpar = joinpath(datafolder, "optimization", "Jastrow", fn)
+    file_path_energy = joinpath(datafolder, "simulation", "energy", fn)
+    file_path_pconfig = joinpath(datafolder, "simulation", "configurations", fn)
 
-    # write optimization measurements to file
-    optimization_measurements = measurement_container.optimization_measurements
-    save(joinpath(datafolder, "optimization", fn), optimization_measurements)
+    # Append determinantal parameter measurements to file
+    detpar_measurements = optimization_measurements["parameters"][2][1:num_detpars]
+    JLD2.@save file_path_detpar detpar_measurements append=true
 
-    # write simulation measurements to file
-    simulation_measurements = measurement_container.simulation_measurements
-    save(joinpath(datafolder, "simulation", fn), simulation_measurements)
+    # Append Jastrow parameter measurements to file
+    jpar_measurements = optimization_measurements["parameters"][2][num_detpars:end]
+    JLD2.@save file_path_jpar jpar_measurements append=true
 
-    # reset optimization measurements to zero
-    for measurement in keys(optimization_measurements)
-        fill!(local_measurements[measurement], zero(Complex{E}))
-    end
+    # Append energy measurements to file
+    energy_measurements = simulation_measurements["energy"]
+    JLD2.@save file_path_energy energy_measurements append=true
+
+    # Append particle configurations to file
+    pconfig_measurements = simulation_measurements["pconfig"]
+    JLD2.@save file_path_pconfig pconfig_measurements append=true
 
 
-    # reset simulation measurements to zero
-    for measurement in keys(simulation_measurements)
-        fill!(local_measurements[measurement], zero(Complex{E}))
+    return nothing
+end
+
+function initialize_measurement_directories(simulation_info::SimulationInfo, measurement_container::NamedTuple)
+
+    (; datafolder, resuming, pID) = simulation_info
+    (; optimization_measurements, simulation_measurements, correlation_measurements) = measurement_container
+
+    # only initialize folders if pID = 0
+    if iszero(pID) && !resuming
+
+        # make optimization measurements directory
+        optimization_directory = joinpath(datafolder, "optimization")
+        mkdir(optimization_directory)
+
+        # make simulation measurements directory
+        simulation_directory = joinpath(datafolder, "simulation")
+        mkdir(simulation_directory)
+
+        # make directories for each parameter measurement
+        detpars_directory = joinpath(optimization_directory, "determinantal")
+        mkdir(detpars_directory)
+        jpars_directory = joinpath(optimization_directory, "Jastrow")
+        mkdir(jpars_directory)
+
+        # make energy measurement directory
+        energy_directory = joinpath(simulation_directory, "energy")
+        mkdir(energy_directory)
+
+        # make configuration measurement directory
+        config_directory = joinpath(simulation_directory, "configurations")
+        mkdir(config_directory)
+
+        # TODO: add correlation measurement directory initialization
     end
 
     return nothing
@@ -466,8 +520,8 @@ function measure_double_occ!(measurement_container, pconfig, model_geometry)
 
     dblocc = nup_ndn / model_geometry.lattice.N
 
-    # write to measurment container
-    
+    # write to measurement container
+    measurement_container.simulation_measurements["double_occ"] = dblocc
     
     return nothing
 end

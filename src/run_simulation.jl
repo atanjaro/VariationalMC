@@ -4,24 +4,24 @@ using LinearAlgebra
 using DelimitedFiles
 using BenchmarkTools
 using Profile
-using Distributions
 using OrderedCollections
 using CSV
 using DataFrames
 using DataStructures
-using Distributions
 using Printf
+using JLD2
 
 # files to include
 include("Hamiltonian.jl")
-include("ParticleConfiguration.jl")
 include("Jastrow.jl")
+include("ParticleConfiguration.jl")
 include("Markov.jl")
 include("Utilities.jl")
 include("Greens.jl")
 include("Hessian.jl")
-include("Measurements.jl")
 include("SimulationInfo.jl")
+include("Measurements.jl")
+
 
 
 #############################
@@ -29,7 +29,8 @@ include("SimulationInfo.jl")
 #############################
 
 # define the size of the lattice
-L = 6
+Lx = 4
+Ly = 4
 
 # define initial electron density
 n̄ = 1.0
@@ -50,20 +51,20 @@ U = 0.5
 # chemical potential
 μ_BCS = 0.0
 
-# phonon chemical potential (fugacity)
-μₚₕ = 0.01
+# # phonon chemical potential (fugacity)
+# μₚₕ = 0.01
 
-# phonon frequency
-Ω = 1.0
+# # phonon frequency
+# Ω = 1.0
 
-# microscopic electron-phonon coupling
-g = 1.0
+# # microscopic electron-phonon coupling
+# g = 1.0
 
 # # microscopic electron phonon coupling
 # α = g * sqrt(2 * Ω)
 
-# dimensionless electron-phonon coupling (g definition)
-λ = (2 * g^2) / (Ω * 8)
+# # dimensionless electron-phonon coupling (g definition)
+# λ = (2 * g^2) / (Ω * 8)
 
 # # dimensionless electron-phonon coupling (α defintion)
 # λ = α^2 / (Ω^2 * 8)
@@ -116,15 +117,12 @@ parameter_values = [0.01]                            # pht = true
 # specify filepath
 filepath = "."
 
-# simulation ID number
+# simulation ID
 sID = 1
-
-# processor ID number
-pID = 0
 
 # construct the foldername the data will be written to
 # note that the simulation ID `sID`` will be appended to this foldername as `*-sID`
-datafolder_prefix = @sprintf "hubbard_square_U%.2f_n%.2f_L%d_delS" U n̄ L 
+datafolder_prefix = @sprintf "hubbard_square_U%.2f_n%.2f_Lx%d_Ly%d_swf" U n̄ Lx Ly 
 
 # initialize an instance of the SimulationInfo type
 # this type helps keep track of where data will be written to
@@ -152,13 +150,13 @@ seed = abs(rand(Int))
 rng = Xoshiro(seed)
 
 # number of optimization updates
-N_opts = 3000
+N_opts = 100 #3000
 
 # optimization bin size
-opt_bin_size = 1000 #6000
+opt_bin_size = 100 #6000
 
 # number of simulation updates 
-N_updates = 6000    #10000
+N_updates = 100    #10000
 
 # number of simulation bins
 N_bins = 100
@@ -167,7 +165,7 @@ N_bins = 100
 bin_size = div(N_updates, N_bins)
 
 # number of MC cycles until measurement
-mc_meas_freq = 2 #300
+mc_meas_freq = 10 #300
 
 # number of iterations until check for numerical stability 
 n_stab = 500
@@ -208,7 +206,7 @@ additional_info = Dict(
     "seed" => seed,
     "n_bar" => n̄,
     "global_energy" => 0.0,
-    "μ_BCS" => 0.0,
+    "μ_BCS" => 0.0
 )
 
 ##################
@@ -227,7 +225,7 @@ unit_cell = UnitCell([[1.0,0.0], [0.0,1.0]],           # lattice vectors
 # lattice = Lattice([Lx],[true])
 
 # build square lattice
-lattice = Lattice([L, L],[true,true])
+lattice = Lattice([Lx, Ly],[true,true])
 
 # define nearest neighbor bonds
 bond_x = Bond((1,1), [1,0])
@@ -281,7 +279,7 @@ jastrow = build_jastrow_factor("e-den-den", model_geometry, pconfig, pht, rng, r
 # jastrow = build_jastrow_factor("e-spn-spn", model_geometry, pconfig, pht, rng, readin_jpars)
 
 # initialize all variational parameters to be optimized
-variational_parameters = all_vpars(determinantal_parameters, jastrow)
+variational_parameters = VariationalParameters(determinantal_parameters, jastrow)
 
 #############################
 ## INITIALIZE MEASUREMENTS ##
@@ -290,6 +288,9 @@ variational_parameters = all_vpars(determinantal_parameters, jastrow)
 # initialize measurement container for VMC measurements
 measurement_container = initialize_measurement_container(model_geometry, variational_parameters, N_opts, opt_bin_size, N_bins, bin_size)
 
+# initialize the sub-directories to which the various measurements will be written
+initialize_measurement_directories(simulation_info, measurement_container)
+
 ##################################
 ## PERFORM OPTIMIZATION UPDATES ##
 ##################################
@@ -297,7 +298,7 @@ measurement_container = initialize_measurement_container(model_geometry, variati
 # start time for optimization
 t_start_opt = time()
 
-# iterate over number optimization updates
+# iterate over number of optimization updates
 for bin in 1:N_opts
 
     # iterate over size of optimization bins
@@ -316,12 +317,7 @@ for bin in 1:N_opts
         sr_update!(measurement_container, determinantal_parameters, jastrow, η, dt)
 
         # write the average measurements for the current bin to file.
-        write_measurements!(
-                measurement_container, 
-                model_geometry, 
-                bin, 
-                bin_size
-        )
+        write_measurements!(measurement_container, simulation_info, bin)
     end
 end
 
