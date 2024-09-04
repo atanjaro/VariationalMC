@@ -1,5 +1,40 @@
 """
 
+    VariataionlParameters
+
+A type defining a set of variational parameters.
+
+"""
+struct VariationalParameters
+    # vector of parameters to be optimized
+    variational_parameters::Vector{AbstractFloat}
+
+    # number of determinantal parameters
+    num_detpars::Int
+
+    # number of Jastrow parameters
+    num_jpars::Int
+end
+
+
+"""
+
+    VariataionlParameters(pars:;Vector{AbstractString}, vals::Vector{AbstractFloat} ) 
+
+Constructor for the variational parameters type.
+
+"""
+function VariationalParameters(determinantal_parameters::DeterminantalParameters, jastrow::Jastrow)
+    variational_parameters = all_vpars(determinantal_parameters, jastrow)
+    num_detpars = determinantal_parameters.num_detpars
+    num_jpars = jastrow.num_jpars - 1
+
+    return VariationalParameters(variational_parameters, num_detpars, num_jpars)
+end
+
+
+"""
+
     get_local_jpar_derivative( jastrow::Jastrow, pconfig::Vector{Int}, pht::Bool )
 
 Calculates the local logarithmic derivative Δₖ(x) = ∂lnΨ(x)/∂vₗₘ, with respect to the kth Jastrow parameter vₗₘ. Returns 
@@ -211,7 +246,7 @@ Update variational parameters through stochastic optimization.
 """
 function sr_update!(measurement_container, determinantal_parameters, jastrow, η, dt)
     if verbose
-        println("Begin optimization step...")
+        println("Optimizing...")
     end
 
     # get covariance (Hessian) matrix
@@ -249,10 +284,6 @@ function sr_update!(measurement_container, determinantal_parameters, jastrow, η
 
     # write the new values to the container
     measurement_container.optimization_measurements["parameters"] = updated_values
-
-    if verbose
-        println("End optimization step")
-    end
 
     return nothing
 end
