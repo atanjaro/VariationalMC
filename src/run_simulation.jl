@@ -186,7 +186,7 @@ dt = 0.03
 verbose = true
 
 # debugging (this will be removed later)
-debug = true
+debug = false
 
 # whether to output matrices to file
 write = false
@@ -290,6 +290,7 @@ measurement_container = initialize_measurement_container(model_geometry, variati
 
 # initialize the sub-directories to which the various measurements will be written
 initialize_measurement_directories(simulation_info, measurement_container)
+
 
 ##################################
 ## PERFORM OPTIMIZATION UPDATES ##

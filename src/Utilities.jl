@@ -55,6 +55,7 @@ function is_invertible(D)
     end
 
     # check for singular values
+    norm_D = norm(D)
     singular_values = svdvals(D)
     smallest_singular_value = minimum(singular_values)
     sing_check = smallest_singular_value > ϵ * norm_D

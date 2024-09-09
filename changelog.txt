@@ -635,3 +635,61 @@ Add FFLO wavefunction.
 Add additional starting configuration method where a certain order is generated. For instance,
       starting the simulation out in an AFM state: pconfig(4x4) = [1,0,1,0,0,1,0,1,1,0,1,0,0,1,0,1,0,1,0,1,1,0,1,0,0,1,0,1,1,0,1,0]
 Add backflow correlations for SSH phonons.
+
+
+Change log (09/05/2024):
+Begin general DEBUG:
+      Fixed BUG in MC cycle. Previously, there was an issue where the energy could spontaneously change between Metropolis steps as 
+      shown for an L = 4 lattice with U = 0.5:
+
+            Hop possible! =>
+            Rⱼ = 1.0039058909261358
+            Rₛ = 0.4999999921874294
+            accept prob. = 0.25195675158532976
+            Hop accepted!
+            Particle: 8
+            Spin: 1
+            initial site: 14
+            final site: 10
+            [ Info: Before update:
+            [ Info: particle_positions: Pair{Any, Any}[1 => 1, 2 => 2, 3 => 3, 7 => 7, 8 => 8, 9 => 9, 12 => 12, 14 => 14, 17 => 1, 18 => 2, 20 => 4, 22 => 6, 23 => 7, 26 => 10, 27 => 11, 32 => 16]
+            [ Info: pconfig: [1, 1, 1, 0, 0, 0, 1, 1, 1, 0, 0, 1, 0, 1, 0, 0, 1, 1, 0, 1, 0, 1, 1, 0, 0, 1, 1, 0, 0, 0, 0, 1]
+            [ Info: After update:
+            [ Info: particle_positions: Pair{Any, Any}[1 => 1, 2 => 2, 3 => 3, 7 => 7, 8 => 8, 9 => 9, 12 => 12, 10 => 10, 17 => 1, 18 => 2, 20 => 4, 22 => 6, 23 => 7, 26 => 10, 27 => 11, 32 => 16]
+            [ Info: pconfig: [1, 1, 1, 0, 0, 0, 1, 1, 1, 1, 0, 1, 0, 0, 0, 0, 1, 1, 0, 1, 0, 1, 1, 0, 0, 1, 1, 0, 0, 0, 0, 1]
+            [ Info: Energy: -0.0010517452369946476
+
+            In this case, the energy is still fine after acceptance. The energy changes after the move, which is expected. Here is where the BUG occurs:
+
+            Hop possible! =>
+            Rⱼ = 1.1205063242975295
+            Rₛ = 1.3268029940671336e-16
+            accept prob. = 2.2102505634435096e-32
+            Hop rejected!
+            Particle: 13
+            Spin: 2
+            initial site: 7
+            final site: 8
+            [ Info: Before update:
+            [ Info: particle_positions: Pair{Any, Any}[1 => 1, 2 => 2, 3 => 3, 7 => 7, 8 => 8, 9 => 9, 10 => 10, 12 => 12, 17 => 1, 18 => 2, 20 => 4, 22 => 6, 23 => 7, 26 => 10, 27 => 11, 32 => 16]
+            [ Info: pconfig: [1, 1, 1, 0, 0, 0, 1, 1, 1, 1, 0, 1, 0, 0, 0, 0, 1, 1, 0, 1, 0, 1, 1, 0, 0, 1, 1, 0, 0, 0, 0, 1]
+            [ Info: After update:
+            [ Info: particle_positions: Pair{Any, Any}[1 => 1, 2 => 2, 3 => 3, 7 => 7, 8 => 8, 9 => 9, 10 => 10, 12 => 12, 17 => 1, 18 => 2, 20 => 4, 22 => 6, 23 => 7, 26 => 10, 27 => 11, 32 => 16]
+            [ Info: pconfig: [1, 1, 1, 0, 0, 0, 1, 1, 1, 1, 0, 1, 0, 0, 0, 0, 1, 1, 0, 1, 0, 1, 1, 0, 0, 1, 1, 0, 0, 0, 0, 1]
+            [ Info: Energy: 0.0028236136747176923
+
+      where despite the configuration not changing, the energy changes. The issue was traced back to the update_particle_posistions!() method, which would cause a conflict with the 
+      actual particle table after update. This has updating method has been removed from local_fermion_update!(), instead, only pconfig is updated and then 
+      get_particle_positions() would be called when needed (which is done at the beginning of each MC cylce anyway, and is based directly off of pconfig).
+
+Upcoming changes:
+Check that each time make_measurements!() is called, that the current value(s) are being normalized by the bin size.
+Check that the measurement container for the derivative is behaving correctly (overwrite to 0 after measurements are written).
+Reconstruct the Hamiltonian before recalculation/stabilization of W? Since D and M are required to get W from scratch.
+DEBUG T vector stabilization method.
+Update stripe wavefunction.
+Add d-wave wavefunction.
+Add FFLO wavefunction.
+Add additional starting configuration method where a certain order is generated. For instance,
+      starting the simulation out in an AFM state: pconfig(4x4) = [1,0,1,0,0,1,0,1,1,0,1,0,0,1,0,1,0,1,0,1,1,0,1,0,0,1,0,1,1,0,1,0]
+Add backflow correlations for SSH phonons.
