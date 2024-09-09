@@ -295,7 +295,7 @@ function measure_ΔkE!(measurement_container, determinantal_parameters, jastrow,
     Δk = vcat(detpar_derivatives,jpar_derivatives)
 
     # compute local energy
-    E = get_local_energy(model_geometry, tight_binding_model, jastrow, pconfig, particle_positions) 
+    E = get_local_energy(model_geometry, tight_binding_model, jastrow, pconfig) 
 
     # compute product of local derivatives with the local energy
     ΔkE = Δk * E
@@ -366,7 +366,7 @@ Measures the total local energy and writes to the measurement container.
 """
 function measure_local_energy!(measurement_container, model_geometry, tight_binding_model, jastrow, pconfig, particle_positions)
     # calculate the current local energy
-    E_loc = get_local_energy(model_geometry, tight_binding_model, jastrow, pconfig, particle_positions)
+    E_loc = get_local_energy(model_geometry, tight_binding_model, jastrow, pconfig)
 
     # get current values from the container
     current_container = measurement_container.simulation_measurements["energy"]
@@ -395,9 +395,12 @@ end
 Calculates the local variational energy per site E/N, where N is the number fo sites.
 
 """
-function get_local_energy(model_geometry, tight_binding_model, jastrow, pconfig, particle_positions)
+function get_local_energy(model_geometry, tight_binding_model, jastrow, pconfig)
     # number of lattice sites
     N = model_geometry.lattice.N
+
+    # get particle positions
+    particle_positions = get_particle_positions(pconfig, model_geometry)
 
     # calculate kinetic energy
     E_k = get_local_kinetic_energy(model_geometry, tight_binding_model, jastrow, pconfig, particle_positions)
@@ -425,11 +428,12 @@ function get_local_kinetic_energy(model_geometry, tight_binding_model, jastrow, 
     # generate neighbor map
     nbr_map = map_neighbor_table(nbr_table)
 
+
     # track kinetic energy
     E_loc_kinetic = 0.0
 
     # calculate electron kinetic energy
-    for β in 1:Np
+    for β in 1:Ne
         # position of particle β
         k = particle_positions[β][2]
 

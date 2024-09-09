@@ -205,7 +205,11 @@ function local_fermion_update!(W, D, model_geometry, jastrow, pconfig, rng, n_it
         proposed_hops += 1
     
         # get particle positions
-        particle_positions = get_particle_positions(pconfig, model_geometry)    
+        particle_positions = get_particle_positions(pconfig, model_geometry)
+        
+        # E_loc_before = get_local_energy(model_geometry, tight_binding_model, jastrow, pconfig)
+        # energy_before = E_loc_before / model_geometry.lattice.N
+        # @info "Energy before Metropolis : $energy_before"
     
         # Metropolis step
         met_step = metropolis(W, jastrow, particle_positions, rng)    
@@ -226,7 +230,7 @@ function local_fermion_update!(W, D, model_geometry, jastrow, pconfig, rng, n_it
             println("final site: $prop_fsite")
     
             @info "Before update:"
-            @info "particle_positions: $particle_positions"
+            # @info "particle_positions: $particle_positions"
             @info "pconfig: $pconfig"
         end
     
@@ -237,8 +241,8 @@ function local_fermion_update!(W, D, model_geometry, jastrow, pconfig, rng, n_it
             # perform hop   
             do_particle_hop!(met_step, pconfig, model_geometry)                 
     
-            # update particle positions
-            update_particle_position!(met_step, particle_positions)     
+            # # update particle positions                                   ## THIS IS THE SOURCE OF THE BUG!!
+            # update_particle_position!(met_step, particle_positions)       ## Remove this later after finishing general debug
     
             # update Green's function
             update_equal_greens!(met_step, W)   
@@ -249,25 +253,29 @@ function local_fermion_update!(W, D, model_geometry, jastrow, pconfig, rng, n_it
         # DEBUG
         if debug
             @info "After update:"
-            @info "particle_positions: $particle_positions"
+            # @info "particle_positions: $particle_positions"
             @info "pconfig: $pconfig"
     
-            println("Length of particle_positions: ", length(particle_positions))
+            # println("Length of particle_positions: ", length(particle_positions))
+
+            # E_loc_after = get_local_energy(model_geometry, tight_binding_model, jastrow, pconfig)
+            # energy_after = E_loc_after / model_geometry.lattice.N
+            # @info "Energy after Metropolis : $energy_after"
         end
     end
 
     
-    # check for numerical stability after a certain number of iterations
-    if n_iter % n_stab == 0
-        # check stability of Green's function 
-        (W, D) = recalc_equal_greens(W, δW, D, pconfig)
+    # # check for numerical stability after a certain number of iterations
+    # if n_iter % n_stab == 0
+    #     # check stability of Green's function 
+    #     (W, D) = recalc_equal_greens(W, δW, D, pconfig)
 
-        # check stability of T vector
-        recalc_Tvec!(jastrow::Jastrow, δT::Float64)
-    end
+    #     # check stability of T vector
+    #     recalc_Tvec!(jastrow::Jastrow, δT::Float64)
+    # end
 
     # # compute local acceptance rate
-    # local_acceptance_rate = accepted_hops / proposed_hops     
+    local_acceptance_rate = accepted_hops / proposed_hops     
 
     return pconfig, jastrow, W, D #local_acceptance_rate, 
 end
