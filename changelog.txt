@@ -693,3 +693,144 @@ Add FFLO wavefunction.
 Add additional starting configuration method where a certain order is generated. For instance,
       starting the simulation out in an AFM state: pconfig(4x4) = [1,0,1,0,0,1,0,1,1,0,1,0,0,1,0,1,0,1,0,1,1,0,1,0,0,1,0,1,1,0,1,0]
 Add backflow correlations for SSH phonons.
+
+
+------------------------------------------------------------
+                  WEEK OF SEPTEMBER 09, 2024
+------------------------------------------------------------
+
+Change log (09/12/2024):
+Updated method of specifying parameters to optimize to account for inital parameters for a charge and spin stripe wavefunction (these start off with 2 x N parameters).
+      Now, initial parameters are contained in a vector within a vector.
+Updated all_vpars() method for compatibility with the above change. 
+Updated build_variational_terms() method:
+      Added ability to add charge and spin stripe terms to the trial state.
+      Updated method for adding antiferromagnetic parameter to trial state.
+      Updated method for adding charge density wave parameter to trial state.
+      Updated method for adding chemical potential to trial state.
+
+
+Upcoming changes:
+Add d-wave wavefunction.
+Need to update determinantal parameter updating in sr_update!() method. 
+Check that each time make_measurements!() is called, that the current value(s) are being normalized by the bin size.
+Check that the measurement container for the derivative is behaving correctly (overwrite to 0 after measurements are written).
+Reconstruct the Hamiltonian before recalculation/stabilization of W? Since D and M are required to get W from scratch.
+DEBUG T vector stabilization method.
+Add FFLO wavefunction.
+Add additional starting configuration method where a certain order is generated. For instance,
+      starting the simulation out in an AFM state: pconfig(4x4) = [1,0,1,0,0,1,0,1,1,0,1,0,0,1,0,1,0,1,0,1,1,0,1,0,0,1,0,1,1,0,1,0]
+Add backflow correlations for SSH phonons.
+
+
+Change log (09/13/2024):
+Updated build_variational_terms() method:
+      Added ability to add d-wave pairing term to trial state.
+
+Upcoming changes:
+Need to update determinantal parameter updating in sr_update!() method. 
+Check that each time make_measurements!() is called, that the current value(s) are being normalized by the bin size.
+Check that the measurement container for the derivative is behaving correctly (overwrite to 0 after measurements are written).
+Reconstruct the Hamiltonian before recalculation/stabilization of W? Since D and M are required to get W from scratch.
+DEBUG T vector stabilization method.
+Add FFLO wavefunction.
+Add additional starting configuration method where a certain order is generated. For instance,
+      starting the simulation out in an AFM state: pconfig(4x4) = [1,0,1,0,0,1,0,1,1,0,1,0,0,1,0,1,0,1,0,1,1,0,1,0,0,1,0,1,1,0,1,0]
+Add backflow correlations for SSH phonons.
+
+
+------------------------------------------------------------
+                  WEEK OF SEPTEMBER 16, 2024
+------------------------------------------------------------
+
+Change log (09/16/2024):
+Updated methods for obtaining particle numbers.
+
+Upcoming changes:
+Need to update determinantal parameter updating in sr_update!() method. 
+Check that each time make_measurements!() is called, that the current value(s) are being normalized by the bin size.
+Check that the measurement container for the derivative is behaving correctly (overwrite to 0 after measurements are written).
+Reconstruct the Hamiltonian before recalculation/stabilization of W? Since D and M are required to get W from scratch.
+DEBUG T vector stabilization method.
+Add FFLO wavefunction.
+Add additional starting configuration method where a certain order is generated. For instance,
+      starting the simulation out in an AFM state: pconfig(4x4) = [1,0,1,0,0,1,0,1,1,0,1,0,0,1,0,1,0,1,0,1,1,0,1,0,0,1,0,1,1,0,1,0]
+Add backflow correlations for SSH phonons.
+
+
+Change log (09/17/2024):
+Updated variables in the get_particle_numbers() method.
+Updated variables in the get_particle_density() method.
+
+Upcoming changes:
+Need to update determinantal parameter updating in sr_update!() method. 
+Check that each time make_measurements!() is called, that the current value(s) are being normalized by the bin size.
+Check that the measurement container for the derivative is behaving correctly (overwrite to 0 after measurements are written).
+Reconstruct the Hamiltonian before recalculation/stabilization of W? Since D and M are required to get W from scratch.
+DEBUG T vector stabilization method.
+Add FFLO wavefunction.
+Add additional starting configuration method where a certain order is generated. For instance,
+      starting the simulation out in an AFM state: pconfig(4x4) = [1,0,1,0,0,1,0,1,1,0,1,0,0,1,0,1,0,1,0,1,1,0,1,0,0,1,0,1,1,0,1,0]
+Add backflow correlations for SSH phonons.
+
+
+Change log (09/18/2024):
+Updated all instances of 'Np' with 'Ne' in the calculation of various matrices. Doing so solves the problem of some initial configurations 
+      being open shell, when they shouldn't be. This change is corroborated by the methods used by Becca and Sorella.
+Updated the singular configuration check (is_invertible() method). Now, this check is done by directly inverting the matrix D using 
+      LU decomposition. A singular configuration will trigger an exit condition.
+Deprecated update_particle_posistions!() method.
+Updated get_particle_postions() method:
+      This method now generates a 2*N vector κ, whose entries are particle numbers β = 1,...,Ne on the corresponding spindex taken from pconfig.
+      This vector also gives the order of creation operators which generate that configuration and will be updated along with pconfig as new
+      configurations are proposed and accepted.
+Updated metropolis() method
+Updated build_determinantal_state() method to now also returns κ.
+
+
+Upcoming changes:
+Need to update local_fermion_update!() method.
+Need to update do_particle_hop() method to also update κ.
+Need to update determinantal parameter updating in sr_update!() method. 
+Check that each time make_measurements!() is called, that the current value(s) are being normalized by the bin size.
+Check that the measurement container for the derivative is behaving correctly (overwrite to 0 after measurements are written).
+Reconstruct the Hamiltonian before recalculation/stabilization of W? Since D and M are required to get W from scratch.
+DEBUG T vector stabilization method.
+Add FFLO wavefunction.
+Add additional starting configuration method where a certain order is generated. For instance,
+      starting the simulation out in an AFM state: pconfig(4x4) = [1,0,1,0,0,1,0,1,1,0,1,0,0,1,0,1,0,1,0,1,1,0,1,0,0,1,0,1,1,0,1,0]
+Add backflow correlations for SSH phonons.
+
+
+
+Change log (09/19/2024):
+Updated do_particle_hop() to now also update κ.
+Updated local_fermion_update!() method to reflect change in do_particle_hop(). Now, both the particle configuration and κ are given
+      directly with the metropolis() method using κ and both quantities updated simultaenously when calling do_particle_hop().
+
+Upcoming changes:
+Need to update determinantal parameter updating in sr_update!() method. 
+Check that each time make_measurements!() is called, that the current value(s) are being normalized by the bin size.
+Check that the measurement container for the derivative is behaving correctly (overwrite to 0 after measurements are written).
+Reconstruct the Hamiltonian before recalculation/stabilization of W? Since D and M are required to get W from scratch.
+DEBUG T vector stabilization method.
+Add FFLO wavefunction.
+Add additional starting configuration method where a certain order is generated. For instance,
+      starting the simulation out in an AFM state: pconfig(4x4) = [1,0,1,0,0,1,0,1,1,0,1,0,0,1,0,1,0,1,0,1,1,0,1,0,0,1,0,1,1,0,1,0]
+Add backflow correlations for SSH phonons.
+
+
+Change log (09/20/2024):
+Replaced all instances of 'particle_positions' with 'κ'.
+Update various measurement methods to normalize bin measurements by bin size.
+
+
+Upcoming changes:
+Check value resetting after measurement write in write_measurements!() method.
+Need to update determinantal parameter updating in sr_update!() method. 
+Reconstruct the Hamiltonian before recalculation/stabilization of W? Since D and M are required to get W from scratch.
+DEBUG T vector stabilization method.
+Add FFLO wavefunction.
+Add additional starting configuration method where a certain order is generated. For instance,
+      starting the simulation out in an AFM state: pconfig(4x4) = [1,0,1,0,0,1,0,1,1,0,1,0,0,1,0,1,0,1,0,1,1,0,1,0,0,1,0,1,1,0,1,0]
+Add backflow correlations for SSH phonons.

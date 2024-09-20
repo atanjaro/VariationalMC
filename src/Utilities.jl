@@ -22,76 +22,26 @@ Runs check on the invertibility of a matrix by checking: the value of the determ
 for singular values, and performs LU decomposition with partial pivoting. 
 
 """
-function is_invertible(D)
-    # tolerance
-    ϵ = eps(Float64)
+function is_invertible(D::AbstractMatrix)
+    invertible = inverse(D)
 
-    # check the determinant is non-zero
-    det_D = det(D)
-    norm_D = norm(D)
-    det_check = abs(det_D) > ϵ * norm_D
+    return invertible
+end
 
-    if !det_check
-        if verbose
-            println("Singular configuration detected! Generating new configuration...")
-            println("Non-zero determinant detected:")
-            println("|$det_D| < $ϵ × $norm_D")
+
+function inverse(D::AbstractMatrix)
+    try
+        D_inv = inv(D)  # Try to compute the inverse
+        # println("Matrix is invertible.")
+        return true  # Inversion successful, matrix is invertible
+    catch e
+        if isa(e, SingularException)
+            println("Singular configuration detected! Matrix inversion unsuccessful.")
+            return false  # Matrix is singular, inversion failed
+        else
+            rethrow(e)  # For any other exceptions, rethrow the error
         end
-        return false
     end
-
-    # check the condition number
-    cond_D = cond(D)
-    inv_eps = 1/ϵ
-    cond_check = cond_D < inv_eps
-
-    if !cond_check
-        if verbose
-            println("Singular configuration detected! Generating new configuration...")
-            println("Condition number test failed:")
-            println("$cond_D > $inv_eps")
-        end
-        return false
-    end
-
-    # check for singular values
-    norm_D = norm(D)
-    singular_values = svdvals(D)
-    smallest_singular_value = minimum(singular_values)
-    sing_check = smallest_singular_value > ϵ * norm_D
-
-    if !sing_check
-        if verbose
-            println("Singular configuration detected! Generating new configuration...")
-            println("Singular values detected:")
-            println("$smallest_singular_value < $ϵ × norm_D")
-        end
-        return false
-    end
-
-    # pivot check with LU decomposition
-    LU = lu(D)
-
-    # Access the combined LU matrix
-    LU_matrix = LU.factors
-
-    # Extract the diagonal elements of the U matrix (which are on the diagonal of LU_matrix)
-    U_diag = diag(LU_matrix)
-
-    # Find the minimum absolute value of the diagonal of U
-    min_pivot = minimum(abs.(U_diag))
-    pivot_check = min_pivot > ϵ * norm_D
-
-    if !pivot_check
-        if verbose
-            println("Singular configuration detected! Generating new configuration...")
-            println("LU partial pivoting check failed:")
-            println("$min_pivot < $ϵ × $norm_D")
-        end
-        return false
-    end
-
-    return true
 end
 
 
@@ -115,7 +65,7 @@ Checks whether configuration is open shell.
 
 """
 function is_openshell(ε, Np)
-    return ε[Np + 1] - ε[Np] < 0.0001
+    return ε[Np+1] - ε[Np] < 0.0001
 end
 
 
@@ -147,14 +97,16 @@ Generates an array combining all values of determinantal and Jastrow parameters.
 """
 function all_vpars(determinantal_parameters, jastrow)
     jpar_map = jastrow.jpar_map
-
     num_jpars = jastrow.num_jpars
 
+    # Extract the Jastrow parameters
     jpars = [value[2] for (i, value) in enumerate(values(jpar_map)) if i < num_jpars]
-    detpars = determinantal_parameters.vals
     
-    # concatenate variational parameters
-    vpar_array = vcat(detpars, jpars)
+    # Collect all values from the inner vectors of detpars into a single vector
+    detpars_all = vcat(determinantal_parameters.vals...)
+    
+    # Concatenate all detpars with jpars into a single vector
+    vpar_array = vcat(detpars_all, jpars)
     
     return vpar_array
 end

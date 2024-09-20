@@ -41,7 +41,7 @@ accepted, returns acceptance, particle β and it's spindex, initial position, an
 position.
 
 """
-function metropolis(W, jastrow, particle_positions, rng)    
+function metropolis(W, jastrow, κ, rng)    
     # create neighbor table
     nbr_table = build_neighbor_table(bonds[1],
                                     model_geometry.unit_cell,
@@ -51,10 +51,13 @@ function metropolis(W, jastrow, particle_positions, rng)
     nbrs = map_neighbor_table(nbr_table)
 
     # randomly select some particle in the lattice
-    beta = rand(rng, 1:trunc(Int,Np))                   
+    β = rand(rng, 1:trunc(Int,Ne))                   
+
+    # spindex occupation number of particle β
+    β_spindex = findfirst(x -> x == β, κ)
 
     # real position 'k' of particle 'β' 
-    k = particle_positions[beta][2]     
+    k = get_index_from_spindex(β_spindex, model_geometry)  
     
     # randomly selected neighboring site 'l'
     k_nbrs = nbrs[k][2]
@@ -62,27 +65,27 @@ function metropolis(W, jastrow, particle_positions, rng)
     l = k_nbrs[nbr_rand]          
 
     # spin of particle particle 'β' 
-    beta_spin = get_spindex_type(particle_positions[beta][1],model_geometry)
+    β_spin = get_spindex_type(β_spindex, model_geometry)
     
     # checks occupation against spin species of particle 'β'
     # if site is unoccupied by same spin species, hop is possible
-    if number_operator(l,pconfig)[beta_spin] == 1
-        if verbose == true
+    if number_operator(l,pconfig)[β_spin] == 1
+        if debug == true
             println("Hop impossible! Rejected!")  
         end
-        return LocalAcceptance(0, beta, beta_spin, k, l)
+        return LocalAcceptance(0, β, β_spin, k, l)
     else
         # begin Metropolis algorithm
 
         # get Jastrow ratio (element of T vector)
-        Rⱼ = get_jastrow_ratio(k, l, jastrow, pht, beta_spin)    
+        Rⱼ = get_jastrow_ratio(k, l, jastrow, pht, β_spin)    
 
         # get wavefunction ratio (correpsonding element of Green's function)
-        Rₛ = W[l, beta]  
+        Rₛ = W[l, β]  
                           
         acceptance_prob = Rⱼ^2 * Rₛ^2    
 
-        if verbose == true
+        if debug == true
             println("Hop possible! =>")
             println("Rⱼ = $Rⱼ")
             println("Rₛ = $Rₛ")
@@ -90,17 +93,17 @@ function metropolis(W, jastrow, particle_positions, rng)
         end
 
         if rand(rng) < acceptance_prob
-            if verbose 
+            if debug 
                 println("Hop accepted!")
             end
             
-            return LocalAcceptance(1, beta, beta_spin, k, l)  # acceptance, particle number, particle spin, initial site, final site
+            return LocalAcceptance(1, β, β_spin, k, l)  # acceptance, particle number, particle spin, initial site, final site
         else
-            if verbose 
+            if debug 
                println("Hop rejected!")
             end
 
-            return LocalAcceptance(0, beta, beta_spin, k, l)
+            return LocalAcceptance(0, β, β_spin, k, l)
         end
     end
 end
@@ -151,7 +154,7 @@ function metropolis(phconfig, model_geometry, rng)
 
         acceptance_prob = Rⱼₚₕ^2 * Rⱼₑₚₕ^2 * exp(2 * μₚₕ * cran) * phnorm^2
 
-        if verbose == true
+        if debug == true
             println("Change possible! =>")
             println("Rⱼₚₕ = $Rⱼₚₕ")
             println("Rⱼₑₚₕ = $Rⱼₑₚₕ")
@@ -160,13 +163,13 @@ function metropolis(phconfig, model_geometry, rng)
         end
 
         if acceptance_prob > rand(rng)
-            if verbose 
+            if debug 
                 println("Change accepted!")
             end
 
             return 1, cran, rand_site
         else
-            if verbose 
+            if debug 
                 println("Change rejected!")
              end
  
@@ -184,8 +187,8 @@ Performs a local MC update. Proposes moves and accept/rejects via Metropolis alg
 if accepted, updates particle positions, T vector, and Green's function (W matrix).
 
 """
-function local_fermion_update!(W, D, model_geometry, jastrow, pconfig, rng, n_iter, n_stab, mc_meas_freq)
-    if verbose
+function local_fermion_update!(W, D, model_geometry, jastrow, pconfig, κ, rng, n_iter, n_stab, mc_meas_freq)
+    if debug
         println("Starting new Monte Carlo cycle...")
     end
 
@@ -197,22 +200,15 @@ function local_fermion_update!(W, D, model_geometry, jastrow, pconfig, rng, n_it
     # perform number of metropolis steps equal to the number of electrons
     # for help in decorrelation
     for s in 1:mc_meas_freq
-        if verbose
+        if debug
             println("Metropolis step = $s")
         end
     
         # increment number of proposed hops
         proposed_hops += 1
     
-        # get particle positions
-        particle_positions = get_particle_positions(pconfig, model_geometry)
-        
-        # E_loc_before = get_local_energy(model_geometry, tight_binding_model, jastrow, pconfig)
-        # energy_before = E_loc_before / model_geometry.lattice.N
-        # @info "Energy before Metropolis : $energy_before"
-    
         # Metropolis step
-        met_step = metropolis(W, jastrow, particle_positions, rng)    
+        met_step = metropolis(W, jastrow, κ, rng)    
     
         # whether hop was accepted
         acceptance = met_step.acceptance
@@ -239,10 +235,7 @@ function local_fermion_update!(W, D, model_geometry, jastrow, pconfig, rng, n_it
             accepted_hops += 1
     
             # perform hop   
-            do_particle_hop!(met_step, pconfig, model_geometry)                 
-    
-            # # update particle positions                                   ## THIS IS THE SOURCE OF THE BUG!!
-            # update_particle_position!(met_step, particle_positions)       ## Remove this later after finishing general debug
+            do_particle_hop!(met_step, pconfig, κ, model_geometry)              
     
             # update Green's function
             update_equal_greens!(met_step, W)   
@@ -253,14 +246,7 @@ function local_fermion_update!(W, D, model_geometry, jastrow, pconfig, rng, n_it
         # DEBUG
         if debug
             @info "After update:"
-            # @info "particle_positions: $particle_positions"
             @info "pconfig: $pconfig"
-    
-            # println("Length of particle_positions: ", length(particle_positions))
-
-            # E_loc_after = get_local_energy(model_geometry, tight_binding_model, jastrow, pconfig)
-            # energy_after = E_loc_after / model_geometry.lattice.N
-            # @info "Energy after Metropolis : $energy_after"
         end
     end
 
@@ -277,7 +263,7 @@ function local_fermion_update!(W, D, model_geometry, jastrow, pconfig, rng, n_it
     # # compute local acceptance rate
     local_acceptance_rate = accepted_hops / proposed_hops     
 
-    return pconfig, jastrow, W, D #local_acceptance_rate, 
+    return pconfig, κ, jastrow, W, D #local_acceptance_rate, 
 end
 
 
@@ -295,7 +281,7 @@ function local_boson_update!(phconfig, model_geometry, rng)
     accepted_addrs = 0
 
     for s in 1:mc_meas_freq
-        if verbose
+        if debug
             println("Metropolis step = $s")
         end
 

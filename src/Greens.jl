@@ -7,46 +7,35 @@ basis.
 """
 function build_determinantal_state(H_mf)
     # Diagonalize Hamiltonian
-    ε, U = diagonalize(H_mf)
+    ε, Uₑ = diagonalize(H_mf)
 
     # Check for open shell configuration
-    if is_openshell(ε, Np)
-        verbose && println("WARNING! Open shell detected")
-        exit(1)
+    if is_openshell(ε, Ne)
+        debug && println("WARNING! Open shell detected")
+        # exit(1)
     else
-        verbose && println("Generating shell...")
+        debug && println("Generating shell...")
     end
 
     # Store energies
-    ε₀ = ε[1:Np]
+    ε₀ = ε[1:Ne]
 
     # Store M matrix
-    M = hcat(U[:,1:Np])
+    M = hcat(Uₑ[:,1:Ne])
 
     # Build Slater determinant
-    # in case that there is no finite overlap...
-    # max_configs = (n, k) -> div(prod(n:-1:(n-k+1)), factorial(k))
-    # max_attempts = max_configs(model_geometry.lattice.N, nup)
-    # attempt = 0
     while true
         pconfig = generate_initial_fermion_configuration()
+        κ = get_particle_positions(pconfig, model_geometry, Ne)
+
         config_indices = findall(x -> x == 1, pconfig)
         D = M[config_indices, :]
 
         # Check that starting configuration is not singular
         if is_invertible(D) 
-            # Write matrices to file if needed
-            if write
-                writedlm("H_mf.csv", H_mf)
-                writedlm("D.csv", D)
-                writedlm("M.csv", M)
-                writedlm("U.csv", U)
-            end
 
-            return D, pconfig, ε, ε₀, M, U
+            return D, pconfig, κ, ε, ε₀, M, Uₑ
         end
-        # # Increment attempt counter
-        # attempt += 1
     end    
 end
 
@@ -63,24 +52,20 @@ function build_determinantal_state(H_mf, init_pconfig)
     ε, Uₑ = diagonalize(H_mf)
 
     # Check for open shell configuration
-    if is_openshell(ε, Np)
-        verbose && println("WARNING! Open shell detected")
+    if is_openshell(ε, Ne)
+        debug && println("WARNING! Open shell detected")
         exit(1)
     else
-        verbose && println("Generating shell...")
+        debug && println("Generating shell...")
     end
 
     # Store energies
-    ε₀ = ε[1:Np]
+    ε₀ = ε[1:Ne]
 
     # Store M matrix
-    M = hcat(U[:,1:Np])
+    M = hcat(U[:,1:Ne])
 
     # Build Slater determinant
-    # in case that there is no finite overlap...
-    # max_configs = (n, k) -> div(prod(n:-1:(n-k+1)), factorial(k))
-    # max_attempts = max_configs(model_geometry.lattice.N, nup)
-    # attempt = 0
     while true
         pconfig = init_pconfig
         config_indices = findall(x -> x == 1, pconfig)
@@ -88,18 +73,9 @@ function build_determinantal_state(H_mf, init_pconfig)
 
         # Check that starting configuration is not singular
         if is_invertible(D) 
-            # Write matrices to file if needed
-            if write
-                writedlm("H.csv", H_mf)
-                # writedlm("D.csv", D)
-                # writedlm("M.csv", M)
-                # writedlm("Ue.csv", Uₑ)
-            end
 
             return D, pconfig, ε, ε₀, M, Uₑ
         end
-        # # Increment attempt counter
-        # attempt += 1
     end    
 end
 
@@ -111,7 +87,7 @@ Returns the equal-time Green's function by solving DᵀWᵀ = Mᵀ using full pi
 
 """
 function get_equal_greens(M::Matrix{Float64}, D::Matrix{Float64})::Matrix{Float64}
-    verbose && println("Getting equal-time Green's function...")
+    debug && println("Getting equal-time Green's function...")
 
     # perform the linear solve directly
     Wt = D' \ M'     
@@ -164,7 +140,9 @@ for the current configuration.
 """
 function recalc_equal_greens(Wᵤ::Matrix{Float64}, δW::Float64, D::Matrix{Float64}, pconfig::Vector{Int64})
     # L = model_geometry.lattice.N
-    # Np = size(Wᵤ, 2)  # Assuming Np is the number of columns in Wᵤ
+    # Ne = size(Wᵤ, 2)  # Assuming Ne is the number of columns in Wᵤ
+
+    # reconstruct the Hamiltonian to reconstruct D
 
     # recalculate D for current configuration
     Dᵣ = M[findall(x -> x == 1, pconfig), :]
@@ -182,28 +160,10 @@ function recalc_equal_greens(Wᵤ::Matrix{Float64}, δW::Float64, D::Matrix{Floa
     ΔW = sqrt(diff_sum / W_sum)
 
     if ΔW > δW
-        verbose && println("WARNING! Green's function has been recalculated: ΔW = ", ΔW, " > δW = ", δW)
+        debug && println("WARNING! Green's function has been recalculated: ΔW = ", ΔW, " > δW = ", δW)
         return Wᵣ, Dᵣ
     else
-        verbose && println("Green's function is stable: ΔW = ", ΔW, " < δW = ", δW)
+        debug && println("Green's function is stable: ΔW = ", ΔW, " < δW = ", δW)
         return Wᵤ, D
     end  
 end
-
-
-"""
-
-    fsgn( W::Matrix{Float64} )
-
-Given the equal time Green's function, returns the value of the Fermion sign.
-
-"""
-function fsgn(W::Matrix{Float64})
-    M_up = W[1:N, :]
-    M_dn = W[N+1:2*N, :]
-
-    return sign(det(M_up) * det(M_dn))
-end
-
-
-

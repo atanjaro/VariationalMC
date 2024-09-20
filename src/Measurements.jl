@@ -106,7 +106,7 @@ function initialize_measurements!(measurement_container, observable)
 end
 
 
-# TODO: implement correlation measurmenets
+# TODO: implement correlation measurements
 function initialize_correlation_measurements!(measurement_container,  correlation)
     (; correlation_measurements) = measurement_container
 
@@ -131,17 +131,15 @@ Measure the local energy and logarithmic derivatives for a particular bin.
 
 """
 function make_measurements!(measurement_container,determinantal_parameters, jastrow, model_geometry, 
-                            tight_binding_model, pconfig,  Np, W, A)
-    # get current particle positions
-    particle_positions = get_particle_positions(pconfig, model_geometry)
+                            tight_binding_model, pconfig, κ, Np, W, A, bin_size)
 
     # measure the energy
-    measure_local_energy!(measurement_container,model_geometry,tight_binding_model,jastrow,pconfig,particle_positions)
+    measure_local_energy!(measurement_container, model_geometry, tight_binding_model, jastrow, pconfig, κ, bin_size)
 
     # measure the lograithmic derivatives
-    measure_Δk!(measurement_container, determinantal_parameters, jastrow, model_geometry,pconfig, particle_positions, Np, W, A)
-    measure_ΔkΔkp!(measurement_container, determinantal_parameters,jastrow, model_geometry, pconfig, particle_positions,Np,W,A)
-    measure_ΔkE!(measurement_container,determinantal_parameters,jastrow,model_geometry,tight_binding_model,pconfig, particle_positions,Np,W,A)
+    measure_Δk!(measurement_container, determinantal_parameters, jastrow, model_geometry,pconfig, κ, Np, W, A,bin_size)
+    measure_ΔkΔkp!(measurement_container, determinantal_parameters,jastrow, model_geometry, pconfig, κ, Np,W,A,bin_size)
+    measure_ΔkE!(measurement_container,determinantal_parameters,jastrow,model_geometry,tight_binding_model,pconfig, κ,Np,W,A,bin_size)
 
     # measure double occupancy
     measure_double_occ!(measurement_container, pconfig, model_geometry)
@@ -188,6 +186,8 @@ function write_measurements!(measurement_container, simulation_info, bin)
     # Append particle configurations to file
     pconfig_measurements = simulation_measurements["pconfig"]
     JLD2.@save file_path_pconfig pconfig_measurements append=true
+
+    # reset current bin measrement to 0
 
 
     return nothing
@@ -239,9 +239,9 @@ determinantal parameters and the rest are derivatives of Jastrow parameters. Mea
 to the measurement container.
 
 """
-function measure_Δk!(measurement_container, determinantal_parameters, jastrow, model_geometry, pconfig, particle_positions, Np, W, A)
+function measure_Δk!(measurement_container, determinantal_parameters, jastrow, model_geometry, pconfig, κ, Np, W, A, bin_size)
     # perform parameter derivatives
-    detpar_derivatives = get_local_detpar_derivative(determinantal_parameters, model_geometry, particle_positions, Np, W, A)
+    detpar_derivatives = get_local_detpar_derivative(determinantal_parameters, model_geometry, κ, Np, W, A)
     jpar_derivatives = get_local_jpar_derivative(jastrow, pconfig, pht)
     Δk = vcat(detpar_derivatives,jpar_derivatives)
 
@@ -250,10 +250,10 @@ function measure_Δk!(measurement_container, determinantal_parameters, jastrow, 
 
     # update value for the current bin
     current_bin_values = current_container[2]
-    current_bin_values .= Δk
+    current_bin_values .= Δk/bin_size
 
     # update accumuator for average measurements
-    new_avg_value = current_container[1] .+ Δk
+    new_avg_value = current_container[1] .+ Δk/bin_size
 
     # combine the updated values 
     updated_values = (new_avg_value, current_bin_values)
@@ -265,21 +265,6 @@ function measure_Δk!(measurement_container, determinantal_parameters, jastrow, 
 end
 
 
-# # function prototype for updating the measurement container
-# function update_container!(current_container, updated_values, n, bin)
-#     new_values = current_container[1] .+ updated_values
-
-#     current_binned_values = current_container[2]
-#     current_binned_value[bin][n] .= new_values
-
-#     updated_container = (new_values, current_binned_values)
-
-#     current_container = updated_container
-
-#     return current_container
-# end
-
-
 """
     measure_ΔkE!( determinantal_parameters, jastrow, model_geometry, tight_binding_model, pconfig, Np, W, A )
 
@@ -288,14 +273,14 @@ to the measurement container.
 
 """
 # PASSED
-function measure_ΔkE!(measurement_container, determinantal_parameters, jastrow, model_geometry, tight_binding_model, pconfig, particle_positions,  Np, W, A)
+function measure_ΔkE!(measurement_container, determinantal_parameters, jastrow, model_geometry, tight_binding_model, pconfig, κ,  Np, W, A, bin_size)
     # perform derivatives
-    detpar_derivatives = get_local_detpar_derivative(determinantal_parameters, model_geometry, particle_positions, Np, W, A)
+    detpar_derivatives = get_local_detpar_derivative(determinantal_parameters, model_geometry, κ, Np, W, A)
     jpar_derivatives = get_local_jpar_derivative(jastrow,pconfig,pht)
     Δk = vcat(detpar_derivatives,jpar_derivatives)
 
     # compute local energy
-    E = get_local_energy(model_geometry, tight_binding_model, jastrow, pconfig) 
+    E = get_local_energy(model_geometry, tight_binding_model, jastrow, pconfig, κ) 
 
     # compute product of local derivatives with the local energy
     ΔkE = Δk * E
@@ -305,10 +290,10 @@ function measure_ΔkE!(measurement_container, determinantal_parameters, jastrow,
 
     # update value for the current bin
     current_bin_values = current_container[2]
-    current_bin_values .= ΔkE
+    current_bin_values .= ΔkE/bin_size
 
     # update accumuator for average measurements
-    new_avg_value = current_container[1] .+ ΔkE
+    new_avg_value = current_container[1] .+ ΔkE/bin_size
 
     # combine the updated values 
     updated_values = (new_avg_value, current_bin_values)
@@ -328,9 +313,9 @@ Measures the product of variational derivatives with other variational derivativ
 to the measurement container.
 
 """
-function measure_ΔkΔkp!(measurement_container, determinantal_parameters, jastrow, model_geometry, pconfig, particle_positions, Np, W, A)
+function measure_ΔkΔkp!(measurement_container, determinantal_parameters, jastrow, model_geometry, pconfig, κ, Np, W, A,bin_size)
     # perform derivatives
-    detpar_derivatives = get_local_detpar_derivative(determinantal_parameters, model_geometry, particle_positions, Np, W, A)
+    detpar_derivatives = get_local_detpar_derivative(determinantal_parameters, model_geometry, κ, Np, W, A)
     jpar_derivatives = get_local_jpar_derivative(jastrow,pconfig, pht)
     Δk = vcat(detpar_derivatives,jpar_derivatives)
 
@@ -342,10 +327,10 @@ function measure_ΔkΔkp!(measurement_container, determinantal_parameters, jastr
 
     # update value for the current bin
     current_bin_values = current_container[2]
-    current_bin_values .= ΔkΔkp
+    current_bin_values .= ΔkΔkp/bin_size
 
     # update accumuator for average measurements
-    new_avg_value = current_container[1] .+ ΔkΔkp
+    new_avg_value = current_container[1] .+ ΔkΔkp/bin_size
 
     # combine the updated values 
     updated_values = (new_avg_value, current_bin_values)
@@ -364,19 +349,20 @@ end
 Measures the total local energy and writes to the measurement container.
 
 """
-function measure_local_energy!(measurement_container, model_geometry, tight_binding_model, jastrow, pconfig, particle_positions)
+function measure_local_energy!(measurement_container, model_geometry, tight_binding_model, jastrow, pconfig, κ, bin_size)
+
     # calculate the current local energy
-    E_loc = get_local_energy(model_geometry, tight_binding_model, jastrow, pconfig)
+    E_loc = get_local_energy(model_geometry, tight_binding_model, jastrow, pconfig, κ)
 
     # get current values from the container
     current_container = measurement_container.simulation_measurements["energy"]
 
     # update value for the current bin
     current_bin_values = current_container[2]
-    current_bin_values = E_loc
+    current_bin_values = E_loc/bin_size
 
     # update accumuator for average measurements
-    new_avg_value = current_container[1] .+ E_loc
+    new_avg_value = current_container[1] .+ E_loc/bin_size
 
     # combine the updated values 
     updated_values = (new_avg_value, current_bin_values)
@@ -395,15 +381,12 @@ end
 Calculates the local variational energy per site E/N, where N is the number fo sites.
 
 """
-function get_local_energy(model_geometry, tight_binding_model, jastrow, pconfig)
+function get_local_energy(model_geometry, tight_binding_model, jastrow, pconfig, κ)
     # number of lattice sites
     N = model_geometry.lattice.N
 
-    # get particle positions
-    particle_positions = get_particle_positions(pconfig, model_geometry)
-
     # calculate kinetic energy
-    E_k = get_local_kinetic_energy(model_geometry, tight_binding_model, jastrow, pconfig, particle_positions)
+    E_k = get_local_kinetic_energy(model_geometry, tight_binding_model, jastrow, pconfig, κ)
 
     # calculate Hubbard energy
     E_hubb = get_local_hubbard_energy(U, model_geometry, pconfig)
@@ -416,7 +399,7 @@ end
 
 
 
-function get_local_kinetic_energy(model_geometry, tight_binding_model, jastrow, pconfig, particle_positions)
+function get_local_kinetic_energy(model_geometry, tight_binding_model, jastrow, pconfig, κ)
     # number of sites
     N = model_geometry.lattice.N
 
@@ -428,18 +411,19 @@ function get_local_kinetic_energy(model_geometry, tight_binding_model, jastrow, 
     # generate neighbor map
     nbr_map = map_neighbor_table(nbr_table)
 
-
     # track kinetic energy
     E_loc_kinetic = 0.0
 
     # calculate electron kinetic energy
     for β in 1:Ne
-        # position of particle β
-        k = particle_positions[β][2]
+        # spindex occupation number of particle β
+        β_spindex = findfirst(x -> x == β, κ)
+
+        # real position 'k' of particle 'β' 
+        k = get_index_from_spindex(β_spindex, model_geometry) 
 
         # spin of particle particle 'β' 
-        spindex = particle_positions[β][1]
-        β_spin = get_spindex_type(spindex, model_geometry)
+        β_spin = get_spindex_type(β_spindex, model_geometry)
       
         # loop over nearest neighbors. TODO: add next-nearest neighbors
         sum_nn = 0.0

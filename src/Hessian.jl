@@ -112,10 +112,10 @@ Calculates the local logarithmic derivative Δₖ(x) = ∂lnΨ(x)/∂αₖ, with
 in the determinantal part of the wavefunction. Returns a vector of derivatives.
 
 """
-function get_local_detpar_derivative(determinantal_parameters, model_geometry, particle_positions, Np, W, A)  
+function get_local_detpar_derivative(determinantal_parameters, model_geometry, κ, Ne, W, A)  
 
-    # dimensions
-    dims = model_geometry.unit_cell.n * model_geometry.lattice.N
+    # number of lattice sites
+    N = model_geometry.unit_cell.n * model_geometry.lattice.N
 
     # number of determinantal parameters
     num_detpars = determinantal_parameters.num_detpars
@@ -125,9 +125,14 @@ function get_local_detpar_derivative(determinantal_parameters, model_geometry, p
     
 
     # loop over Nₚ particles 
-    G = zeros(AbstractFloat, 2*dims, 2*dims)
-    for β in 1:Np
-        k = particle_positions[β][2]  
+    G = zeros(AbstractFloat, 2*N, 2*N)
+    for β in 1:Ne
+        # spindex occupation number of particle β
+        β_spindex = findfirst(x -> x == β, κ)
+
+        # real position 'k' of particle 'β' 
+        k = get_index_from_spindex(β_spindex, model_geometry) 
+
         G[k,:] .= W[:,β]
         # for j in 1:2*dims
             # for (spindex, iᵦ) in particle_positions
@@ -155,15 +160,13 @@ Generates the covariance (Hessian) matrix S, for Stochastic Reconfiguration
 The matrix S has elements S_kk' = <Δ_kΔk'> - <Δ_k><Δ_k'>
 
 """
-function get_hessian_matrix(measurement_container)
-    # get size of bin
-    bin_size = measurement_container.opt_bin_size
+function get_hessian_matrix(measurement_container, N_updates)
 
     # measure local parameters derivatives ⟨Δₖ⟩ for the current bin
-    Δk = measurement_container.optimization_measurements["Δk"][2]/bin_size
+    Δk = measurement_container.optimization_measurements["Δk"][2]/N_updates
     
     # measure the product of local derivatives ⟨ΔₖΔₖ'⟩ for the current bin
-    ΔkΔkp = measurement_container.optimization_measurements["ΔkΔkp"][2]/bin_size
+    ΔkΔkp = measurement_container.optimization_measurements["ΔkΔkp"][2]/N_updates
     
     # calculate the product of local derivatives ⟨Δₖ⟩⟨Δₖ'⟩
     ΔkΔk = Δk * Δk'  
@@ -184,21 +187,19 @@ Generates the force vector f, for Stochastic Reconfiguration.
 The vector f has elements f_k = <Δ_k><H> - <Δ_kH>
 
 """
-function get_force_vector(measurement_container)
-    # get size of bin
-    bin_size = measurement_container.opt_bin_size
+function get_force_vector(measurement_container, N_updates)
     
     # initialize force vector
     f = [] 
 
     # measure local parameters derivatives ⟨Δₖ⟩ for the current bin
-    Δk = measurement_container.optimization_measurements["Δk"][2]/bin_size
+    Δk = measurement_container.optimization_measurements["Δk"][2]/N_updates
 
     # measure local energy E = ⟨H⟩ for the current bin
-    E = measurement_container.simulation_measurements["energy"][2]/bin_size
+    E = measurement_container.simulation_measurements["energy"][2]/N_updates
 
     # measure product of local derivatives with energy ⟨ΔkE⟩ for the current bin
-    ΔkE = measurement_container.optimization_measurements["ΔkE"][2]/bin_size         
+    ΔkE = measurement_container.optimization_measurements["ΔkE"][2]/N_updates
 
     # calculate product of local derivative with the local energy ⟨Δk⟩⟨H⟩
     ΔktE = Δk * E
@@ -244,16 +245,16 @@ end
 Update variational parameters through stochastic optimization.
 
 """
-function sr_update!(measurement_container, determinantal_parameters, jastrow, η, dt)
-    if verbose
+function sr_update!(measurement_container, determinantal_parameters, jastrow, η, dt, N_updates)
+    if debug
         println("Optimizing...")
     end
 
     # get covariance (Hessian) matrix
-    S = get_hessian_matrix(measurement_container)
+    S = get_hessian_matrix(measurement_container, N_updates)
 
     # get force vector
-    f = get_force_vector(measurement_container)
+    f = get_force_vector(measurement_container, N_updates)
 
     # perform gradient descent
     δvpars = parameter_gradient(S,f,η)     
