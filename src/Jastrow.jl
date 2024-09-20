@@ -368,7 +368,7 @@ function build_jastrow_factor(jastrow_type::String, model_geometry::ModelGeometr
     # get number of Jastrow parameters
     num_jpars = length(jpar_map)
    
-    if verbose
+    if debug
         # report the number of Jastrow parameters initialized
         println(num_jpars," Jastrow parameters initialized")
         println("Type: ", jastrow_type)
@@ -396,7 +396,7 @@ function build_jastrow_factor(jastrow_type::String, model_geometry::ModelGeometr
     # get number of Jastrow parameters
     num_jpars = length(jpar_map)
    
-    if verbose
+    if debug
         # report the number of Jastrow parameters initialized
         println(num_jpars," Jastrow parameters initialized")
         println("Type: ", jastrow_type)
@@ -469,14 +469,14 @@ function recalc_Tvec!(jastrow::Jastrow, δT::Float64)
     ΔT = sqrt(diff_sum / T_sum)
 
     if ΔT > δT
-        verbose && println("WARNING! T vector has been recalculated: ΔT = ", ΔT, " > δT = ", δT)
+        debug && println("WARNING! T vector has been recalculated: ΔT = ", ΔT, " > δT = ", δT)
 
         # record new T vector
         jastrow.Tvec = Tᵣ
 
         return nothing
     else
-        verbose && println("T vector is stable: ΔT = ", ΔT, " < δT = ", δT)
+        debug && println("T vector is stable: ΔT = ", ΔT, " < δT = ", δT)
         return nothing
     end  
 end

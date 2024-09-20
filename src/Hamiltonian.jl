@@ -43,7 +43,7 @@ struct DeterminantalParameters
     # name of order parameter
     pars::Vector{AbstractString}
     # variational parameter values
-    vals::Vector{AbstractFloat}
+    vals::Vector{Vector{AbstractFloat}}
     # number of determinantal parameters
     num_detpars::Int
 end
@@ -58,7 +58,9 @@ Constructor for the variational parameters type.
 """
 function initialize_determinantal_parameters(pars, vals)
     @assert length(pars) == length(vals) "Input vectors must have the same length"
-    num_detpars = length(pars)
+    
+    # Calculate num_detpars as the total number of elements in all inner vectors of vals
+    num_detpars = sum(length, vals)
 
     return DeterminantalParameters(pars, vals, num_detpars)
 end
@@ -111,18 +113,18 @@ parameters to tx,ty,t' for future SSH model functionality.
 
 """
 function build_tight_binding_model(tight_binding_model)
-    dims = model_geometry.unit_cell.n*model_geometry.lattice.N 
+    N = model_geometry.unit_cell.n*model_geometry.lattice.N 
     nbr_table = build_neighbor_table(bonds[1],
                                     model_geometry.unit_cell,
                                     model_geometry.lattice)
-    H_t = zeros(AbstractFloat, 2*dims, 2*dims)
-    H_tp = zeros(AbstractFloat, 2*dims, 2*dims)
-    μ_vec = Vector{AbstractFloat}(undef, 2*dims)
+    H_t = zeros(AbstractFloat, 2*N, 2*N)
+    H_tp = zeros(AbstractFloat, 2*N, 2*N)
+    μ_vec = Vector{AbstractFloat}(undef, 2*N)
     if pht == true
         # particle-hole transformed chemical potential
         if !("μ_BCS" in parameters_to_optimize)     
-            for i in 1:dims
-                for j in dims+1:2*dims
+            for i in 1:N
+                for j in N+1:2*N
                     μ_vec[i] = -tight_binding_model.μ
                     μ_vec[j] = tight_binding_model.μ
                 end 
@@ -213,8 +215,8 @@ function build_tight_binding_model(tight_binding_model)
     else
         # chemical potential
         if !("μ_BCS" in parameters_to_optimize)
-            for i in 1:dims
-                for j in dims+1:2*dims
+            for i in 1:N
+                for j in N+1:2*N
                     μ_vec[i] = -tight_binding_model.μ
                     μ_vec[j] = -tight_binding_model.μ
                 end 
@@ -321,25 +323,32 @@ matrices and a vector of individual matrix terms.
 
 """
 function build_variational_terms(determinantal_parameters)
-    dims = model_geometry.unit_cell.n*model_geometry.lattice.N
+    # model parameters
+    N = model_geometry.unit_cell.n*model_geometry.lattice.N
+    L = model_geometry.lattice.L
     vparam_map = map_determinantal_parameters(determinantal_parameters) 
-    Hs = zeros(AbstractFloat, 2*dims, 2*dims)
-    Hd = zeros(AbstractFloat, 2*dims, 2*dims)    
-    Ha = zeros(AbstractFloat, 2*dims, 2*dims)    
-    Hc = zeros(AbstractFloat, 2*dims, 2*dims) 
-    Hμ = zeros(AbstractFloat, 2*dims, 2*dims)       
-    Hcs = zeros(AbstractFloat, 2*dims, 2*dims)
-    Hss = zeros(AbstractFloat, 2*dims, 2*dims)    
+
+    # initial matrices
+    Hs = zeros(AbstractFloat, 2*N, 2*N) 
+    Ha = zeros(AbstractFloat, 2*N, 2*N)    
+    Hc = zeros(AbstractFloat, 2*N, 2*N) 
+    Hμ = zeros(AbstractFloat, 2*N, 2*N)
+    Hd = zeros(AbstractFloat, 2*N, 2*N)       
+    
+    # store vpar matrices
     H_vpars = []
     V = []
-    # check for s-wave order
+
+    # s-wave pairing order
     if haskey(vparam_map, "Δs") == true
+        # ensure that particle-hole transformation is on
         @assert pht == true
-        bA = zeros(AbstractFloat, dims, dims)
-        bD = zeros(AbstractFloat, dims, dims)
-        Δ_vec_bB = Vector{AbstractFloat}(undef, dims)
-        Δ_vec_bC = Vector{AbstractFloat}(undef, dims)
-        for i in 1:dims
+
+        bA = zeros(AbstractFloat, N, N)
+        bD = zeros(AbstractFloat, N, N)
+        Δ_vec_bB = Vector{AbstractFloat}(undef, N)
+        Δ_vec_bC = Vector{AbstractFloat}(undef, N)
+        for i in 1:N
             Δ_vec_bB[i] = 1
             Δ_vec_bC[i] = 1
         end
@@ -350,140 +359,254 @@ function build_variational_terms(determinantal_parameters)
         push!(H_vpars,Hs)
         push!(V, Vs)
     end
-    # check for d-wave order
+
+    # d-wave pairing order
     if haskey(vparam_map, "Δd") == true
+        # ensure that particle-hole transformation is on
         @assert pht == true
+
+        # create neighbor table
+        nbr_table = build_neighbor_table(bonds[1],
+        model_geometry.unit_cell,
+        model_geometry.lattice)
+
+        # maps neighbor table to dictionary of bonds and neighbors                                
+        nbrs = map_neighbor_table(nbr_table)
+
+        # Predefine the displacement-to-sign map
+        disp_sign_map = Dict([1,0] => 1, [0,1] => -1, [-1,0] => 1, [0,-1] => -1)
+
+        # initial variational operator matrix
+        Vdwave = zeros(AbstractFloat, 2*N, 2*N)
+
+        for i in 1:N
+            # get all neighbors of site i
+            nn = nbrs[i][2]
+
+            # loop over neighbors
+            for j in nn
+                # Find the displacement between site i and one of its neighbors j
+                disp = sites_to_displacement(i, j, unit_cell, lattice)
+
+                # Lookup sign of Δd
+                dsgn = get(disp_sign_map, disp, 0)  # Default to 0 if no match
+
+                if dsgn != 0
+                    println(dsgn > 0 ? "+1" : "-1")
+
+                    # Store spin-down indices
+                    idn_idx = get_spindices_from_index(i, model_geometry)[2]
+                    jdn_idx = get_spindices_from_index(j, model_geometry)[2]
+
+                    # Add elements to variational operator
+                    Vdwave[i, jdn_idx] = dsgn 
+                    Vdwave[j, idn_idx] = dsgn 
+                    Vdwave[jdn_idx, i] = dsgn 
+                    Vdwave[idn_idx, j] = dsgn 
+                end
+            end
+        end
+
+        Hd += vparam_map["Δd"][1]*Vdwave
+        push!(H_vpars,Hd)
+        push!(V, Vdwave)
     end
-    # check for antiferromagnetic (Neél) order
+
+    # antiferromagnetic (Neél) order
     if haskey(vparam_map, "Δa") == true
-        afm_vec = Vector{AbstractFloat}(undef, 2*dims)
-        if pht == true
-            # particle-hole transformed Neél order
-            for i in 1:dims
-                for j in dims+1:2*dims
-                    for k in 1:ndims(model_geometry.lattice)
-                        loc_up = site_to_loc(i,model_geometry.unit_cell,model_geometry.lattice)[1]
-                        afm_vec[i] = (-1)^(sum(loc_up[k]))*(-1)
-                        loc_dwn = site_to_loc(j-model_geometry.lattice.N,model_geometry.unit_cell,model_geometry.lattice)[1]
-                        afm_vec[j] = (-1)^(sum(loc_dwn[k]))
-                    end
-                end 
+        # diagonal vector
+        afm_vec = fill(1,2*N)
+
+        # account for particle-hole transformation
+        if pht
+            # stagger
+            for s in 1:2*N
+                idx = get_index_from_spindex(s, model_geometry)
+                loc = site_to_loc(idx, model_geometry.unit_cell, model_geometry.lattice)
+                afm_vec[s] *= (-1)^(loc[1][1]+loc[1][2])
             end
+
+            # store variational operator
+            Vafm = LinearAlgebra.Diagonal(afm_vec)
+            
+            # create Hamiltonian term
+            Ha += vparam_map["Δa"][1]*Vafm
+            push!(H_vpars,Ha)
+            push!(V, Vafm)
         else
-            # Neél order
-            for i in 1:dims
-                for j in dims+1:2*dims
-                    for k in 1:ndims(model_geometry.lattice)
-                        loc_up = site_to_loc(i,model_geometry.unit_cell,model_geometry.lattice)[1]
-                        afm_vec[i] = (-1)^(sum(loc_up[k]))*(-1)
-                        loc_dwn = site_to_loc(j-model_geometry.lattice.N,model_geometry.unit_cell,model_geometry.lattice)[1]
-                        afm_vec[j] = (-1)^(sum(loc_dwn[k]))*(-1) 
-                    end
-                end 
+            # account for minus sign 
+            afm_vec_neg = copy(afm_vec)
+            afm_vec_neg[N+1:2*N] .= -afm_vec_neg[N+1:2*N]
+
+            # stagger
+            for s in 1:2*N
+                idx = get_index_from_spindex(s, model_geometry)
+                loc = site_to_loc(idx, model_geometry.unit_cell, model_geometry.lattice)
+                afm_vec_neg[s] *= (-1)^(loc[1][1]+loc[1][2])
             end
+
+            # store variational operator
+            Vafm_neg = LinearAlgebra.Diagonal(afm_vec_neg)
+            
+            # create Hamiltonian term
+            Ha += vparam_map["Δa"][1]*Vafm_neg
+            push!(H_vpars,Ha)
+            push!(V, Vafm_neg)
         end
-        Va = LinearAlgebra.Diagonal(afm_vec)
-        Ha += vparam_map["Δa"][1]*Va
-        push!(H_vpars,Ha)
-        push!(V, Va)
     end
-    # check for uniform charge order
+
+    # uniform charge density wave order
     if haskey(vparam_map, "Δc") == true
-        cdw_vec = Vector{AbstractFloat}(undef, 2*dims)
-        if pht == true
-            # particle-hole transformed charge density wave
-            for i in 1:dims
-                for j in dims+1:2*dims
-                    for k in 1:ndims(model_geometry.lattice)
-                        loc_up = site_to_loc(i,model_geometry.unit_cell,model_geometry.lattice)[1]
-                        cdw_vec[i] = (-1)^(sum(loc_up[k]))
-                        loc_dwn = site_to_loc(j-model_geometry.lattice,model_geometry.unit_cell,model_geometry.lattice)[1]
-                        cdw_vec[j] = (-1)^(sum(loc_dwn[k]))
-                    end
-                end 
+        # diagonal vector
+        cdw_vec = fill(1,2*N)
+
+        # account for particle-hole transformation
+        if pht
+            # account for minus sign 
+            cdw_vec_neg = copy(cdw_vec)
+            cdw_vec_neg[N+1:2*N] .= -cdw_vec_neg[N+1:2*N]
+
+            # stagger
+            for s in 1:2*N
+                idx = get_index_from_spindex(s, model_geometry)
+                loc = site_to_loc(idx, model_geometry.unit_cell, model_geometry.lattice)
+                cdw_vec_neg[s] *= (-1)^(loc[1][1]+loc[1][2])
             end
+
+            # store variational operator
+            Vcdw = LinearAlgebra.Diagonal(cdw_vec)
+
+            # account for particle-hole transformation
+            Hc += vparam_map["Δc"][1]*Vcdw
+            push!(H_vpars,Hc)
+            push!(V, Vcdw)
         else
-            # charge density wave
-            for i in 1:dims
-                for j in dims+1:2*dims
-                    for k in 1:ndims(model_geometry.lattice)
-                        loc_up = site_to_loc(i,model_geometry.unit_cell,model_geometry.lattice)[1]
-                        cdw_vec[i] = (-1)^(sum(loc_up[k]))
-                        loc_dwn = site_to_loc(j-model_geometry.lattice,model_geometry.unit_cell,model_geometry.lattice)[1]
-                        cdw_vec[j] = (-1)^(sum(loc_dwn[k]))*(-1) 
-                    end
-                end 
+            # stagger
+            for s in 1:2*N
+                idx = get_index_from_spindex(s, model_geometry)
+                loc = site_to_loc(idx, model_geometry.unit_cell, model_geometry.lattice)
+                cdw_vec_neg[s] *= (-1)^(loc[1][1]+loc[1][2])
             end
+
+            # store variational operator
+            Vcdw_neg = LinearAlgebra.Diagonal(cdw_vec_neg)
+
+            # create Hamiltonian term
+            Hc += vparam_map["Δc"][1]*Vcdw_neg
+            push!(H_vpars,Hc)
+            push!(V, Vcdw_neg)
         end
-        Vc = LinearAlgebra.Diagonal(cdw_vec)
-        Hc += vparam_map["Δc"][1]*Vc
-        push!(H_vpars,Hc)
-        push!(V, Vc)
     end
-    # check for BCS chemical potential
+
+    # BCS chemical potential
     if haskey(vparam_map, "μ_BCS") == true
-        μ_vec = Vector{AbstractFloat}(undef, 2*dims)
-        if pht == true
-            # particle-hole transformed chemical potential
-            for i in 1:dims
-                for j in dims+1:2*dims
-                    μ_vec[i] = -1
-                    μ_vec[j] = 1
-                end 
-            end
+        # diagonal vector
+        μ_vec = fill(-1,2*N)
+
+        if pht
+            # account for minus sign 
+            μ_vec_neg = copy(μ_vec)
+            μ_vec_neg[N+1:2*N] .= -μ_vec_neg[N+1:2*N]
+
+            # store variational operator
+            Vμ_neg = LinearAlgebra.Diagonal(μ_vec_neg)
+
+            #
+            Hμ += vparam_map["μ_BCS"][1]*Vμ_neg
+            push!(H_vpars,Hμ)
+            push!(V, Vμ_neg)
         else
-            # chemical potential
-            for i in 1:dims
-                for j in dims+1:2*dims
-                    μ_vec[i] = -1
-                    μ_vec[j] = -1
-                end 
-            end
+            Vμ = LinearAlgebra.Diagonal(μ_vec)
+
+            Hμ += vparam_map["μ_BCS"][1]*Vμ
+            push!(H_vpars,Hμ)
+            push!(V, Vμ)
         end
-        Vμ = LinearAlgebra.Diagonal(μ_vec)
-        Hμ += vparam_map["μ_BCS"][1]*Vμ
-        push!(H_vpars,Hμ)
-        push!(V, Vμ)
     end
-    # check for charge stripes
+
+    # charge stripe order
     if haskey(vparam_map, "Δcs") == true
-        # vector to be transformed to matrix
-        cs_vec = Vector{AbstractFloat}(undef, 2*dims)
-        for i in 1:dims
-            for j in dims+1:2*dims
-                cs_vec[i] = 1
-                cs_vec[j] = 1
-            end 
+        # ensure that particle-hole transformation is off
+        @assert pht == false
+
+        # store diagonal vectors
+        cs_vectors = []
+
+        # populate vectors
+        for shift in 0:(L[1]-1)
+            vec = zeros(Int, 2 * N)  # Initialize a vector of zeros with length 2*N
+            for i in 1:2*L[1]
+                idx = (i-1)*L[1] + 1 + shift  # Compute the index
+                if idx <= 2 * N  # Ensure the index does not exceed the bounds of vec
+                    vec[idx] = 1  # Place a "1" if the index is valid
+                end
+            end
+            # for i in 1:2*L[1]
+            #     vec[(i-1)*L[1] + 1 + shift] = 1  # Place a "1" every Lth element, shifted by `shift`
+            # end
+            push!(cs_vectors, vec)  # Store the vector in the list of vectors
         end
-        Vcs = LinearAlgebra.Diagonal(cs_vec)
-        Hcs += vparam_map["Δcs"][1]*Vcs
-        push!(H_vpars,Hcs)
-        push!(V, Vcs)
+
+        iter = 0
+
+        for cs_vec in cs_vectors
+            Hcs = zeros(AbstractFloat, 2*N, 2*N)
+            iter += 1
+            Vcs = LinearAlgebra.Diagonal(cs_vec)
+
+            Hcs += vparam_map["Δcs"][iter]*Vcs
+            push!(H_vpars,Hcs)
+            push!(V, Vcs)
+        end
     end
-    # check for spin stripes
+
+    # spin stripe order
     if haskey(vparam_map, "Δss") == true
-        # vector to be transformed to matrix
-        ss_vec = Vector{AbstractFloat}(undef, 2*dims)
-        for i in 1:dims
-            for j in dims+1:2*dims
-                ss_vec[i] = 1
-                ss_vec[j] = -1
-            end 
+        # ensure that particle-hole transformation is off
+        @assert pht == false
+
+        # store diagonal vectors
+        ss_vectors = []
+
+        # populate vectors
+        for shift in 0:(L[1]-1)
+            vec = zeros(Int, 2 * N)  # Initialize a vector of zeros with length 2*N
+            for i in 1:2*L[1]
+                idx = (i-1)*L[1] + 1 + shift  # Compute the index
+                if idx <= 2 * N  # Ensure the index does not exceed the bounds of vec
+                    vec[idx] = 1  # Place a "1" if the index is valid
+                end
+            end
+            # for i in 1:(2*L[1])
+            #     vec[(i-1)*L[1] + 1 + shift] = 1  # Place a "1" every Lth element, shifted by `shift`
+            # end
+            push!(ss_vectors, vec)  # Store the vector in the list of vectors
         end
-        Vss = LinearAlgebra.Diagonal(ss_vec)
-        Hss += vparam_map["Δcs"][1]*Vss
-        push!(H_vpars,Hss)
-        push!(V, Vss)
+
+        iter = 0
+
+        for ss_vec in ss_vectors
+            iter += 1
+
+            Hss = zeros(AbstractFloat, 2*N, 2*N)
+            ss_vec_neg = copy(ss_vec)
+            ss_vec_neg[N+1:2*N] .= -ss_vec_neg[N+1:2*N]
+
+            for s in 1:2*N
+                idx = get_index_from_spindex(s, model_geometry)
+                loc = site_to_loc(idx, model_geometry.unit_cell, model_geometry.lattice)
+                ss_vec_neg[s] *= (-1)^(loc[1][1]+loc[1][2])
+            end
+
+            # Vss = LinearAlgebra.Diagonal(ss_vec)
+            Vss_neg = LinearAlgebra.Diagonal(ss_vec_neg)
+
+            Hss += vparam_map["Δss"][iter]*Vss_neg
+            push!(H_vpars,Hss)
+            push!(V, Vss_neg)
+        end
     end
-    # pd_vec = Vector{AbstractFloat}(undef, 2*norbs*L)
-    #     for i in 2:3:(2*norbs*L)-1
-    #         for j in 3:3:2*norbs*L
-    #             pd_vec[i] = 1
-    #                 pd_vec[j] = 1
-    #         end
-    #     end
-       
-    #     return LinearAlgebra.Diagonal(pd_vec)
+
     return [sum(H_vpars),V]
 end
 
@@ -497,7 +620,7 @@ matrix of variational terms.
 
 """
 function build_mean_field_hamiltonian(tight_binding_model::TightBindingModel, determinantal_parameters::DeterminantalParameters)
-    if verbose
+    if debug
         println("Building mean-field Hamiltonian...")
     end
     return build_tight_binding_model(tight_binding_model) + build_variational_terms(determinantal_parameters)[1], build_variational_terms(determinantal_parameters)[2]
@@ -513,16 +636,16 @@ Returns variational parameter matrices Aₖ from the corresponding Vₖ. Compute
 
 """
 function get_Ak_matrices(V, U, ε, model_geometry)
-    if verbose
+    if debug
         println("Building A matrices...")
     end
 
-    dims = model_geometry.unit_cell.n * model_geometry.lattice.N
+    N = model_geometry.unit_cell.n * model_geometry.lattice.N
     A = Vector{Matrix{AbstractFloat}}()
     adjU = adjoint(U)
 
     # Generate matrix of perturbation theory energies
-    pt_energies = 1.0 ./ ε[1:2*dims]' .- ε[1:2*dims]
+    pt_energies = 1.0 ./ ε[1:2*N]' .- ε[1:2*N]
 
     # iterate over each Vₖ for each variational parameter
     for i in V
