@@ -86,7 +86,7 @@ end
 Returns the equal-time Green's function by solving DᵀWᵀ = Mᵀ using full pivot LU decomposition.
 
 """
-function get_equal_greens(M::Matrix{Float64}, D::Matrix{Float64})::Matrix{Float64}
+function get_equal_greens(M::Matrix{ComplexF64}, D::Matrix{ComplexF64})
     debug && println("Getting equal-time Green's function...")
 
     # perform the linear solve directly

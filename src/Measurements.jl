@@ -429,7 +429,7 @@ function get_local_kinetic_energy(model_geometry, tight_binding_model, jastrow, 
         sum_nn = 0.0
         for l in nbr_map[k][2]
             # check that neighboring sites are unoccupied
-            if number_operator(l, pconfig)[β_spin] == 0
+            if get_onsite_fermion_occupation(l, pconfig)[β_spin] == 0
                 Rⱼ = get_jastrow_ratio(k, l, jastrow, pht, β_spin)
                 sum_nn += Rⱼ * W[l, β]
             end
@@ -447,7 +447,7 @@ function get_local_kinetic_energy(model_geometry, tight_binding_model, jastrow, 
         end
     end
 
-    return E_loc_kinetic
+    return real(E_loc_kinetic)
 end
 
 
@@ -461,9 +461,9 @@ function get_local_hubbard_energy(U, model_geometry, pconfig)
     # calculate Hubbard energy
     for i in 1:N
         if pht
-            dblocc_sum += number_operator(i, pconfig)[1] * (1 - number_operator(i, pconfig)[2])
+            dblocc_sum += get_onsite_fermion_occupation(i, pconfig)[1] * (1 - get_onsite_fermion_occupation(i, pconfig)[2])
         else
-            dblocc_sum += number_operator(i, pconfig)[1] * number_operator(i, pconfig)[2]
+            dblocc_sum += get_onsite_fermion_occupation(i, pconfig)[1] * get_onsite_fermion_occupation(i, pconfig)[2]
         end
     end
 
@@ -503,7 +503,7 @@ function measure_double_occ!(measurement_container, pconfig, model_geometry)
     nup_ndn = 0.0
 
     for i in 1:model_geometry.lattice.N
-        nup_ndn += number_operator(i, pconfig)[1] * (1 - number_operator(i, pconfig)[2])
+        nup_ndn += get_onsite_fermion_occupation(i, pconfig)[1] * (1 - get_onsite_fermion_occupation(i, pconfig)[2])
     end
 
     dblocc = nup_ndn / model_geometry.lattice.N
@@ -522,7 +522,7 @@ Measure the local particle density ⟨n⟩.
 
 """
 function measure_n(site)
-    loc_den = number_operator(site, pconfig)[1] + 1 - number_operator(i, pconfig)[2]
+    loc_den = get_onsite_fermion_occupation(site, pconfig)[1] + 1 - get_onsite_fermion_occupation(i, pconfig)[2]
 
     return loc_den
 end
@@ -548,7 +548,7 @@ Measure the local spin.
 
 """
 function measure_s()
-    loc_spn = number_operator(site,pconfig)[1] - 1 + number_operator(i,pconfig)[2]
+    loc_spn = get_onsite_fermion_occupation(site,pconfig)[1] - 1 + get_onsite_fermion_occupation(i,pconfig)[2]
 
     return loc_spn
 end

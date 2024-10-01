@@ -834,3 +834,80 @@ Add FFLO wavefunction.
 Add additional starting configuration method where a certain order is generated. For instance,
       starting the simulation out in an AFM state: pconfig(4x4) = [1,0,1,0,0,1,0,1,1,0,1,0,0,1,0,1,0,1,0,1,1,0,1,0,0,1,0,1,1,0,1,0]
 Add backflow correlations for SSH phonons.
+
+------------------------------------------------------------
+                  WEEK OF SEPTEMBER 23, 2024
+------------------------------------------------------------
+
+Change log (09/23/2024):
+Changed 'number_operator' method to "get_onsite_fermion_density'
+
+
+Upcoming changes:
+Check value resetting after measurement write in write_measurements!() method.
+Need to update determinantal parameter updating in sr_update!() method. 
+Reconstruct the Hamiltonian before recalculation/stabilization of W? Since D and M are required to get W from scratch.
+DEBUG T vector stabilization method.
+Add FFLO wavefunction.
+Add additional starting configuration method where a certain order is generated. For instance,
+      starting the simulation out in an AFM state: pconfig(4x4) = [1,0,1,0,0,1,0,1,1,0,1,0,0,1,0,1,0,1,0,1,1,0,1,0,0,1,0,1,1,0,1,0]
+Add backflow correlations for SSH phonons.
+
+
+Change log (09/24/2024):
+Updated density calculation in th get_Tvec() method.
+
+
+Upcoming changes:
+Need to split get_Tvec() function into 2 methods: one exclusively for fermions and another for fermions and bosons.
+Check value resetting after measurement write in write_measurements!() method.
+Need to update determinantal parameter updating in sr_update!() method. 
+Reconstruct the Hamiltonian before recalculation/stabilization of W? Since D and M are required to get W from scratch.
+DEBUG T vector stabilization method.
+Add FFLO wavefunction.
+Add additional starting configuration method where a certain order is generated. For instance,
+      starting the simulation out in an AFM state: pconfig(4x4) = [1,0,1,0,0,1,0,1,1,0,1,0,0,1,0,1,0,1,0,1,1,0,1,0,0,1,0,1,1,0,1,0]
+Add backflow correlations for SSH phonons.
+
+
+Change log (09/25/2024):
+Changed 'get_onsite_fermion_density' method to 'get_onsite_fermion_occupation'
+Changed 'get_phonon_density' method to 'get_phonon_occupation'
+Split get_Tvec() function into 2 methods: one exclusively for fermions and another for fermions and bosons:
+      New methods now returns both Tvec_f and Tvec_b.
+Added additional 'build_jastrow_factor' methods to accept phonon configuration for phonon-phonon and electron-phonon Jastrow factors.
+Updated the Jastrow type:
+      Jastrow type now stores both fermionic and bosonic T vectors.
+
+
+Upcoming changes:
+Devise a method of initializing an SSH (optical and/or bond) configuration of lattice displacements. 
+Check value resetting after measurement write in write_measurements!() method.
+Need to update determinantal parameter updating in sr_update!() method. 
+Reconstruct the Hamiltonian before recalculation/stabilization of W? Since D and M are required to get W from scratch.
+DEBUG T vector stabilization method.
+Add FFLO wavefunction.
+Add additional starting configuration method where a certain order is generated. For instance,
+      starting the simulation out in an AFM state: pconfig(4x4) = [1,0,1,0,0,1,0,1,1,0,1,0,0,1,0,1,0,1,0,1,1,0,1,0,0,1,0,1,1,0,1,0]
+Add backflow correlations for SSH phonons.
+
+------------------------------------------------------------
+                  WEEK OF SEPTEMBER 30, 2024
+------------------------------------------------------------
+
+Change log (10/01/2024):
+Added ElectronPhonon module with some function and type prototypes.
+Changed unsuccessful matrix inversion to an exit condition in build_determinantal_state() method.
+Updated H_mf, M, U_e, W, A, and D matrices to type Matrix{Complex}
+
+Upcoming changes:
+Need to add flag to jastrow ratio functions to use either fermionic or bosonic T vectors.
+Devise a method of initializing an SSH (optical and/or bond) configuration of lattice displacements. 
+Check value resetting after measurement write in write_measurements!() method.
+Need to update determinantal parameter updating in sr_update!() method. 
+Reconstruct the Hamiltonian before recalculation/stabilization of W? Since D and M are required to get W from scratch.
+DEBUG T vector stabilization method.
+Add FFLO wavefunction.
+Add additional starting configuration method where a certain order is generated. For instance,
+      starting the simulation out in an AFM state: pconfig(4x4) = [1,0,1,0,0,1,0,1,1,0,1,0,0,1,0,1,0,1,0,1,1,0,1,0,0,1,0,1,1,0,1,0]
+Add backflow correlations for SSH phonons.

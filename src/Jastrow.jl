@@ -2,7 +2,7 @@
 
     Jastrow( jastrow_type::AbstractString, num_jpars::Int, 
              jpar_map::OrderedDict{Any, Any}, Float64}} 
-             Tvec::Vector{Float64} )
+             Tvec_f::Vector{Float64}, Tvec_b::Vector{Float64} )
 
 A type defining quantities related to a Jastrow factor.
 
@@ -17,8 +17,11 @@ mutable struct Jastrow
     # map of Jastrow parameters
     jpar_map::OrderedDict{Any, Any}
 
-    # T vector
-    Tvec::Vector{Float64}
+    # fermionic T vector
+    Tvec_f::Vector{Float64}
+
+    # bosonic T vector
+    Tvec_b::Vector{Float64}
 end
 
 
@@ -203,16 +206,17 @@ end
 
     get_Tvec( jastrow_type::AbstractString, jpar_map::Dict{Any,Any}, pconfig::Vector{Int64}, model_geometry::ModelGeometry ) 
 
-Returns vector of T with entries Tᵢ = ∑ⱼ vᵢⱼnᵢ(x) if using density Jastrow or 
-Tᵢ = ∑ⱼ wᵢⱼSᵢ(x) if using spin Jastrow.
+Returns vector of T with entries of the form Tᵢ = ∑ⱼ vᵢⱼnᵢ(x) where vᵢⱼ are the associated Jastrow peseudopotentials and nᵢ(x)
+is the total electron occupation.
 
 """
 function get_Tvec(jastrow_type::String, jpar_map::OrderedDict{Any,Any}, pconfig::Vector{Int64}, pht::Bool, model_geometry::ModelGeometry)
     # extent of the lattice
     N = model_geometry.lattice.N
 
-    # initialize T vector
-    Tvec = Vector{AbstractFloat}(undef, N)
+    # initialize T vectors
+    Tvec_f = Vector{AbstractFloat}(undef, N)
+    Tvec_b = Vector{AbstractFloat}(undef, N)
 
     for i in 1:N
         # track the Jastrow parameter sum
@@ -228,33 +232,84 @@ function get_Tvec(jastrow_type::String, jpar_map::OrderedDict{Any,Any}, pconfig:
             end
         end
 
-        # check particle occupations
-        num_up = number_operator(i, pconfig)[1]
-        num_dn = number_operator(i, pconfig)[2]
+        # get fermion occupations
+        num_up = get_onsite_fermion_occupation(i, pconfig)[1]
+        num_dn = get_onsite_fermion_occupation(i, pconfig)[2]
 
-        # check Jastrow type
         if jastrow_type == "e-den-den"  # electron density-density
             if pht
-                Tvec[i] = jpar_sum * (num_up + num_dn - 1)  
+                Tvec_f[i] = jpar_sum * (num_up + num_dn - 1)  
             else
-                Tvec[i] = jpar_sum * (num_up + num_dn)  
+                Tvec_f[i] = jpar_sum * (num_up + num_dn)  
             end
         elseif jastrow_type == "e-spn-spn"  # electron spin-spin
             if pht 
-                Tvec[i] = 0.5 * jpar_sum * (num_up + num_dn - 1)
+                Tvec_f[i] = 0.5 * jpar_sum * (num_up + num_dn - 1)
             else
-                Tvec[i] = 0.5 * jpar_sum * (num_up + num_dn)
+                Tvec_f[i] = 0.5 * jpar_sum * (num_up + num_dn)
             end
-        elseif jastrow_type == "eph-den-den" # electron-phonon density-density
-            # populate electron-phonon T vector
-        elseif jastrow_type == "ph-dsp-dsp"  # phonon-displacement-displacement
-            # populate
-        elseif jastrow_type == "eph-den-dsp"  # electron-phonon density-displacement
-            # populate
         end
     end
     
-    return Tvec
+    return Tvec_f, Tvec_b
+end
+
+
+"""
+
+    get_Tvec( jastrow_type::AbstractString, jpar_map::Dict{Any,Any}, pconfig::Vector{Int64}, phconfig::Vector{Int64}, model_geometry::ModelGeometry ) 
+
+Returns vectors T_f and T_b with entries of the form Tᵢ = ∑ⱼ vᵢⱼnᵢ(x) where vᵢⱼ are the associated Jastrow peseudopotentials and nᵢ(x)
+is the total electron or phonon occupation. 
+
+"""
+function get_Tvec(jastrow_type::String, jpar_map::OrderedDict{Any,Any}, pconfig::Vector{Int64}, phconfig::Vector{Int64}, pht::Bool, model_geometry::ModelGeometry)
+    # extent of the lattice
+    N = model_geometry.lattice.N
+
+    # initialize T vectors
+    Tvec_f = Vector{AbstractFloat}(undef, N)
+    Tvec_b = Vector{AbstractFloat}(undef, N)
+
+    for i in 1:N
+        # track the Jastrow parameter sum
+        jpar_sum = 0.0
+        for j in 1:N 
+            # Calculate the reduced index for (i, j)
+            red_idx = reduce_index(i-1, j-1, model_geometry)
+
+            # Add the appropriate value based on the key of the jpar_map
+            if haskey(jpar_map, red_idx)
+                (_, vᵢⱼ) = jpar_map[red_idx]
+                jpar_sum += vᵢⱼ
+            end
+        end
+
+        # get boson occupations
+        num_phonons = get_phonon_occupation(i, phconfig)
+
+        if jastrow_type == "eph-den-den" # electron-phonon density-density
+            # get fermion occupations
+            num_up = get_onsite_fermion_occupation(i, pconfig)[1]
+            num_dn = get_onsite_fermion_occupation(i, pconfig)[2]
+
+            if pht 
+                Tvec_f[i] = jpar_sum * (num_up + num_dn - 1)
+                Tvec_b[i] = jpar_sum * num_phonons
+            else
+                Tvec_f[i] = jpar_sum * (num_up + num_dn)
+                Tvec_b[i] = jpar_sum * num_phonons
+            end
+        elseif jastrow_type == "ph-den-den"  # phonon density-density
+            Tvec_b[i] = jpar_sum * num_phonons
+        elseif jastrow_type == "ph-dsp-dsp"  # phonon-displacement-displacement
+            # TODO
+        elseif jastrow_type == "eph-den-dsp"  # electron-phonon density-displacement
+            # TODO
+        end
+    end
+    
+    return Tvec_f, Tvec_b
 end
 
 
@@ -265,8 +320,9 @@ Updates elements Tᵢ of the vector T after a Metropolis update.
 
 """
 function update_Tvec!(local_acceptance, jastrow::Jastrow, model_geometry::ModelGeometry, pht::Bool)
-    # T vector
-    Tvec = jastrow.Tvec
+    # T vectors
+    Tvec_f = jastrow.Tvec_f
+    Tvec_b = jastrow.Tvec_b
 
     # jpar map
     jpar_map = jastrow.jpar_map
@@ -292,12 +348,12 @@ function update_Tvec!(local_acceptance, jastrow::Jastrow, model_geometry::ModelG
 
         if pht
             if local_acceptance.spin == 2
-               Tvec[i] += - vᵢₗ + vᵢₖ
+               Tvec_f[i] += - vᵢₗ + vᵢₖ
             else
-                Tvec[i] += vᵢₗ - vᵢₖ
+                Tvec_f[i] += vᵢₗ - vᵢₖ
             end
         else
-            Tvec[i] += vᵢₗ - vᵢₖ
+            Tvec_f[i] += vᵢₗ - vᵢₖ
         end
     end
 
@@ -315,7 +371,7 @@ using the corresponding T vectors Tₖ and Tₗ, rsepctively.
 """
 function get_jastrow_ratio(k, l, jastrow::Jastrow, pht::Bool, spin::Int)
     # T vector
-    Tvec = jastrow.Tvec
+    Tvec = jastrow.Tvec_f
 
     # jpar map
     jpar_map = jastrow.jpar_map
@@ -363,7 +419,7 @@ function build_jastrow_factor(jastrow_type::String, model_geometry::ModelGeometr
     jpar_map = initialize_jpars(model_geometry, rng, readin_jpars)
 
     # generate T vector
-    init_Tvec = get_Tvec(jastrow_type, jpar_map, pconfig, pht, model_geometry)
+    (init_Tvec_f, init_Tvec_b) = get_Tvec(jastrow_type, jpar_map, pconfig, pht, model_geometry)
 
     # get number of Jastrow parameters
     num_jpars = length(jpar_map)
@@ -374,7 +430,35 @@ function build_jastrow_factor(jastrow_type::String, model_geometry::ModelGeometr
         println("Type: ", jastrow_type)
     end
 
-    return Jastrow(jastrow_type, num_jpars, jpar_map, init_Tvec)
+    return Jastrow(jastrow_type, num_jpars, jpar_map, init_Tvec_f, init_Tvec_b)
+end
+
+
+"""
+    build_jastrow_factor( jastrow_type::String, model_geometry::ModelGeometry, 
+                          pconfig::Vector{Int64}, phconfig::Vector{Int64}, pht::Bool, rng::Xoshiro, readin_jpars::Bool )
+
+Constructs relevant Jastrow factor and returns intitial T vector, matrix of Jastrow parameters, and
+number of Jastrow parameters. 
+
+"""
+function build_jastrow_factor(jastrow_type::String, model_geometry::ModelGeometry, pconfig::Vector{Int64}, phconfig::Vector{Int64}, pht::Bool, rng::Xoshiro, readin_jpars::Bool)
+    # map Jastrow parameters
+    jpar_map = initialize_jpars(model_geometry, rng, readin_jpars)
+
+    # generate T vector
+    (init_Tvec_f, init_Tvec_b) = get_Tvec(jastrow_type, jpar_map, pconfig, phconfig, pht, model_geometry)
+
+    # get number of Jastrow parameters
+    num_jpars = length(jpar_map)
+   
+    if debug
+        # report the number of Jastrow parameters initialized
+        println(num_jpars," Jastrow parameters initialized")
+        println("Type: ", jastrow_type)
+    end
+
+    return Jastrow(jastrow_type, num_jpars, jpar_map, init_Tvec_f, init_Tvec_b)
 end
 
 
@@ -391,7 +475,7 @@ function build_jastrow_factor(jastrow_type::String, model_geometry::ModelGeometr
     jpar_map = initialize_jpars(model_geometry, path_to_jpars, readin_jpars)
 
     # generate T vector
-    init_Tvec = get_Tvec(jastrow_type, jpar_map, pconfig, pht, model_geometry)
+    (init_Tvec_f, init_Tvec_b) = get_Tvec(jastrow_type, jpar_map, pconfig, pht, model_geometry)
 
     # get number of Jastrow parameters
     num_jpars = length(jpar_map)
@@ -402,7 +486,35 @@ function build_jastrow_factor(jastrow_type::String, model_geometry::ModelGeometr
         println("Type: ", jastrow_type)
     end
 
-    return Jastrow(jastrow_type, num_jpars, jpar_map, init_Tvec)
+    return Jastrow(jastrow_type, num_jpars, jpar_map, init_Tvec_f, init_Tvec_b)
+end
+
+
+"""
+    build_jastrow_factor( jastrow_type::String, model_geometry::ModelGeometry, 
+                          pconfig::Vector{Int64}, phconfig::Vector{Int64}, pht::Bool, path_to_jpars::String, readin_jpars::Bool )
+
+Constructs relevant Jastrow factor and returns intitial T vector, matrix of Jastrow parameters, and
+number of Jastrow parameters. 
+
+"""
+function build_jastrow_factor(jastrow_type::String, model_geometry::ModelGeometry, pconfig::Vector{Int64}, phconfig::Vector{Int64}, pht::Bool, path_to_jpars::String, readin_jpars::Bool)
+    # map Jastrow parameters
+    jpar_map = initialize_jpars(model_geometry, path_to_jpars, readin_jpars)
+
+    # generate T vector
+    (init_Tvec_f, init_Tvec_b) = get_Tvec(jastrow_type, jpar_map, pconfig, phconfig::Vector{Int64}, pht, model_geometry)
+
+    # get number of Jastrow parameters
+    num_jpars = length(jpar_map)
+   
+    if debug
+        # report the number of Jastrow parameters initialized
+        println(num_jpars," Jastrow parameters initialized")
+        println("Type: ", jastrow_type)
+    end
+
+    return Jastrow(jastrow_type, num_jpars, jpar_map, init_Tvec_f, init_Tvec_b)
 end
 
 
