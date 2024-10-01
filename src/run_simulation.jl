@@ -28,8 +28,8 @@ include("Measurements.jl")
 #############################
 
 # Define the size of the lattice
-Lx = 4
-Ly = 4
+Lx = 8
+Ly = 8
 
 # Specify number of particles in the Canonical Ensemble
 #   - If initial density is given, code will automatically calculate number of electrons
@@ -59,7 +59,7 @@ U = 0.5
 μ_BCS = 0.0
 
 # # Phonon fugacity
-# μₚₕ = 0.01
+# μₚₕ = 0.0
 
 # # Phonon frequency
 # Ω = 1.0
@@ -91,10 +91,10 @@ path_to_detpars = "/path/to/determinantal/parameters/"
 readin_jpars = false
 path_to_jpars = "/path/to/jastrow/parameters/"
 
-# # Parameters to be optimized and initial value(s)
-# parameters_to_optimize = ["Δs", "μ_BCS"]                              # s-wave (BCS) order parameter
-# parameter_values = [[0.01], [μ_BCS]]                                 
-# pht = true
+# Parameters to be optimized and initial value(s)
+parameters_to_optimize = ["Δs", "μ_BCS"]                              # s-wave (BCS) order parameter
+parameter_values = [[0.01], [μ_BCS]]                                 
+pht = true
 
 # # Parameters to be optimized and initial value(s)
 # parameters_to_optimize = ["Δcs", "Δss"]                               # charge and spin stripe order parameters
@@ -106,10 +106,10 @@ path_to_jpars = "/path/to/jastrow/parameters/"
 # parameter_values = [[0.05], [0.03], [μ_BCS]]                          
 # pht = true
 
-# Parameters to be optimized and initial value(s)
-parameters_to_optimize = ["Δa"]                                       # antiferromagnetic (Neél) order parameter
-parameter_values = [[0.01]]                                            
-pht = false
+# # Parameters to be optimized and initial value(s)
+# parameters_to_optimize = ["Δa"]                                       # antiferromagnetic (Neél) order parameter
+# parameter_values = [[0.01]]                                            
+# pht = false
 
 # # Parameters to be optimized and initial value(s)
 # parameters_to_optimize = ["Δc"]                                       # charge density wave order parameter
@@ -167,7 +167,7 @@ seed = abs(rand(Int))
 # Initialize random number generator
 rng = Xoshiro(seed)
        
-# Number of optimization updates
+# Number of minimization/optimization updates
 N_opts = 3000
 
 # Optimization bin size
@@ -295,10 +295,13 @@ A = get_Ak_matrices(V, Uₑ, ε, model_geometry)
 W = get_equal_greens(M, D)
 
 # # Construct electron density-density Jastrow factor
-# jastrow = build_jastrow_factor("e-den-den", model_geometry, pconfig, pht, rng, readin_jpars)
+# jastrow_den = build_jastrow_factor("e-den-den", model_geometry, pconfig, pht, rng, readin_jpars)
 
 # Construct electron spin-spin Jastrow factor
-jastrow = build_jastrow_factor("e-spn-spn", model_geometry, pconfig, pht, rng, readin_jpars)
+jastrow_spn = build_jastrow_factor("e-spn-spn", model_geometry, pconfig, pht, rng, readin_jpars)
+
+# # Construct electron spin-spin Jastrow factor
+# jastrow_eph = build_jastrow_factor("eph-den-den", model_geometry, pconfig, phconfig, pht, rng, readin_jpars)
 
 # Initialize all variational parameters to be optimized
 variational_parameters = VariationalParameters(determinantal_parameters, jastrow)

@@ -69,7 +69,7 @@ function metropolis(W, jastrow, κ, rng)
     
     # checks occupation against spin species of particle 'β'
     # if site is unoccupied by same spin species, hop is possible
-    if number_operator(l,pconfig)[β_spin] == 1
+    if get_onsite_fermion_occupation(l,pconfig)[β_spin] == 1
         if debug == true
             println("Hop impossible! Rejected!")  
         end

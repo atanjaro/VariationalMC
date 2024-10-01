@@ -134,10 +134,6 @@ function generate_initial_bond_phonon_configuration()
 end
 
 
-
-
-
-
 """
     get_spindex_type( spindex::Int, model_geometry::ModelGeometry )::Int
 
@@ -177,16 +173,29 @@ end
 
 
 """
-    number_operator( site::Int, pconfig::Vector{Int} )
+    get_onsite_fermion_occupation( site::Int, pconfig::Vector{Int} )
 
 Returns the number of spin-up and spin-down electrons occupying a real lattice site i.  
 
 """
-function number_operator(site::Int, pconfig::Vector{Int})
+function get_onsite_fermion_occupation(site::Int, pconfig::Vector{Int})
     nup = pconfig[site]
     ndn = pconfig[site+model_geometry.lattice.N]
     Ne = pconfig[site] + pconfig[site+model_geometry.lattice.N]
     return nup, ndn, Ne
+end
+
+
+"""
+    get_phonon_occupation( site::Int, phconfig::Vector{Int} )
+
+Returns the number of phonons occupying a real lattice site i or a lattice bond i.  
+
+"""
+function get_phonon_occupation(i::Int, phconfig::Vector{Int})
+    nph = phconfig[i]
+
+    return nph
 end
 
 
@@ -240,33 +249,6 @@ function do_particle_hop!(met_step, pconfig::Vector{Int}, κ::Vector{Int64}, mod
 end
 
 
-
-# """
-#     get_particle_positions( pconfig::Vector{Int} )
-
-# Returns a dictionary of particle positions with keys and values,
-# "spindex" -> "lattice site".
-
-# """
-# function get_particle_positions(pconfig::Vector{Int}, model_geometry::ModelGeometry)
-#     particle_positions = Dict()
-#     for i in eachindex(pconfig)
-#         if pconfig[i] == 1
-#             particle_positions[i] = get_index_from_spindex(i, model_geometry)
-#         else
-#         end
-#     end
-
-#     sorted_positions = sort(collect(particle_positions), by = x->x[1])
-
-#     if length(sorted_positions) != Ne
-#         @error "Mismatch in particle_positions length: expected $Ne, got $(length(sorted_positions))"
-#     end
-    
-#     return sorted_positions
-# end
-
-
 """
 
     get_particle_positions( pconfig::Vector{Int}, model_geometry::ModelGeometry, Ne::Int )
@@ -292,27 +274,6 @@ function get_particle_positions(pconfig::Vector{Int}, model_geometry::ModelGeome
 
     return κ
 end
-
-# """
-#     update_particle_position!( met_step::LocalAcceptance, paritcle_positions)
-
-# If a particle 'β' at site 'k' successfully hops to a neighboring site 'l', update its
-# position in 'particle_positions' as well as 'pconfig.
-
-# """
-# function update_particle_position!(met_step, particle_positions)
-#     if met_step.acceptance == 1
-#         # Update the pair within the vector
-#         particle_positions[met_step.particle] = Pair(get_spindices_from_index(met_step.fsite, model_geometry)[met_step.spin], met_step.fsite)
-#         return nothing
-#     else
-#         # DO NOTHING
-#         return nothing
-#     end
-# end
-
-
-
 
 
 

@@ -65,10 +65,10 @@ function get_local_jpar_derivative(jastrow::Jastrow, pconfig::Vector{Int}, pht::
             for idx in indices
                 i = idx[1]
                 j = idx[2]
-                nup_i = number_operator(i+1, pconfig)[1]
-                ndn_i = number_operator(i+1, pconfig)[2]
-                nup_j = number_operator(j+1, pconfig)[1]
-                ndn_j = number_operator(j+1, pconfig)[2]
+                nup_i = get_onsite_fermion_occupation(i+1, pconfig)[1]
+                ndn_i = get_onsite_fermion_occupation(i+1, pconfig)[2]
+                nup_j = get_onsite_fermion_occupation(j+1, pconfig)[1]
+                ndn_j = get_onsite_fermion_occupation(j+1, pconfig)[2]
                 if pht
                     derivatives[num] += -0.5 * (nup_i + ndn_i - 1) * (nup_j + ndn_j - 1)
                 else
@@ -86,10 +86,10 @@ function get_local_jpar_derivative(jastrow::Jastrow, pconfig::Vector{Int}, pht::
             for idx in indices
                 i = idx[1]
                 j = idx[2]
-                nup_i = number_operator(i+1, pconfig)[1]
-                ndn_i = number_operator(i+1, pconfig)[2]
-                nup_j = number_operator(j+1, pconfig)[1]
-                ndn_j = number_operator(j+1, pconfig)[2]
+                nup_i = get_onsite_fermion_occupation(i+1, pconfig)[1]
+                ndn_i = get_onsite_fermion_occupation(i+1, pconfig)[2]
+                nup_j = get_onsite_fermion_occupation(j+1, pconfig)[1]
+                ndn_j = get_onsite_fermion_occupation(j+1, pconfig)[2]
                 if pht
                     derivatives[num] += -0.4 * (nup_i + ndn_i - 1) * (nup_j + ndn_j - 1)
                 else
@@ -125,7 +125,7 @@ function get_local_detpar_derivative(determinantal_parameters, model_geometry, �
     
 
     # loop over Nₚ particles 
-    G = zeros(AbstractFloat, 2*N, 2*N)
+    G = zeros(Complex, 2*N, 2*N)
     for β in 1:Ne
         # spindex occupation number of particle β
         β_spindex = findfirst(x -> x == β, κ)

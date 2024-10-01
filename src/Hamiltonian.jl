@@ -117,9 +117,9 @@ function build_tight_binding_model(tight_binding_model)
     nbr_table = build_neighbor_table(bonds[1],
                                     model_geometry.unit_cell,
                                     model_geometry.lattice)
-    H_t = zeros(AbstractFloat, 2*N, 2*N)
-    H_tp = zeros(AbstractFloat, 2*N, 2*N)
-    μ_vec = Vector{AbstractFloat}(undef, 2*N)
+    H_t = zeros(Complex, 2*N, 2*N)
+    H_tp = zeros(Complex, 2*N, 2*N)
+    μ_vec = Vector{Complex}(undef, 2*N)
     if pht == true
         # particle-hole transformed chemical potential
         if !("μ_BCS" in parameters_to_optimize)     
@@ -329,11 +329,11 @@ function build_variational_terms(determinantal_parameters)
     vparam_map = map_determinantal_parameters(determinantal_parameters) 
 
     # initial matrices
-    Hs = zeros(AbstractFloat, 2*N, 2*N) 
-    Ha = zeros(AbstractFloat, 2*N, 2*N)    
-    Hc = zeros(AbstractFloat, 2*N, 2*N) 
-    Hμ = zeros(AbstractFloat, 2*N, 2*N)
-    Hd = zeros(AbstractFloat, 2*N, 2*N)       
+    Hs = zeros(Complex, 2*N, 2*N) 
+    Ha = zeros(Complex, 2*N, 2*N)    
+    Hc = zeros(Complex, 2*N, 2*N) 
+    Hμ = zeros(Complex, 2*N, 2*N)
+    Hd = zeros(Complex, 2*N, 2*N)       
     
     # store vpar matrices
     H_vpars = []
@@ -641,7 +641,7 @@ function get_Ak_matrices(V, U, ε, model_geometry)
     end
 
     N = model_geometry.unit_cell.n * model_geometry.lattice.N
-    A = Vector{Matrix{AbstractFloat}}()
+    A = Vector{Matrix{Complex}}()
     adjU = adjoint(U)
 
     # Generate matrix of perturbation theory energies
