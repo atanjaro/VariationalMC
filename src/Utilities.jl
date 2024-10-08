@@ -214,4 +214,47 @@ function max_dist(N, L)
 end
 
 
+"""
 
+    apply_tabc!( H::Matrix{ComplexF64}, Lx::Int, Ly::Int, θ::Tuple{Float64, Float64} )
+
+Given a Hamiltonian matrix H, phase θ, and lattice dimensions Lx and Ly, applies twisted boundary conditions. 
+
+"""
+function apply_tbc!(H::Matrix{ComplexF64}, θ::Tuple{Float64, Float64}, Lx::Int, Ly::Int)
+    θx, θy = θ
+    N = Lx * Ly
+
+    # Apply the twist in the x-direction for spin-up and spin-down sectors
+    for y in 1:Lx
+        idx1 = Lx * (y - 1) + 1  # First element of row y
+        idx2 = Lx * y            # Last element of row y
+
+        # Spin-up sector
+        H[idx1, idx2] *= cis(θx) #exp(1im * θx)
+        H[idx2, idx1] *= cis(-θx) #exp(-1im * θx)
+
+        # Spin-down sector
+        H[idx1 + N, idx2 + N] *= cis(-θx) #exp(1im * -θx)
+        H[idx2 + N, idx1 + N] *= cis(θx) #exp(-1im * -θx)
+    end
+
+    # Apply the twist in the y-direction for spin-up and spin-down sectors
+    for x in 1:Ly
+        idx1 = x                  # Top element of column x
+        idx2 = Ly * (Ly - 1) + x  # Bottom element of column x
+
+        # Spin-up sector
+        H[idx1, idx2] *= cis(θy) #exp(1im * θy)
+        H[idx2, idx1] *= cis(-θy) #exp(-1im * θy)
+
+        # Spin-down sector
+        H[idx1 + N, idx2 + N] *= cis(-θy) #exp(1im * -θy)
+        H[idx2 + N, idx1 + N] *= cis(θy) #exp(-1im * -θy)
+    end
+end
+
+
+# # Apply twist phases to the Hamiltonian
+# θ = (rand(rng) * 2 * π, rand(rng) * 2 * π)  
+# apply_tbc!(H, θ, Lx, Ly)

@@ -135,18 +135,18 @@ function build_tight_binding_model(tight_binding_model)
             for (i,j) in eachcol(nbr_table)
                 H_t[i,j] += -tight_binding_model.t[1]
             end
-            for (i,j) in eachcol(nbr_table .+ model_geometry.lattice.N)    
+            for (i,j) in eachcol(nbr_table .+ N)    
                 H_t[i,j] += tight_binding_model.t[1]
             end
         # special case for 1D
         elseif  Lx == 1 && Ly > Lx || Ly == 1 && Lx > Ly
-            for (i,j) in eachcol(nbr_table[:,1:model_geometry.lattice.N])
+            for (i,j) in eachcol(nbr_table[:,1:N])
                 H_t[i,j] += -tight_binding_model.t[1]
                 if model_geometry.lattice.N > 2
                     H_t[j,i] += -tight_binding_model.t[1]
                 end
             end
-            for (i,j) in eachcol(nbr_table[:,1:model_geometry.lattice.N] .+ model_geometry.lattice.N)    
+            for (i,j) in eachcol(nbr_table[:,1:N] .+ N)    
                 H_t[i,j] += tight_binding_model.t[1]
                 if model_geometry.lattice.N > 2
                     H_t[j,i] += tight_binding_model.t[1]
@@ -158,7 +158,7 @@ function build_tight_binding_model(tight_binding_model)
                 H_t[i,j] += -tight_binding_model.t[1]
                 H_t[j,i] += -tight_binding_model.t[1]
             end
-            for (i,j) in eachcol(nbr_table[:,1:(size(nbr_table,2) - Ly)] .+ model_geometry.lattice.N)
+            for (i,j) in eachcol(nbr_table[:,1:(size(nbr_table,2) - Ly)] .+ N)
                 H_t[i,j] += tight_binding_model.t[1]
                 H_t[j,i] += tight_binding_model.t[1]
             end 
@@ -168,7 +168,7 @@ function build_tight_binding_model(tight_binding_model)
                 H_t[i,j] += -tight_binding_model.t[1]
                 H_t[j,i] += -tight_binding_model.t[1]
             end
-            for (i,j) in eachcol(nbr_table[:,1:(size(nbr_table,2) - Lx)] .+ model_geometry.lattice.N)
+            for (i,j) in eachcol(nbr_table[:,1:(size(nbr_table,2) - Lx)] .+ N)
                 H_t[i,j] += tight_binding_model.t[1]
                 H_t[j,i] += tight_binding_model.t[1]
             end 
@@ -180,7 +180,7 @@ function build_tight_binding_model(tight_binding_model)
                 else
                 end
             end
-            for (i,j) in eachcol(nbr_table .+ model_geometry.lattice.N)    
+            for (i,j) in eachcol(nbr_table .+ N)    
                 H_t[i,j] += tight_binding_model.t[1]
                 if model_geometry.lattice.N > 2
                     H_t[j,i] += tight_binding_model.t[1]
@@ -197,7 +197,7 @@ function build_tight_binding_model(tight_binding_model)
                 for (i,j) in eachcol(nbr_table_p)
                     H_tp[i,j] += tight_binding_model.t[2]/2
                 end
-                for (i,j) in eachcol(nbr_table_p .+ model_geometry.lattice.N)    
+                for (i,j) in eachcol(nbr_table_p .+ N)    
                     H_tp[i,j] += -tight_binding_model.t[2]/2
                 end
             else
@@ -205,7 +205,7 @@ function build_tight_binding_model(tight_binding_model)
                     H_tp[i,j] += tight_binding_model.t[2]
                     H_tp[j,i] += tight_binding_model.t[2]
                 end
-                for (i,j) in eachcol(nbr_table_p .+ model_geometry.lattice.N)    
+                for (i,j) in eachcol(nbr_table_p .+ N)    
                     H_tp[i,j] += -tight_binding_model.t[2]
                     H_tp[j,i] += -tight_binding_model.t[2]
                 end
@@ -227,18 +227,18 @@ function build_tight_binding_model(tight_binding_model)
             for (i,j) in eachcol(nbr_table)
                 H_t[i,j] += -tight_binding_model.t[1]
             end
-            for (i,j) in eachcol(nbr_table .+ model_geometry.lattice.N)    
+            for (i,j) in eachcol(nbr_table .+ N)    
                 H_t[i,j] += -tight_binding_model.t[1]
             end
         # special case for 1D  
         elseif  Lx == 1 && Ly > Lx || Ly == 1 && Lx > Ly
-            for (i,j) in eachcol(nbr_table[:,1:model_geometry.lattice.N])
+            for (i,j) in eachcol(nbr_table[:,1:N])
                 H_t[i,j] += -tight_binding_model.t[1]
                 if model_geometry.lattice.N > 2
                     H_t[j,i] += -tight_binding_model.t[1]
                 end
             end
-            for (i,j) in eachcol(nbr_table[:,1:model_geometry.lattice.N] .+ model_geometry.lattice.N)    
+            for (i,j) in eachcol(nbr_table[:,1:model_geometry.lattice.N] .+ N)    
                 H_t[i,j] += -tight_binding_model.t[1]
                 if model_geometry.lattice.N > 2
                     H_t[j,i] += -tight_binding_model.t[1]
@@ -250,7 +250,7 @@ function build_tight_binding_model(tight_binding_model)
                 H_t[i,j] += -tight_binding_model.t[1]
                 H_t[j,i] += -tight_binding_model.t[1]
             end
-            for (i,j) in eachcol(nbr_table[:,1:(size(nbr_table,2) - Ly)] .+ model_geometry.lattice.N)
+            for (i,j) in eachcol(nbr_table[:,1:(size(nbr_table,2) - Ly)] .+ N)
                 H_t[i,j] += -tight_binding_model.t[1]
                 H_t[j,i] += -tight_binding_model.t[1]
             end 
@@ -260,7 +260,7 @@ function build_tight_binding_model(tight_binding_model)
                 H_t[i,j] += -tight_binding_model.t[1]
                 H_t[j,i] += -tight_binding_model.t[1]
             end
-            for (i,j) in eachcol(nbr_table[:,1:(size(nbr_table,2) - Lx)] .+ model_geometry.lattice.N)
+            for (i,j) in eachcol(nbr_table[:,1:(size(nbr_table,2) - Lx)] .+ N)
                 H_t[i,j] += -tight_binding_model.t[1]
                 H_t[j,i] += -tight_binding_model.t[1]
             end  
@@ -272,7 +272,7 @@ function build_tight_binding_model(tight_binding_model)
                 else
                 end
             end
-            for (i,j) in eachcol(nbr_table .+ model_geometry.lattice.N)    
+            for (i,j) in eachcol(nbr_table .+ N)    
                 H_t[i,j] += -tight_binding_model.t[1]
                 if model_geometry.lattice.N > 2
                     H_t[j,i] += -tight_binding_model.t[1]
@@ -289,7 +289,7 @@ function build_tight_binding_model(tight_binding_model)
                 for (i,j) in eachcol(nbr_table_p)
                     H_tp[i,j] += tight_binding_model.t[2]/2
                 end
-                for (i,j) in eachcol(nbr_table_p .+ model_geometry.lattice.N)    
+                for (i,j) in eachcol(nbr_table_p .+ N)    
                     H_tp[i,j] += tight_binding_model.t[2]/2
                 end
             else
@@ -297,7 +297,7 @@ function build_tight_binding_model(tight_binding_model)
                     H_tp[i,j] += tight_binding_model.t[2]
                     H_tp[j,i] += tight_binding_model.t[2]
                 end
-                for (i,j) in eachcol(nbr_table_p .+ model_geometry.lattice.N)    
+                for (i,j) in eachcol(nbr_table_p .+ N)    
                     H_tp[i,j] += tight_binding_model.t[2]
                     H_tp[j,i] += tight_binding_model.t[2]
                 end

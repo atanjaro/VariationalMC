@@ -302,8 +302,48 @@ function get_Tvec(jastrow_type::String, jpar_map::OrderedDict{Any,Any}, pconfig:
             end
         elseif jastrow_type == "ph-den-den"  # phonon density-density
             Tvec_b[i] = jpar_sum * num_phonons
-        elseif jastrow_type == "ph-dsp-dsp"  # phonon-displacement-displacement
-            # TODO
+        end
+    end
+    
+    return Tvec_f, Tvec_b
+end
+
+
+"""
+
+    get_Tvec( jastrow_type::AbstractString, jpar_map::Dict{Any,Any}, pconfig::Vector{Int64}, phconfig::Vector{Int64}, model_geometry::ModelGeometry ) 
+
+Returns vectors T_f and T_b with entries of the form Tᵢ = ∑ⱼ vᵢⱼnᵢ(x) where vᵢⱼ are the associated Jastrow peseudopotentials and nᵢ(x)
+is the total electron or phonon occupation. 
+
+"""
+function get_Tvec(jastrow_type::String, jpar_map::OrderedDict{Any,Any}, pconfig::Vector{Int64}, phconfig::Matrix{AbstractFloat}, pht::Bool, model_geometry::ModelGeometry)
+    # extent of the lattice
+    N = model_geometry.lattice.N
+
+    # initialize T vectors
+    Tvec_f = Vector{AbstractFloat}(undef, N)
+    Tvec_b = Vector{AbstractFloat}(undef, N)
+
+    for i in 1:N
+        # track the Jastrow parameter sum
+        jpar_sum = 0.0
+        for j in 1:N 
+            # Calculate the reduced index for (i, j)
+            red_idx = reduce_index(i-1, j-1, model_geometry)
+
+            # Add the appropriate value based on the key of the jpar_map
+            if haskey(jpar_map, red_idx)
+                (_, vᵢⱼ) = jpar_map[red_idx]
+                jpar_sum += vᵢⱼ
+            end
+        end
+
+        # get boson displacements
+        X_i = get_onsite_phonon_displacements(i, phconfig)
+
+        if jastrow_type == "ph-dsp-dsp"  # phonon-displacement-displacement
+            Tvec_b[i] = jpar_sum * X_i
         elseif jastrow_type == "eph-den-dsp"  # electron-phonon density-displacement
             # TODO
         end
@@ -311,6 +351,9 @@ function get_Tvec(jastrow_type::String, jpar_map::OrderedDict{Any,Any}, pconfig:
     
     return Tvec_f, Tvec_b
 end
+
+
+
 
 
 """
@@ -349,11 +392,14 @@ function update_Tvec!(local_acceptance, jastrow::Jastrow, model_geometry::ModelG
         if pht
             if local_acceptance.spin == 2
                Tvec_f[i] += - vᵢₗ + vᵢₖ
+               Tvec_b[i] += - vᵢₗ + vᵢₖ
             else
                 Tvec_f[i] += vᵢₗ - vᵢₖ
+                Tvec_b[i] += vᵢₗ - vᵢₖ
             end
         else
             Tvec_f[i] += vᵢₗ - vᵢₖ
+            Tvec_b[i] += vᵢₗ - vᵢₖ
         end
     end
 
@@ -370,8 +416,9 @@ using the corresponding T vectors Tₖ and Tₗ, rsepctively.
 
 """
 function get_jastrow_ratio(k, l, jastrow::Jastrow, pht::Bool, spin::Int)
-    # T vector
-    Tvec = jastrow.Tvec_f
+    # T vectors
+    Tvec_f = jastrow.Tvec_f
+    Tvec_b = jastrow.Tvec_b
 
     # jpar map
     jpar_map = jastrow.jpar_map
@@ -388,21 +435,29 @@ function get_jastrow_ratio(k, l, jastrow::Jastrow, pht::Bool, spin::Int)
     end
 
     # select element for the initial and final sites
-    Tₗ = Tvec[l]
-    Tₖ = Tvec[k]
+    # fermionic
+    Tₗ_f = Tvec_f[l]
+    Tₖ_f = Tvec_f[k]
+
+    # bosonic
+    Tₗ_b = Tvec_b[l]
+    Tₖ_b = Tvec_b[k]
 
     # compute ratio
     if pht
         if spin == 2
-            jas_ratio = exp(-((Tₗ - Tₖ) - vₗₗ + vₗₖ)) 
+            jas_ratio_f = exp(-((Tₗ_f - Tₖ_f) - vₗₗ + vₗₖ)) 
+            jas_ratio_b = exp(-((Tₗ_b - Tₖ_b) - vₗₗ + vₗₖ))
         else
-            jas_ratio = exp(-((Tₗ - Tₖ) + vₗₗ - vₗₖ)) 
+            jas_ratio_f = exp(-((Tₗ_f - Tₖ_f) + vₗₗ - vₗₖ)) 
+            jas_ratio_b = exp(-((Tₗ_b - Tₖ_b) + vₗₗ - vₗₖ)) 
         end
     else
-        jas_ratio = exp(-((Tₗ - Tₖ) + vₗₗ - vₗₖ)) 
+        jas_ratio_f = exp(-((Tₗ_f - Tₖ_f) + vₗₗ - vₗₖ)) 
+        jas_ratio_b = exp(-((Tₗ_b - Tₖ_b) + vₗₗ - vₗₖ)) 
     end
 
-    return jas_ratio
+    return jas_ratio_f, jas_ratio_b
 end
 
 

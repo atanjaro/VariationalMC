@@ -430,7 +430,7 @@ function get_local_kinetic_energy(model_geometry, tight_binding_model, jastrow, 
         for l in nbr_map[k][2]
             # check that neighboring sites are unoccupied
             if get_onsite_fermion_occupation(l, pconfig)[β_spin] == 0
-                Rⱼ = get_jastrow_ratio(k, l, jastrow, pht, β_spin)
+                Rⱼ = get_jastrow_ratio(k, l, jastrow, pht, β_spin)[1]
                 sum_nn += Rⱼ * W[l, β]
             end
         end

@@ -41,7 +41,7 @@ accepted, returns acceptance, particle β and it's spindex, initial position, an
 position.
 
 """
-function metropolis(W, jastrow, κ, rng)    
+function metropolis(W, e_jastrow, κ, rng)    
     # create neighbor table
     nbr_table = build_neighbor_table(bonds[1],
                                     model_geometry.unit_cell,
@@ -78,7 +78,7 @@ function metropolis(W, jastrow, κ, rng)
         # begin Metropolis algorithm
 
         # get Jastrow ratio (element of T vector)
-        Rⱼ = get_jastrow_ratio(k, l, jastrow, pht, β_spin)    
+        Rⱼ = get_jastrow_ratio(k, l, e_jastrow, pht, β_spin)[1]    
 
         # get wavefunction ratio (correpsonding element of Green's function)
         Rₛ = W[l, β]  
@@ -116,7 +116,7 @@ Perform accept/reject step of proposed addition/removal of a particle using the 
 accepted, returns acceptance, site, and whether a particle was added or removed.
 
 """
-function metropolis(phconfig, model_geometry, rng)
+function metropolis(phconfig::Vector{Int}, ph_jastrow::Jastrow, eph_jastrow::Jastrow, model_geometry::ModelGeometry, rng::Xoshiro)
     # randomly select a site on the lattice
     N = model_geometry.lattice.N
     rnd_site = rand(rng, 1:N)
@@ -142,8 +142,8 @@ function metropolis(phconfig, model_geometry, rng)
         println("Removal impossible! Rejected!") 
     else
         # get phonon-phonon and electon-phonon Jastrow ratios
-        Rⱼₚₕ = get_jastrow_ratio()   # TODO: add Jastrow ratio methods for both of these Jastrow factors
-        Rⱼₑₚₕ = get_jastrow_ratio()
+        Rⱼₚₕ = get_jastrow_ratio(k, l, ph_jastrow, pht, β_spin)[2]   
+        Rⱼₑₚₕ = get_jastrow_ratio(k, l, eph_jastrow, pht, β_spin)[1]
 
         # get phononic amplitudes
         if cran == -1
@@ -180,14 +180,13 @@ end
 
 
 """
-    local_fermion_update!(Ne::Int, model_geometry::ModelGeometry, 
-                        jastrow::Jastrow, pconfig::Vector{Int64}, rng::Xoshiro)
+    local_fermion_update!()
 
 Performs a local MC update. Proposes moves and accept/rejects via Metropolis algorithm,
 if accepted, updates particle positions, T vector, and Green's function (W matrix).
 
 """
-function local_fermion_update!(W, D, model_geometry, jastrow, pconfig, κ, rng, n_iter, n_stab, mc_meas_freq)
+function local_fermion_update!(W, D, model_geometry, e_jastrow, pconfig, κ, rng, n_iter, n_stab, mc_meas_freq)
     if debug
         println("Starting new Monte Carlo cycle...")
     end
@@ -208,7 +207,7 @@ function local_fermion_update!(W, D, model_geometry, jastrow, pconfig, κ, rng, 
         proposed_hops += 1
     
         # Metropolis step
-        met_step = metropolis(W, jastrow, κ, rng)    
+        met_step = metropolis(W, e_jastrow, κ, rng)    
     
         # whether hop was accepted
         acceptance = met_step.acceptance
@@ -241,7 +240,7 @@ function local_fermion_update!(W, D, model_geometry, jastrow, pconfig, κ, rng, 
             update_equal_greens!(met_step, W)   
     
             # update T vector
-            update_Tvec!(met_step, jastrow, model_geometry, pht)  
+            update_Tvec!(met_step, e_jastrow, model_geometry, pht)  
         end
         # DEBUG
         if debug
@@ -263,22 +262,22 @@ function local_fermion_update!(W, D, model_geometry, jastrow, pconfig, κ, rng, 
     # # compute local acceptance rate
     local_acceptance_rate = accepted_hops / proposed_hops     
 
-    return pconfig, κ, jastrow, W, D #local_acceptance_rate, 
+    return pconfig, κ, e_jastrow, W, D #local_acceptance_rate, 
 end
 
 
 """
-    local_boson_update!( )
+    local_boson_update!( phconfig::Vector{Int64}, ph_jastrow::Jastrow, eph_jastrow::Jastrow, model_geometry::ModelGeometry, rng::Xoshiro )
 
 Performs a local MC update. Proposes moves and accept/rejects via Metropolis algorithm,
 if accepted, updates phonon configurations and phonon number.
 
 """
-function local_boson_update!(phconfig, model_geometry, rng)
+function local_boson_update!(phconfig::Vector{Int64}, ph_jastrow::Jastrow, eph_jastrow::Jastrow, model_geometry::ModelGeometry, rng::Xoshiro)
     # counts number of proposed additions/removals
-    proposed_addrs = 0
+    proposed_addrms = 0
     # counts number of accepted additions/removals
-    accepted_addrs = 0
+    accepted_addrms = 0
 
     for s in 1:mc_meas_freq
         if debug
@@ -286,25 +285,68 @@ function local_boson_update!(phconfig, model_geometry, rng)
         end
 
         # increment number of proposed additions/removals
-        proposed_addrs += 1
+        proposed_addrms += 1
 
         # Metropolis step
-        met_step = metropolis(phconfig, model_geometry, rng)    
+        met_step = metropolis(phconfig, ph_jastrow, eph_jastrow, model_geometry, rng)    
 
         # whether change was accepted
         acceptance = met_step.acceptance
 
         if acceptance == 1
-            accepted_addrs += 1
+            accepted_addrms += 1
     
             # perform change
             change_particle_number!(met_step, phconfig, model_geometry)                   
     
             # update T vector
-            update_Tvec!(met_step, jastrow, model_geometry, pht)  
+            update_Tvec!(met_step, ph_jastrow, model_geometry, pht)  
+            update_Tvec!(met_step, eph_jastrow, model_geometry, pht)  
         end
     end
 
     return nothing
 end
 
+
+"""
+    local_boson_update!( )
+
+Performs a local MC update. Proposes displacements and accept/rejects via Metropolis algorithm,
+if accepted, updates phonon configurations and phonon displacements.
+
+"""
+function local_boson_update!(phconfig::Matrix{AbstractFloat}, ph_jastrow::Jastrow, eph_jastrow::Jastrow, model_geometry::ModelGeometry, rng::Xoshiro)
+    # counts number of proposed additions/removals
+    proposed_disps = 0
+    # counts number of accepted additions/removals
+    accepted_disps = 0
+
+    for s in 1:mc_meas_freq
+        if debug
+            println("Metropolis step = $s")
+        end
+
+        # increment number of proposed additions/removals
+        proposed_disps += 1
+
+        # Metropolis step
+        met_step = metropolis(phconfig, ph_jastrow, eph_jastrow, model_geometry, rng)    
+
+        # whether change was accepted
+        acceptance = met_step.acceptance
+
+        if acceptance == 1
+            accepted_disps += 1
+    
+            # perform change
+            update_displacements!(met_step, phconfig, model_geometry)                   
+    
+            # update T vector
+            update_Tvec!(met_step, ph_jastrow, model_geometry, pht)  
+            update_Tvec!(met_step, eph_jastrow, model_geometry, pht)  
+        end
+    end
+
+    return nothing
+end
