@@ -28,8 +28,8 @@ include("Measurements.jl")
 #############################
 
 # Define the size of the lattice
-Lx = 8
-Ly = 8
+Lx = 4
+Ly = 4
 
 # Specify number of particles in the Canonical Ensemble
 #   - If initial density is given, code will automatically calculate number of electrons
@@ -58,24 +58,27 @@ U = 0.5
 # (BCS) chemical potential
 μ_BCS = 0.0
 
-# # Phonon fugacity
-# μₚₕ = 0.0
+# Phonon density fugacity
+μₚₕ = 0.0
 
-# # Phonon frequency
-# Ω = 1.0
+# Phonon displacement fugacity
+z_x = 0.01
+z_y = 0.01
 
-# # Microscopic electron-phonon coupling
-# g = 1.0
+# Phonon frequency
+Ω = 1.0
 
-# # Microscopic electron phonon coupling
-# α = g * sqrt(2 * Ω)
+# Microscopic electron-phonon coupling
+g = 1.0
+
+# Microscopic electron phonon coupling
+α = g * sqrt(2 * Ω)
 
 # # Dimensionless electron-phonon coupling (g definition)
 # λ = (2 * g^2) / (Ω * 8)
 
 # # Dimensionless electron-phonon coupling (α defintion)
 # λ = α^2 / (Ω^2 * 8)
-
 
 #######################################
 ##      VARIATIONAL PARAMETERS       ##
@@ -124,7 +127,17 @@ pht = true
 # Parameters to be optimized and initial value(s)
 # parameters_to_optimize = ["Δcs", "Δss", "μₚₕ"]                         # charge and spin stripe order parameters + optical phonons
 # parameter_values = [[0.01], [0.01], [μₚₕ]]               
- # pht = false         
+# pht = false         
+
+# Parameters to be optimized and initial value(s)
+# parameters_to_optimize = ["Δs", "z_x", "z_y"]                                # s-wave (BCS) order parameter + optical phonons
+# parameter_values = [[0.01], [0.01], [0.01]]                      
+# pht = true    
+
+# # Parameters to be optimized and initial value(s)
+# parameters_to_optimize = ["Δcs", "Δss", "z_x", "z_y"]                         # charge and spin stripe order parameters + optical phonons
+# parameter_values = [[0.01], [0.01], [z_x], [z_y]]               
+# pht = false         
 
 
 ###################
@@ -244,6 +257,12 @@ unit_cell = UnitCell([[1.0,0.0], [0.0,1.0]],           # lattice vectors
 # Build a square lattice
 lattice = Lattice([Lx, Ly],[true,true])
 
+# whether to use twist averaged boundary conditions
+tabc = false
+
+# number of twist angles
+N_θ = 800
+
 # # Define nearest neighbor bonds
 # bond = Bond(orbitals = (1,1), displacement = [1])
 
@@ -294,11 +313,19 @@ A = get_Ak_matrices(V, Uₑ, ε, model_geometry)
 # Initialize equal-time Green's function (W matrix)
 W = get_equal_greens(M, D)
 
-# # Construct electron density-density Jastrow factor
-# jastrow_den = build_jastrow_factor("e-den-den", model_geometry, pconfig, pht, rng, readin_jpars)
+# # Initialize phonon parameters
+# phonon_parameters = initialize_phonon_parameters(Ω, 1.0, α)
 
-# Construct electron spin-spin Jastrow factor
-jastrow_spn = build_jastrow_factor("e-spn-spn", model_geometry, pconfig, pht, rng, readin_jpars)
+# Initialize model for electron-phonon coupling
+# holstein = initialize_electron_phonon_model(μₚₕ, phonon_parameters, model_geometry)
+# bond_ssh = initialize_electron_phonon_model("bond", z₀_x, z₀_y, phonon_parameters, model_geometry)
+# optical_ssh = initialize_electron_phonon_model("onsite", z_x, z_y, phonon_parameters, model_geometry)
+
+# Construct electron density-density Jastrow factor
+jastrow = build_jastrow_factor("e-den-den", model_geometry, pconfig, pht, rng, readin_jpars)
+
+# # Construct electron spin-spin Jastrow factor
+# jastrow_spn = build_jastrow_factor("e-spn-spn", model_geometry, pconfig, pht, rng, readin_jpars)
 
 # # Construct electron spin-spin Jastrow factor
 # jastrow_eph = build_jastrow_factor("eph-den-den", model_geometry, pconfig, phconfig, pht, rng, readin_jpars)

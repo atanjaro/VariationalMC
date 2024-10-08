@@ -87,48 +87,62 @@ end
 
 """
 
-    generate_initial_onsite_phonon_configuration( )
+    generate_initial_phonon_density_configuration()
 
-Returns initial vector to store onsite phonon configurations.
+Returns initial vector to store phonon occupations.
 
 """
-function generate_initial_onsite_phonon_configuration()
-    init_phconfig = zeros(Int, model_geometry.lattice.N)
+function generate_initial_phonon_density_configuration(model_geometry::ModelGeometry)
+    N = model_geometry.lattice.N
+    init_phconfig = zeros(Int, N)
  
     return init_phconfig
 end
 
 
-"""
-
-    generate_initial_bond_phonon_configuration( )
-
-Returns initial vector to store bond phonon configurations.
 
 """
-function generate_initial_bond_phonon_configuration()
-    # create neighbor table
-    nbr_table = build_neighbor_table(bonds[1],
-                                    model_geometry.unit_cell,
-                                    model_geometry.lattice)
 
-    # maps neighbor table to dictionary of bonds and neighbors                                
-    nbrs = map_neighbor_table(nbr_table)
+    generate_initial_phonon_displacement_configuration( )
 
-    # Collect all bonds into a Set to ensure uniqueness
-    unique_bonds = Set{Int}()
+Returns initial matrix to store phonon displacements. Each column represents displacements in each dimension. 
 
-    for (site, bond_info) in nbrs
+"""
+function generate_initial_phonon_displacement_configuration(loc::AbstractString, model_geometry::ModelGeometry)
+    # dimensions
+    dims = size(model_geometry.lattice.L)[1]
+    N = model_geometry.lattice.N
+
+    if loc == "bond"
+        # create neighbor table
+        nbr_table = build_neighbor_table(bonds[1],
+        model_geometry.unit_cell,
+        model_geometry.lattice)
+
+        # maps neighbor table to dictionary of bonds and neighbors                                
+        nbrs = map_neighbor_table(nbr_table)
+
+        # Collect all bonds into a Set to ensure uniqueness
+        unique_bonds = Set{Int}()
+
+        for (site, bond_info) in nbrs
         # Add bonds to the set (automatically handles duplicates)
         for bond in bond_info.bonds
-            push!(unique_bonds, bond)
+        push!(unique_bonds, bond)
         end
+        end
+
+        # The total number of unique bonds is the length of the set
+        total_bonds = length(unique_bonds)
+
+        # initialize phonon configuration
+        init_phconfig = zeros(AbstractFloat, total_bonds, dims)        
+    elseif loc == "onsite"
+        # initialize phonon configuration
+        init_phconfig = zeros(AbstractFloat, N, dims)
+    else
+        println("ERROR: Not a valid location in the lattice!")
     end
-
-    # The total number of unique bonds is the length of the set
-    total_bonds = length(unique_bonds)
-
-    init_phconfig = zeros(Int, total_bonds)
 
     return init_phconfig
 end
@@ -196,6 +210,32 @@ function get_phonon_occupation(i::Int, phconfig::Vector{Int})
     nph = phconfig[i]
 
     return nph
+end
+
+
+"""
+    get_onsite_phonon_displacement( site::Int, phconfig::Vector{Int} )
+
+Returns the X and Y displacements of a phonon at site i.
+
+"""
+function get_onsite_phonon_displacement(i::Int, phconfig::Matrix{AbstractFloat})
+    Xᵢ, Yᵢ = phconfig[i, :]
+
+    return [Xᵢ, Yᵢ]
+end
+
+
+"""
+    get_bond_phonon_displacement( site::Int, phconfig::Vector{Int} )
+
+Returns the X and Y displacements of a phonon at bond i.
+
+"""
+function get_bond_phonon_displacement(i::Int, phconfig::Matrix{AbstractFloat})
+    Xᵢ, Yᵢ = phconfig[i, :]
+
+    return [Xᵢ, Yᵢ]
 end
 
 

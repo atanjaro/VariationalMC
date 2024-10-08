@@ -911,3 +911,86 @@ Add FFLO wavefunction.
 Add additional starting configuration method where a certain order is generated. For instance,
       starting the simulation out in an AFM state: pconfig(4x4) = [1,0,1,0,0,1,0,1,1,0,1,0,0,1,0,1,0,1,0,1,1,0,1,0,0,1,0,1,1,0,1,0]
 Add backflow correlations for SSH phonons.
+
+
+Change log (10/02/2024):
+Updated PhononParameters type to include the phonon mass.
+Add HolsteinModel and SSHModel types.
+Updated initialize_phonon_parameters() method.
+Deprecated generate_initial_bond_phonon_configuration() method.
+Changed name of 'generate_initial_onsite_phonon_configuration' to 'generate_initial_phonon_density_configuration'.
+Added generate_initial_phonon_displacement_configuration() method for specifiying an initial SSH configuration. 
+Deprecated the std_x_qho() function. Used exact answer instead.
+There are now two methods of initializing electron-phonon models using the initialize_electron_phonon_model() function:
+      1. Providing an initial fugacity will automatically initialize a Holstein model. This creates an instance of the HolsteinModel type.
+      2. Provding either "bond" or "onsite, along with initial parameters z₀_x and z₀_x
+
+Upcoming changes:
+Need to add flag to jastrow ratio functions to use either fermionic or bosonic T vectors.
+Add TABC.
+Check value resetting after measurement write in write_measurements!() method.
+Need to update determinantal parameter updating in sr_update!() method. 
+Reconstruct the Hamiltonian before recalculation/stabilization of W? Since D and M are required to get W from scratch.
+DEBUG T vector stabilization method.
+Add FFLO wavefunction.
+Add additional starting configuration method where a certain order is generated. For instance,
+      starting the simulation out in an AFM state: pconfig(4x4) = [1,0,1,0,0,1,0,1,1,0,1,0,0,1,0,1,0,1,0,1,1,0,1,0,0,1,0,1,1,0,1,0]
+Add backflow correlations for SSH phonons.
+
+
+Change log (10/03/2024):
+Prototyped function for generating matrix of phases for doing TABC.
+
+Upcoming changes:
+Add TABC.
+Need to add flag to jastrow ratio functions to use either fermionic or bosonic T vectors.
+Check value resetting after measurement write in write_measurements!() method.
+Need to update determinantal parameter updating in sr_update!() method. 
+Reconstruct the Hamiltonian before recalculation/stabilization of W? Since D and M are required to get W from scratch.
+DEBUG T vector stabilization method.
+Add FFLO wavefunction.
+Add additional starting configuration method where a certain order is generated. For instance,
+      starting the simulation out in an AFM state: pconfig(4x4) = [1,0,1,0,0,1,0,1,1,0,1,0,0,1,0,1,0,1,0,1,1,0,1,0,0,1,0,1,1,0,1,0]
+Add backflow correlations for SSH phonons.
+
+
+Change log (10/04/2024):
+Updated electron-phonon model intialization:
+      For a square lattice, there are two fugacity parameters z_x and z_y (one for each phonon mode). This has been updated when 
+            initializing the SSHModel type.
+Added function prototypes for doing TABC:
+      Added set_phases() method for generating matrix of phases for a given twist angle.
+      Added apply_tabc!() method for modifying the mean-field Hamiltonian
+
+
+Upcoming changes:
+Need to add flag to jastrow ratio functions to use either fermionic or bosonic T vectors.
+Check value resetting after measurement write in write_measurements!() method.
+Need to update determinantal parameter updating in sr_update!() method. 
+Reconstruct the Hamiltonian before recalculation/stabilization of W? Since D and M are required to get W from scratch.
+DEBUG T vector stabilization method.
+Add FFLO wavefunction.
+Add additional starting configuration method where a certain order is generated. For instance,
+      starting the simulation out in an AFM state: pconfig(4x4) = [1,0,1,0,0,1,0,1,1,0,1,0,0,1,0,1,0,1,0,1,1,0,1,0,0,1,0,1,1,0,1,0]
+Add backflow correlations for SSH phonons.
+
+
+------------------------------------------------------------
+                  WEEK OF OCTOBER 07, 2024
+------------------------------------------------------------
+
+Change log (10/08/2024):
+Updated definition of metropolis() method for performing local density phonon updates to include relevant Jastrow factors.
+Updated get_jastrow_ratio() method to now return ratios from both fermionic and bosonic T vectors.
+Updated update_Tvec() method to now update both fermionic and bosonic T vectors/
+
+Upcoming changes:
+Need to add flag to jastrow ratio functions to use either fermionic or bosonic T vectors.
+Check value resetting after measurement write in write_measurements!() method.
+Need to update determinantal parameter updating in sr_update!() method. 
+Reconstruct the Hamiltonian before recalculation/stabilization of W? Since D and M are required to get W from scratch.
+DEBUG T vector stabilization method.
+Add FFLO wavefunction.
+Add additional starting configuration method where a certain order is generated. For instance,
+      starting the simulation out in an AFM state: pconfig(4x4) = [1,0,1,0,0,1,0,1,1,0,1,0,0,1,0,1,0,1,0,1,1,0,1,0,0,1,0,1,1,0,1,0]
+Add backflow correlations for SSH phonons.
