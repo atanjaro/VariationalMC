@@ -222,17 +222,17 @@ Returns the X and Y displacements of a phonon at site i.
 function get_onsite_phonon_displacement(i::Int, phconfig::Matrix{AbstractFloat})
     Xᵢ, Yᵢ = phconfig[i, :]
 
-    return [Xᵢ, Yᵢ]
+    return (Xᵢ, Yᵢ)
 end
 
 
 """
-    get_bond_phonon_displacement( site::Int, phconfig::Vector{Int} )
+    get_bond_phonon_displacement( b::Int, phconfig::Vector{Int} )
 
-Returns the X and Y displacements of a phonon at bond i.
+Given a bond in the lattice b, returns the displacement of phonon located on that bond. 
 
 """
-function get_bond_phonon_displacement(i::Int, phconfig::Matrix{AbstractFloat})
+function get_bond_phonon_displacement(b::Int, phconfig::Matrix{AbstractFloat})
     Xᵢ, Yᵢ = phconfig[i, :]
 
     return [Xᵢ, Yᵢ]
@@ -285,6 +285,31 @@ function do_particle_hop!(met_step, pconfig::Vector{Int}, κ::Vector{Int64}, mod
         κ[l] = β
     end
     
+    return nothing
+end
+
+
+"""
+    change_particle_number!( met_step, phconfig::Vector{Int}, model_geometry::ModelGeometry )
+
+If proposed particle addition or removal is accepted, add or remove a particle, and update the particle 
+configuration..
+
+"""
+function change_particle_number!(met_step, phconfig, model_geometry)
+    # lattice site
+    N = model_geometry.lattice.N
+    i = met_step[3]
+
+    # addition or removal
+    cran = met_step[2]
+
+    if cran == 1
+        phconfig[i] += 1
+    elseif cran == -1
+        phconfig -= 1
+    end
+
     return nothing
 end
 

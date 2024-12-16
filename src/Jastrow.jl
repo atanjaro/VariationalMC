@@ -325,38 +325,84 @@ function get_Tvec(jastrow_type::String, jpar_map::OrderedDict{Any,Any}, pconfig:
     Tvec_f = Vector{AbstractFloat}(undef, N)
     Tvec_b = Vector{AbstractFloat}(undef, N)
 
-    for i in 1:N
-        # track the Jastrow parameter sum
-        jpar_sum = 0.0
-        for j in 1:N 
-            # Calculate the reduced index for (i, j)
-            red_idx = reduce_index(i-1, j-1, model_geometry)
+    # optical ssh model
+    if size(phconfig)[1] == N
+        for i in 1:N
+            # track the Jastrow parameter sum
+            jpar_sum = 0.0
+            for j in 1:N 
+                # Calculate the reduced index for (i, j)
+                red_idx = reduce_index(i-1, j-1, model_geometry)
 
-            # Add the appropriate value based on the key of the jpar_map
-            if haskey(jpar_map, red_idx)
-                (_, vᵢⱼ) = jpar_map[red_idx]
-                jpar_sum += vᵢⱼ
+                # Add the appropriate value based on the key of the jpar_map
+                if haskey(jpar_map, red_idx)
+                    (_, vᵢⱼ) = jpar_map[red_idx]
+                    jpar_sum += vᵢⱼ
+                end
+            end
+
+            # get boson displacements
+            (Xᵢ, Yᵢ) = get_onsite_phonon_displacement(i, phconfig)
+
+            if jastrow_type == "ph-dsp-dsp-x"  # phonon-x-displacement-displacement
+                Tvec_b[i] = jpar_sum * Xᵢ
+            elseif jastrow_type == "ph-dsp-dsp-y" # phonon-y-displacement-displacement
+                Tvec_b[i] = jpar_sum * Yᵢ
+            elseif jastrow_type == "eph-den-dsp-x"  # electron-phonon density-x-displacement
+                # get fermion occupations
+                num_up = get_onsite_fermion_occupation(i, pconfig)[1]
+                num_dn = get_onsite_fermion_occupation(i, pconfig)[2]
+
+                if pht
+                    Tvec_f[i] = jpar_sum * (num_up + num_dn - 1)
+                else
+                    Tvec_f[i] = jpar_sum * (num_up + num_dn)
+                end
+
+                Tvec_b[i] = jpar_sum * Xᵢ
+            elseif jastrow_type == "eph-den-dsp-y"  # electron-phonon density-y-displacement
+                # get fermion occupations
+                num_up = get_onsite_fermion_occupation(i, pconfig)[1]
+                num_dn = get_onsite_fermion_occupation(i, pconfig)[2]
+
+                if pht
+                    Tvec_f[i] = jpar_sum * (num_up + num_dn - 1)
+                else
+                    Tvec_f[i] = jpar_sum * (num_up + num_dn)
+                end
+
+                Tvec_b[i] = jpar_sum * Yᵢ
             end
         end
+    # bond ssh model
+    elseif size(phconfig)[1] == 2*N
+        # TODO; figure out how to do this for the bond model
+        # for i in 1:N
+        #     # track the Jastrow parameter sum
+        #     jpar_sum = 0.0
+        #     for j in 1:N 
+        #         # Calculate the reduced index for (i, j)
+        #         red_idx = reduce_index(i-1, j-1, model_geometry)
 
-        # get boson displacements
-        X_i = get_onsite_phonon_displacements(i, phconfig)
+        #         # Add the appropriate value based on the key of the jpar_map
+        #         if haskey(jpar_map, red_idx)
+        #             (_, vᵢⱼ) = jpar_map[red_idx]
+        #             jpar_sum += vᵢⱼ
+        #         end
 
-        if jastrow_type == "ph-dsp-dsp"  # phonon-displacement-displacement
-            Tvec_b[i] = jpar_sum * X_i
-        elseif jastrow_type == "eph-den-dsp"  # electron-phonon density-displacement
-            # TODO
-        end
+        #         # get boson displacements
+        #         X_ij = get_bond_phonon_displacement(b, phconfig)
+
+        #     end
+        # end
     end
     
     return Tvec_f, Tvec_b
 end
 
 
-
-
-
 """
+
     update_Tvec!( local_acceptance::LocalAcceptance, jastrow::Jastrow, model_geometry::ModelGeometry, pht::Bool )
 
 Updates elements Tᵢ of the vector T after a Metropolis update.
@@ -408,17 +454,17 @@ end
 
 
 """
-    get_jastrow_ratio( local_acceptance, jastrow::Jastrow, pht::Bool )
+    get_jastrow_ratio( k::Int, l::Int, jastrow::Jastrow, pht::Bool, spin::Int )
 
 Calculates ratio J(x₂)/J(x₁) = exp[-s(Tₗ - Tₖ) + vₗₗ - vₗₖ ] of Jastrow factors for particle configurations 
 which differ by a single particle hopping from site 'k' (configuration 'x₁') to site 'l' (configuration 'x₂')
 using the corresponding T vectors Tₖ and Tₗ, rsepctively.  
 
 """
-function get_jastrow_ratio(k, l, jastrow::Jastrow, pht::Bool, spin::Int)
+function get_jastrow_ratio(k::Int, l::Int, jastrow::Jastrow, pht::Bool, spin::Int)
     # T vectors
     Tvec_f = jastrow.Tvec_f
-    Tvec_b = jastrow.Tvec_b
+    # Tvec_b = jastrow.Tvec_b
 
     # jpar map
     jpar_map = jastrow.jpar_map
@@ -439,25 +485,102 @@ function get_jastrow_ratio(k, l, jastrow::Jastrow, pht::Bool, spin::Int)
     Tₗ_f = Tvec_f[l]
     Tₖ_f = Tvec_f[k]
 
-    # bosonic
-    Tₗ_b = Tvec_b[l]
-    Tₖ_b = Tvec_b[k]
+    # # bosonic
+    # Tₗ_b = Tvec_b[l]
+    # Tₖ_b = Tvec_b[k]
 
     # compute ratio
     if pht
         if spin == 2
             jas_ratio_f = exp(-((Tₗ_f - Tₖ_f) - vₗₗ + vₗₖ)) 
-            jas_ratio_b = exp(-((Tₗ_b - Tₖ_b) - vₗₗ + vₗₖ))
+            # jas_ratio_b = exp(-((Tₗ_b - Tₖ_b) - vₗₗ + vₗₖ))
         else
             jas_ratio_f = exp(-((Tₗ_f - Tₖ_f) + vₗₗ - vₗₖ)) 
-            jas_ratio_b = exp(-((Tₗ_b - Tₖ_b) + vₗₗ - vₗₖ)) 
+            # jas_ratio_b = exp(-((Tₗ_b - Tₖ_b) + vₗₗ - vₗₖ)) 
         end
     else
         jas_ratio_f = exp(-((Tₗ_f - Tₖ_f) + vₗₗ - vₗₖ)) 
-        jas_ratio_b = exp(-((Tₗ_b - Tₖ_b) + vₗₗ - vₗₖ)) 
+        # jas_ratio_b = exp(-((Tₗ_b - Tₖ_b) + vₗₗ - vₗₖ)) 
     end
 
-    return jas_ratio_f, jas_ratio_b
+    return jas_ratio_f #, jas_ratio_b
+end
+
+
+"""
+
+    get_jastrow_ratio( i::Int, cran::Int, jastrow::Jastrow, phconfig::Vector{Int} )
+
+Calculates ratio J(x₂)/J(x₁) of Jastrow factors for phonon density configurations
+which differ by the addition or removal of a boson. 
+
+"""
+function get_jastrow_ratio(i::Int, cran::Int, jastrow::Jastrow, phconfig::Vector{Int}, μₚₕ::AbstractFloat)
+    # T vectors
+    Tvec_f = jastrow.Tvec_f
+    Tvec_b = jastrow.Tvec_b
+
+    # get phonon occupation at site i
+    num_phonons = get_phonon_occupation(i, phconfig)
+
+    # get fermionic T vector
+    Tᵢ_f = Tvec_f[i]
+
+    if cran == -1
+        # removal of a particle
+        jas_ratio_b = exp(-μₚₕ) * sqrt(num_phonons) * exp(Tᵢ_f)
+    elseif cran == 1
+        # addition of a particle
+        jas_ratio_b = exp(μₚₕ) * exp(-Tᵢ_f) / (num_phonons + 1)
+    end
+
+    return jas_ratio_b
+end
+
+
+"""
+
+    get_jastrow_ratio(  )
+
+Calculates ratio J(x₂)/J(x₁) of Jastrow factors for phonon density configurations
+which differ by the addition or removal of a boson. 
+
+"""
+function get_jastrow_ratio(i::Int, j::Int, Δ::AbstractFloat, jastrow::Jastrow, phconfig::Matrix{AbstractFloat}, z_x::AbstractFloat, z_y::AbstractFloat)
+    # sum nᵢnⱼ over all possible i and j 
+    # TODO: this will require a slight change in the defintion of the Jastrow parameters for displacement configurations
+            # since we will require ALL distances and the displacement parameters are odd under exchange of i and j i.e. wᵢⱼ = - wⱼᵢ
+end
+
+
+"""
+
+    get_jastrow_ratio( i::Int, cran::Int, jastrow::Jastrow, phconfig::Vector{Int} )
+
+Calculates ratio J(x₂)/J(x₁) of Jastrow factors for phonon density configurations
+which differ by the addition or removal of a boson. 
+
+"""
+function get_jastrow_ratio(i::Int, j::Int, jastrow::Jastrow, phconfig::Matrix{AbstractFloat}, z_x, z_y)
+    # T vectors
+    Tvec_f = jastrow.Tvec_f
+    Tvec_b = jastrow.Tvec_b
+
+    # get phonon occupation displacement between sites i and j 
+   
+
+    # get fermionic T vector
+    Tᵢ_f = Tvec_f[i]
+
+    if cran == -1
+        # # removal of a particle
+        # R = exp(-μₚₕ) * sqrt(num_phonons) * exp(Tᵢ_f)
+    elseif cran == 1
+        # # addition of a particle
+        # R = exp(μₚₕ) * exp(-Tᵢ_f) / (num_phonons + 1)
+    end
+
+    return R
 end
 
 
@@ -471,13 +594,13 @@ number of Jastrow parameters.
 """
 function build_jastrow_factor(jastrow_type::String, model_geometry::ModelGeometry, pconfig::Vector{Int64}, pht::Bool, rng::Xoshiro, readin_jpars::Bool)
     # map Jastrow parameters
-    jpar_map = initialize_jpars(model_geometry, rng, readin_jpars)
+    jpar_map = initialize_jpars(model_geometry, rng, readin_jpars);
 
     # generate T vector
-    (init_Tvec_f, init_Tvec_b) = get_Tvec(jastrow_type, jpar_map, pconfig, pht, model_geometry)
+    (init_Tvec_f, init_Tvec_b) = get_Tvec(jastrow_type, jpar_map, pconfig, pht, model_geometry);
 
     # get number of Jastrow parameters
-    num_jpars = length(jpar_map)
+    num_jpars = length(jpar_map);
    
     if debug
         # report the number of Jastrow parameters initialized
@@ -497,7 +620,10 @@ Constructs relevant Jastrow factor and returns intitial T vector, matrix of Jast
 number of Jastrow parameters. 
 
 """
-function build_jastrow_factor(jastrow_type::String, model_geometry::ModelGeometry, pconfig::Vector{Int64}, phconfig::Vector{Int64}, pht::Bool, rng::Xoshiro, readin_jpars::Bool)
+function build_jastrow_factor(jastrow_type::String, model_geometry::ModelGeometry, pconfig::Vector{Int64}, electron_phonon_model, pht::Bool, rng::Xoshiro, readin_jpars::Bool)
+    # phonon configuration
+    phconfig = electron_phonon_model.phconfig
+
     # map Jastrow parameters
     jpar_map = initialize_jpars(model_geometry, rng, readin_jpars)
 
@@ -553,7 +679,10 @@ Constructs relevant Jastrow factor and returns intitial T vector, matrix of Jast
 number of Jastrow parameters. 
 
 """
-function build_jastrow_factor(jastrow_type::String, model_geometry::ModelGeometry, pconfig::Vector{Int64}, phconfig::Vector{Int64}, pht::Bool, path_to_jpars::String, readin_jpars::Bool)
+function build_jastrow_factor(jastrow_type::String, model_geometry::ModelGeometry, pconfig::Vector{Int64}, electron_phonon_model, pht::Bool, path_to_jpars::String, readin_jpars::Bool)
+    # phonon configuration
+    phconfig = electron_phonon_model.phconfig
+
     # map Jastrow parameters
     jpar_map = initialize_jpars(model_geometry, path_to_jpars, readin_jpars)
 

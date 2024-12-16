@@ -1,6 +1,6 @@
 """
 
-    VariataionlParameters
+    VariataionalParameters
 
 A type defining a set of variational parameters.
 
@@ -28,6 +28,17 @@ function VariationalParameters(determinantal_parameters::DeterminantalParameters
     variational_parameters = all_vpars(determinantal_parameters, jastrow)
     num_detpars = determinantal_parameters.num_detpars
     num_jpars = jastrow.num_jpars - 1
+
+    return VariationalParameters(variational_parameters, num_detpars, num_jpars)
+end
+
+function VariationalParameters(determinantal_parameters::DeterminantalParameters, jastrow1::Jastrow, jastrow2::Jastrow)
+    variational_parameters = all_vpars(determinantal_parameters, jastrow1, jastrow2)
+    num_detpars = determinantal_parameters.num_detpars
+    num_jpars1 = jastrow1.num_jpars - 1
+    num_jpars2 = jastrow2.num_jpars - 1
+
+    num_jpars = num_jpars1 + num_jpars2
 
     return VariationalParameters(variational_parameters, num_detpars, num_jpars)
 end
@@ -65,14 +76,19 @@ function get_local_jpar_derivative(jastrow::Jastrow, pconfig::Vector{Int}, pht::
             for idx in indices
                 i = idx[1]
                 j = idx[2]
+
+                # check for double counting
+                dblcount_correction = (j==i) ? 0.5 : 1.0
+
+                # get occupations
                 nup_i = get_onsite_fermion_occupation(i+1, pconfig)[1]
                 ndn_i = get_onsite_fermion_occupation(i+1, pconfig)[2]
                 nup_j = get_onsite_fermion_occupation(j+1, pconfig)[1]
                 ndn_j = get_onsite_fermion_occupation(j+1, pconfig)[2]
                 if pht
-                    derivatives[num] += -0.5 * (nup_i + ndn_i - 1) * (nup_j + ndn_j - 1)
+                    derivatives[num] += -dblcount_correction * (nup_i + ndn_i - 1) * (nup_j + ndn_j - 1)
                 else
-                    derivatives[num] += -0.5 * (nup_i + ndn_i) * (nup_j + ndn_j)
+                    derivatives[num] += -dblcount_correction * (nup_i + ndn_i) * (nup_j + ndn_j)
                 end
             end
         end
@@ -86,14 +102,19 @@ function get_local_jpar_derivative(jastrow::Jastrow, pconfig::Vector{Int}, pht::
             for idx in indices
                 i = idx[1]
                 j = idx[2]
+
+                # check for double counting
+                dblcount_correction = (j==i) ? 0.5 : 1.0
+
+                # get occupations
                 nup_i = get_onsite_fermion_occupation(i+1, pconfig)[1]
                 ndn_i = get_onsite_fermion_occupation(i+1, pconfig)[2]
                 nup_j = get_onsite_fermion_occupation(j+1, pconfig)[1]
                 ndn_j = get_onsite_fermion_occupation(j+1, pconfig)[2]
                 if pht
-                    derivatives[num] += -0.4 * (nup_i + ndn_i - 1) * (nup_j + ndn_j - 1)
+                    derivatives[num] += -0.5 * (nup_i + ndn_i - 1) * (nup_j + ndn_j - 1)
                 else
-                    derivatives[num] += -0.4 * (nup_i + ndn_i) * (nup_j + ndn_j)
+                    derivatives[num] += -0.5 * (nup_i + ndn_i) * (nup_j + ndn_j)
                 end
             end
         end
@@ -134,12 +155,6 @@ function get_local_detpar_derivative(determinantal_parameters, model_geometry, �
         k = get_index_from_spindex(β_spindex, model_geometry) 
 
         G[k,:] .= W[:,β]
-        # for j in 1:2*dims
-            # for (spindex, iᵦ) in particle_positions
-            #     G[iᵦ,j] = W[j,β]
-            # # G[iᵦ,:] = W[:,β]
-        #     end
-        # end
     end
 
     # loop over the number of determinantal parameters
@@ -160,13 +175,13 @@ Generates the covariance (Hessian) matrix S, for Stochastic Reconfiguration
 The matrix S has elements S_kk' = <Δ_kΔk'> - <Δ_k><Δ_k'>
 
 """
-function get_hessian_matrix(measurement_container, N_updates)
+function get_hessian_matrix(measurement_container, bin_size)
 
     # measure local parameters derivatives ⟨Δₖ⟩ for the current bin
-    Δk = measurement_container.optimization_measurements["Δk"][2]/N_updates
+    Δk = measurement_container.optimization_measurements["Δk"][1]/bin_size
     
     # measure the product of local derivatives ⟨ΔₖΔₖ'⟩ for the current bin
-    ΔkΔkp = measurement_container.optimization_measurements["ΔkΔkp"][2]/N_updates
+    ΔkΔkp = measurement_container.optimization_measurements["ΔkΔkp"][1]/bin_size
     
     # calculate the product of local derivatives ⟨Δₖ⟩⟨Δₖ'⟩
     ΔkΔk = Δk * Δk'  
@@ -187,19 +202,19 @@ Generates the force vector f, for Stochastic Reconfiguration.
 The vector f has elements f_k = <Δ_k><H> - <Δ_kH>
 
 """
-function get_force_vector(measurement_container, N_updates)
+function get_force_vector(measurement_container, bin_size)
     
     # initialize force vector
     f = [] 
 
     # measure local parameters derivatives ⟨Δₖ⟩ for the current bin
-    Δk = measurement_container.optimization_measurements["Δk"][2]/N_updates
+    Δk = measurement_container.optimization_measurements["Δk"][1]/bin_size
 
     # measure local energy E = ⟨H⟩ for the current bin
-    E = measurement_container.simulation_measurements["energy"][2]/N_updates
+    E = measurement_container.simulation_measurements["energy"][1]/bin_size
 
     # measure product of local derivatives with energy ⟨ΔkE⟩ for the current bin
-    ΔkE = measurement_container.optimization_measurements["ΔkE"][2]/N_updates
+    ΔkE = measurement_container.optimization_measurements["ΔkE"][1]/bin_size
 
     # calculate product of local derivative with the local energy ⟨Δk⟩⟨H⟩
     ΔktE = Δk * E

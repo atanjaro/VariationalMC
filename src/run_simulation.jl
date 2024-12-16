@@ -10,9 +10,11 @@ using DataFrames
 using DataStructures
 using Printf
 using JLD2
+using Revise
 
 # files to include
 include("Hamiltonian.jl")
+include("ElectronPhonon.jl")
 include("Jastrow.jl")
 include("ParticleConfiguration.jl")
 include("Markov.jl")
@@ -58,21 +60,24 @@ U = 0.5
 # (BCS) chemical potential
 μ_BCS = 0.0
 
-# Phonon density fugacity
-μₚₕ = 0.0
+# # Phonon density fugacity
+# μₚₕ = 0.0
 
-# Phonon displacement fugacity
-z_x = 0.01
-z_y = 0.01
+# # Phonon displacement fugacity
+# z_x = 0.01
+# z_y = 0.01
 
-# Phonon frequency
-Ω = 1.0
+# # Phonon frequency
+# Ω = 1.0
 
-# Microscopic electron-phonon coupling
-g = 1.0
+# # Phonon mass
+# Mₚₕ = 1.0
 
-# Microscopic electron phonon coupling
-α = g * sqrt(2 * Ω)
+# # Microscopic electron-phonon coupling
+# g = 1.0
+
+# # Microscopic electron phonon coupling
+# α = g * sqrt(2 * Ω)
 
 # # Dimensionless electron-phonon coupling (g definition)
 # λ = (2 * g^2) / (Ω * 8)
@@ -119,9 +124,9 @@ pht = true
 # parameter_values = [[0.1]]                                             
 # pht = false
 
-# Parameters to be optimized and initial value(s)
-# parameters_to_optimize = ["Δs", "μₚₕ"]                                # s-wave (BCS) order parameter + optical phonons
-# parameter_values = [[0.01], [μₚₕ]]                      
+# # Parameters to be optimized and initial value(s)
+# parameters_to_optimize = ["Δs", "μ_BCS", "μₚₕ"]                                # s-wave (BCS) order parameter + optical phonons
+# parameter_values = [[0.01], [μ_BCS], [μₚₕ]]                      
 # pht = true          
 
 # Parameters to be optimized and initial value(s)
@@ -129,7 +134,7 @@ pht = true
 # parameter_values = [[0.01], [0.01], [μₚₕ]]               
 # pht = false         
 
-# Parameters to be optimized and initial value(s)
+# # Parameters to be optimized and initial value(s)
 # parameters_to_optimize = ["Δs", "z_x", "z_y"]                                # s-wave (BCS) order parameter + optical phonons
 # parameter_values = [[0.01], [0.01], [0.01]]                      
 # pht = true    
@@ -181,16 +186,16 @@ seed = abs(rand(Int))
 rng = Xoshiro(seed)
        
 # Number of minimization/optimization updates
-N_opts = 3000
+N_opts = 100 #3000
 
 # Optimization bin size
-opt_bin_size = 6000
+opt_bin_size = 10 # 6000
 
 # Number of simulation updates 
-N_updates = 10000
+N_updates = 100 # 10000
 
 # Number of simulation bins
-N_bins = 100
+N_bins = 10
 
 # Simulation bin size
 bin_size = div(N_updates, N_bins)
@@ -314,29 +319,40 @@ A = get_Ak_matrices(V, Uₑ, ε, model_geometry)
 W = get_equal_greens(M, D)
 
 # # Initialize phonon parameters
-# phonon_parameters = initialize_phonon_parameters(Ω, 1.0, α)
+# phonon_parameters = initialize_phonon_parameters(Ω, Mₚₕ, α)
 
-# Initialize model for electron-phonon coupling
+# Initialize a Holstein model of electron-phonon coupling
 # holstein = initialize_electron_phonon_model(μₚₕ, phonon_parameters, model_geometry)
-# bond_ssh = initialize_electron_phonon_model("bond", z₀_x, z₀_y, phonon_parameters, model_geometry)
+
+# # Initialize an optical Su-Schrieffer-Heeger model of electron-phonon coupling
 # optical_ssh = initialize_electron_phonon_model("onsite", z_x, z_y, phonon_parameters, model_geometry)
 
+# Initialize a bond Su-Schrieffer-Heeger model of electron-phonon coupling
+# bond_ssh = initialize_electron_phonon_model("bond", z_x, z_y, phonon_parameters, model_geometry)
+
 # Construct electron density-density Jastrow factor
-jastrow = build_jastrow_factor("e-den-den", model_geometry, pconfig, pht, rng, readin_jpars)
+jastrow_den = build_jastrow_factor("e-den-den", model_geometry, pconfig, pht, rng, readin_jpars)
 
 # # Construct electron spin-spin Jastrow factor
 # jastrow_spn = build_jastrow_factor("e-spn-spn", model_geometry, pconfig, pht, rng, readin_jpars)
 
-# # Construct electron spin-spin Jastrow factor
-# jastrow_eph = build_jastrow_factor("eph-den-den", model_geometry, pconfig, phconfig, pht, rng, readin_jpars)
+# Construct electron-phonon density-density Jastrow factor
+# jastrow_eph = build_jastrow_factor("eph-den-den", model_geometry, pconfig, holstein, pht, rng, readin_jpars)
+
+# Construct electron-phonon density-displacement Jastrow factors
+# jastrow_eph_x = build_jastrow_factor("eph-den-dsp-x", model_geometry, pconfig, optical_ssh, pht, rng, readin_jpars)
+# jastrow_eph_y = build_jastrow_factor("eph-den-dsp-y", model_geometry, pconfig, optical_ssh, pht, rng, readin_jpars)
 
 # Initialize all variational parameters to be optimized
-variational_parameters = VariationalParameters(determinantal_parameters, jastrow)
+variational_parameters = VariationalParameters(determinantal_parameters, jastrow_den)
 
 #############################
 ## INITIALIZE MEASUREMENTS ##
 #############################
 
+##
+# Possible point of failure?
+##
 # Initialize measurement container for VMC measurements
 measurement_container = initialize_measurement_container(model_geometry, variational_parameters, N_opts, opt_bin_size, N_bins, bin_size)
 
@@ -362,14 +378,20 @@ for bin in 1:N_opts
     for n in 1:opt_bin_size
 
         # Perform local update to fermionic degrees of freedom
-        (pconfig, κ, jastrow, W, D) = local_fermion_update!(W, D, model_geometry, jastrow, pconfig, κ, rng, n, n_stab, mc_meas_freq-100)
+        (pconfig, κ, jastrow, W, D) = local_fermion_update!(W, D, model_geometry, jastrow_den, pconfig, κ, rng, n, n_stab, mc_meas_freq-100)
 
         # # Perform local update to bosonic degrees of freedom
-        # (bosonic_acceptance_rate, phconfig, jastrow) = local_boson_update!(phconfig, model_geometry, rng)
+        # local_boson_update!(phconfig, model_geometry, rng)
 
         # Make measurements
-        make_measurements!(measurement_container, determinantal_parameters, jastrow, model_geometry, tight_binding_model, pconfig, κ, Np, W, A, opt_bin_size)
+        ##
+        # Possible point of failure?
+        ##
+        make_measurements!(measurement_container, determinantal_parameters, jastrow_den, model_geometry, tight_binding_model, pconfig, κ, Np, W, A, opt_bin_size)
 
+        ##
+        # Possible point of failure?
+        ##
         # Write the average measurements for the current bin to file
         write_measurements!(measurement_container, simulation_info, bin)
     end
@@ -377,7 +399,10 @@ for bin in 1:N_opts
     # Perform Stochastic Reconfiguration
     # This change was made so that a full bin is populated and the average for that bin is used in 
     # calculating the force vector and Hessian matrix
-    sr_update!(measurement_container, determinantal_parameters, jastrow, η, dt, N_opts)
+    ##
+    # Possible point of failure?
+    ##
+    sr_update!(measurement_container, determinantal_parameters, jastrow_den, η, dt, N_opts)
 
     if debug
         println("Ending optimization step")
