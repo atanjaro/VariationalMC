@@ -24,7 +24,7 @@ end
 A type defining quantities related to a Holstein model of electon-phonon coupling.
 
 """
-struct HolsteinModel
+mutable struct HolsteinModel
     # phonon parameters
     phonon_parameters::PhononParameters
 
@@ -46,7 +46,7 @@ end
 A type defining quantities related to an SSH model of electon-phonon coupling.
 
 """
-struct SSHModel
+mutable struct SSHModel
     # phonon parameters
     phonon_parameters::PhononParameters
 
@@ -123,3 +123,30 @@ function initialize_electron_phonon_model(loc::AbstractString, z_x::AbstractFloa
     return SSHModel(phonon_parameters, loc, z, phconfig)
 end
 
+"""
+
+    update_electron_phonon_model(  )
+
+After a Metropolis update, updates phonon configurations and parameters.
+
+"""
+function update_electron_phonon_model!(holstein_model::HolsteinModel, phconfig::Vector{Int}, model_geometry::ModelGeometry)
+    N = model_geometry.lattice.N
+
+    # update total phonon number
+    Nₚₕ = 0
+    for i in 1:N
+        n_ph = get_phonon_occupation(i, phconfig)
+        Nₚₕ += n_ph
+    end
+
+    # update phconfig
+    holstein_model.phconfig = phconfig
+
+    # update total phonon number
+    holstein_model.Nₚₕ = Nₚₕ
+
+    return nothing
+end
+
+# TODO: maybe put in a phonon module (Phonon.jl) to contain handling of the coherent states and such?

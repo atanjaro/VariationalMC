@@ -7,7 +7,7 @@ basis.
 """
 function build_determinantal_state(H_mf)
     # Diagonalize Hamiltonian
-    ε, Uₑ = diagonalize(H_mf)
+    ε, Uₑ = diagonalize(H_mf);
 
     # Check for open shell configuration
     if is_openshell(ε, Ne)
@@ -18,23 +18,32 @@ function build_determinantal_state(H_mf)
     end
 
     # Store energies
-    ε₀ = ε[1:Ne]
+    ε₀ = ε[1:Ne];
+
+    if debug
+        print("Initial energies = ", ε₀)
+    end
 
     # Store M matrix
-    M = hcat(Uₑ[:,1:Ne])
+    M = hcat(Uₑ[:,1:Ne]);
 
     # Build Slater determinant
     while true
-        pconfig = generate_initial_fermion_configuration()
-        κ = get_particle_positions(pconfig, model_geometry, Ne)
+        pconfig = generate_initial_fermion_configuration();
 
-        config_indices = findall(x -> x == 1, pconfig)
-        D = M[config_indices, :]
+        κ = get_particle_positions(pconfig, model_geometry, Ne);
+
+        config_indices = findall(x -> x == 1, pconfig);
+        D = M[config_indices, :];
 
         # Check that starting configuration is not singular
         if is_invertible(D) 
 
-            return D, pconfig, κ, ε, ε₀, M, Uₑ
+            if debug
+                println("Initial configuration: ", pconfig)
+            end
+
+            return D, pconfig, κ, ε, ε₀, M, Uₑ;
         end
     end    
 end
@@ -90,24 +99,27 @@ function get_equal_greens(M::Matrix{ComplexF64}, D::Matrix{ComplexF64})
     debug && println("Getting equal-time Green's function...")
 
     # perform the linear solve directly
-    Wt = D' \ M'     
+    Wt = D' \ M';     
 
     # transpose the result back to the original shape
-    W = Wt'
+    W = Wt';
 
-    debug && println("W = $W")
+    debug && print("W = $W")
  
-    return W                
+    return W;                
 end          
 
 
 """
-    update_equal_greens!( local_acceptance::LocalAcceptance, W::Matrix{Float64} ) 
+    update_equal_greens!( local_acceptance::LocalAcceptance, W ) 
     
 Perform in-place update of the equal-time Green's function. 
 
 """
-function update_equal_greens!(local_acceptance::LocalAcceptance, W::Matrix{Float64})
+function update_equal_greens!(local_acceptance::LocalAcceptance, W)
+    # convert W back into a regular matrix
+    W = copy(W)
+
     # final site of the hopping particle
     l = local_acceptance.fsite
 

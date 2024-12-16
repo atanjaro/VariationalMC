@@ -111,6 +111,31 @@ function all_vpars(determinantal_parameters, jastrow)
     return vpar_array
 end
 
+function all_vpars(determinantal_parameters, jastrow1, jastrow2)
+    # extract both map of Jastrow parameters
+    jpar_map1 = jastrow1.jpar_map
+    jpar_map2 = jastrow2.jpar_map
+
+    # extract both numbers of Jastrow parameters
+    num_jpars1 = jastrow1.num_jpars
+    num_jpars2 = jastrow2.num_jpars
+
+    # # total number of Jastrow parameters
+    # num_jpars = num_jpars1 + num_jpars2
+
+    # Extract the Jastrow parameters
+    jpars1 = [value[2] for (i, value) in enumerate(values(jpar_map1)) if i < num_jpars1]
+    jpars2 = [value[2] for (i, value) in enumerate(values(jpar_map2)) if i < num_jpars2]
+    
+    # Collect all values from the inner vectors of detpars into a single vector
+    detpars_all = vcat(determinantal_parameters.vals...)
+    
+    # Concatenate all detpars with jpars into a single vector
+    vpar_array = vcat(detpars_all, jpars1, jpars2)
+    
+    return vpar_array
+end
+
 
 """
 
@@ -258,3 +283,26 @@ end
 # # Apply twist phases to the Hamiltonian
 # θ = (rand(rng) * 2 * π, rand(rng) * 2 * π)  
 # apply_tbc!(H, θ, Lx, Ly)
+
+"""
+Converts vector of parameter names to string for appending to the datafolder prefix.
+"""
+function convert_par_name(parameters_to_optimize)
+    # Map of special characters to their ASCII replacements
+    replacements = Dict('Δ' => "Delta", 'μ' => "mu")
+    
+    # Helper function to sanitize each string
+    function sanitize_string(s::String)
+        # Replace special characters using the replacements dictionary
+        for (char, replacement) in replacements
+            s = replace(s, char => replacement)
+        end
+        # Remove any remaining non-alphanumeric characters
+        s = replace(s, r"[^a-zA-Z0-9]" => "")
+        return s
+    end
+
+    # Apply sanitization to each parameter and join with underscores
+    cleaned_parameters = join(sanitize_string.(parameters_to_optimize), "_")
+    return cleaned_parameters
+end
