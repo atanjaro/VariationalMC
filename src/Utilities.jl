@@ -306,3 +306,24 @@ function convert_par_name(parameters_to_optimize)
     cleaned_parameters = join(sanitize_string.(parameters_to_optimize), "_")
     return cleaned_parameters
 end
+
+"""
+Resets value of a dictionary (measurement container) to zero.
+"""
+function reset_dictionary_to_zeros!(dict::AbstractDict)
+    for key in keys(dict)
+        dict[key] = reset_to_zeros(dict[key])
+    end
+end
+
+function reset_to_zeros(value)
+    if isa(value, Tuple)
+        return tuple(reset_to_zeros(v) for v in value)
+    elseif isa(value, AbstractArray)
+        return zeros(eltype(value), size(value))
+    elseif isa(value, Number)
+        return zero(value)
+    else
+        throw(ArgumentError("Unsupported type for reset: $(typeof(value))"))
+    end
+end

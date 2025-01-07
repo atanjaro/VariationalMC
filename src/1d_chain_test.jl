@@ -102,7 +102,7 @@ simulation_info = SimulationInfo(
 initialize_datafolder(simulation_info)
 
 # random seed
-seed = abs(rand(Int)) # 1829519153600081228 #
+seed = 1829519153600081228 #abs(rand(Int)) # 
 
 # Initialize random number generator
 rng = Xoshiro(seed)
@@ -203,19 +203,27 @@ initialize_measurement_directories(simulation_info, measurement_container);
 ## As a result, it is like the parameter is never optimized, unlike the Jastrow parameters. Will have to take a closer look.
 
 # Here are some vector 'bins' for storing data during this test
-energy_bin = []
-dblocc_bin = []
-parameter_bin = []
+global energy_bin = Float64[]
+global dblocc_bin = Float64[]
+global parameter_bin = Float64[]
 
+for bin in 1:N_opts
+    for n in 1:opt_bin_size
 
-bin = 1
+        # perform local fermion update for a certain number of equilibration steps
+        (pconfig, κ, jastrow_den, W, D) = local_fermion_update!(W, D, model_geometry, jastrow_den, pconfig, κ, rng, n, n_stab, mc_meas_freq)
 
-for n in 1:opt_bin_size
-    # local fermion update for mc_meas_freq equilibration steps
-    (pconfig, κ, jastrow_den, W, D) = local_fermion_update!(W, D, model_geometry, jastrow_den, pconfig, κ, rng, n, n_stab, mc_meas_freq)
-
-    make_measurements!(measurement_container,determinantal_parameters, jastrow_den, model_geometry, 
+        # make basic measurements
+        make_measurements!(measurement_container,determinantal_parameters, jastrow_den, model_geometry, 
                                 tight_binding_model, pconfig, κ, Np, W, A)
+
+    end
+
+    # perform Stochastic Reconfiguration
+    sr_update!(measurement_container, determinantal_parameters, jastrow_den, η, dt, opt_bin_size)
+
+    # write measurements to file
+    write_measurements!(measurement_container, simulation_info, debug)                            
 end
 
 # this is the deconstructed SR updating scheme
@@ -230,8 +238,8 @@ vpars = all_vpars(determinantal_parameters, jastrow_den)
 vpars += dt * δvpars
 
 # push back Jastrow parameters
-update_jastrow!(jastrow_den, vpars)     # BUG: when the Jastrow parameters are pushed back,
-                                             # the wrong parameters are being pushed to the wrong entries in the jpar_map
+update_jastrow!(jastrow_den, vpars)     
+                                             
 
 # push back determinantal_parameters
 update_detpars!(determinantal_parameters, vpars)

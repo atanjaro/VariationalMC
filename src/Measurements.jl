@@ -181,63 +181,109 @@ end
 Writes current measurements in the current bin to a JLD2 file 
 
 """
-function write_measurements!(measurement_container, simulation_info)
+function write_measurements!(measurement_container, simulation_info, debug)
+
+    simulation_measurements = measurement_container.simulation_measurements
 
     if debug
+        # Write accumulated values to global vectors
+        push!(energy_bin, simulation_measurements["energy"][1])
+        push!(dblocc_bin, simulation_measurements["double_occ"][1])
 
-        push!(energy_bin, simulation_measurements["energy"][2])
-        push!(dblocc_bin, simulation_measurements["double_occ"][2])
-
-
-        # reset all bin values to zeroes
-
-
-
+        # Reset all bin values to zero
+        reset_measurement_container!(simulation_measurements)
     else
-
+        # Extract simulation information
         (; datafolder, pID) = simulation_info
-
         (; optimization_measurements, simulation_measurements, num_detpars) = measurement_container
 
-        # construct filename
-        fn = @sprintf "bin-%d_pID-%d.jld2" bin pID  
-        file_path_detpar = joinpath(datafolder, "optimization", "determinantal", fn)        
-        file_path_jpar = joinpath(datafolder, "optimization", "Jastrow", fn)
-        file_path_energy = joinpath(datafolder, "simulation", "energy", fn)
-        file_path_pconfig = joinpath(datafolder, "simulation", "configurations", fn)
-        file_path_dblocc = joinpath(datafolder, "simulation", "double_occ", fn)
-        file_path_density = joinpath(datafolder, "simulation", "density", fn)
+        # Construct file paths
+        bin = 1  # Example bin number; replace as needed
+        fn = @sprintf "bin-%d_pID-%d.jld2" bin pID
 
-        # Append determinantal parameter measurements to file
+        file_paths = Dict(
+            "detpar" => joinpath(datafolder, "optimization", "determinantal", fn),
+            "jpar" => joinpath(datafolder, "optimization", "Jastrow", fn),
+            "energy" => joinpath(datafolder, "simulation", "energy", fn),
+            "pconfig" => joinpath(datafolder, "simulation", "configurations", fn),
+            "dblocc" => joinpath(datafolder, "simulation", "double_occ", fn),
+            "density" => joinpath(datafolder, "simulation", "density", fn)
+        )
+
+        # Save optimization measurements
         detpar_measurements = optimization_measurements["parameters"][2][1:num_detpars]
-        JLD2.@save file_path_detpar detpar_measurements append=true
+        JLD2.@save file_paths["detpar"] detpar_measurements append=true
 
-        # Append Jastrow parameter measurements to file
         jpar_measurements = optimization_measurements["parameters"][2][num_detpars:end]
-        JLD2.@save file_path_jpar jpar_measurements append=true
+        JLD2.@save file_paths["jpar"] jpar_measurements append=true
 
-        # Append energy measurements to file
-        energy_measurements = simulation_measurements["energy"][2]
-        JLD2.@save file_path_energy energy_measurements append=true
+        # Save simulation measurements (accumulated values)
+        JLD2.@save file_paths["energy"] simulation_measurements["energy"][1] append=true
+        JLD2.@save file_paths["pconfig"] simulation_measurements["pconfig"] append=true
+        JLD2.@save file_paths["dblocc"] simulation_measurements["double_occ"][1] append=true
+        JLD2.@save file_paths["density"] simulation_measurements["density"][1] append=true
 
-        # Append particle configurations to file
-        pconfig_measurements = simulation_measurements["pconfig"]
-        JLD2.@save file_path_pconfig pconfig_measurements append=true
-
-        # Append double occupancy to file
-        dblocc_measurements = simulation_measurements["double_occ"][2]
-        JLD2.@save file_path_dblocc dblocc_measurements append=true
-
-        # Append average density to file
-        density_measurements = simulation_measurements["density"][2]
-        JLD2.@save file_path_density density_measurements append=true
-
-        # reset current bin measurement to 0
-
+        # Reset current bin measurements to zeroes
+        reset_dictionary_to_zeros!(simulation_measurements)
     end
-
-    return nothing
 end
+# function write_measurements!(measurement_container, simulation_info)
+
+#     if debug
+
+#         push!(energy_bin, simulation_measurements["energy"][2])
+#         push!(dblocc_bin, simulation_measurements["double_occ"][2])
+
+
+#         # reset all bin values to zeroes
+
+
+
+#     else
+
+#         (; datafolder, pID) = simulation_info
+
+#         (; optimization_measurements, simulation_measurements, num_detpars) = measurement_container
+
+#         # construct filename
+#         fn = @sprintf "bin-%d_pID-%d.jld2" bin pID  
+#         file_path_detpar = joinpath(datafolder, "optimization", "determinantal", fn)        
+#         file_path_jpar = joinpath(datafolder, "optimization", "Jastrow", fn)
+#         file_path_energy = joinpath(datafolder, "simulation", "energy", fn)
+#         file_path_pconfig = joinpath(datafolder, "simulation", "configurations", fn)
+#         file_path_dblocc = joinpath(datafolder, "simulation", "double_occ", fn)
+#         file_path_density = joinpath(datafolder, "simulation", "density", fn)
+
+#         # Append determinantal parameter measurements to file
+#         detpar_measurements = optimization_measurements["parameters"][2][1:num_detpars]
+#         JLD2.@save file_path_detpar detpar_measurements append=true
+
+#         # Append Jastrow parameter measurements to file
+#         jpar_measurements = optimization_measurements["parameters"][2][num_detpars:end]
+#         JLD2.@save file_path_jpar jpar_measurements append=true
+
+#         # Append energy measurements to file
+#         energy_measurements = simulation_measurements["energy"][2]
+#         JLD2.@save file_path_energy energy_measurements append=true
+
+#         # Append particle configurations to file
+#         pconfig_measurements = simulation_measurements["pconfig"]
+#         JLD2.@save file_path_pconfig pconfig_measurements append=true
+
+#         # Append double occupancy to file
+#         dblocc_measurements = simulation_measurements["double_occ"][2]
+#         JLD2.@save file_path_dblocc dblocc_measurements append=true
+
+#         # Append average density to file
+#         density_measurements = simulation_measurements["density"][2]
+#         JLD2.@save file_path_density density_measurements append=true
+
+#         # reset current bin measurement to 0
+
+#     end
+
+#     return nothing
+# end
 
 function initialize_measurement_directories(simulation_info::SimulationInfo, measurement_container::NamedTuple)
 

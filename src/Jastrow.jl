@@ -709,20 +709,20 @@ Updates Jastrow parameters after Stochastic Reconfiguration.
 
 """
 function update_jastrow!(jastrow::Jastrow, new_vpars::Vector{Float64})
-    # number of Jastrow parameters
-    num_jpars = jastrow.num_jpars;
+    # number of Jastrow parameters that were modified
+    num_jpars = jastrow.num_jpars - 1;
 
     # map of Jastrow parameters
     jpar_map = jastrow.jpar_map;
 
-    # all new Jastrow parameters except for the last one
-    new_jpars = new_vpars[end-num_jpars+1:end-1]
+    # updated Jastrow parameters 
+    new_jpars = new_vpars[end-num_jpars+1:end]
 
     # get irreducible indices
     irr_indices = collect(keys(jpar_map))
 
     # update all parameters except for the last one
-    for i in 1:(num_jpars-1)
+    for i in 1:num_jpars
         # Extract the current (indices, jpars) tuple
         indices, _ = jpar_map[irr_indices[i]]
         
