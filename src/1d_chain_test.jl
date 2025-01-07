@@ -111,7 +111,7 @@ rng = Xoshiro(seed)
 N_opts = 100
 
 # Optimization bin size
-opt_bin_size = 100
+opt_bin_size = 10
 
 # Number of simulation updates 
 N_updates = 100
