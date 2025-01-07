@@ -191,7 +191,7 @@ function write_measurements!(measurement_container, simulation_info, debug)
         push!(dblocc_bin, simulation_measurements["double_occ"][1])
 
         # Reset all bin values to zero
-        reset_measurement_container!(simulation_measurements)
+        reset_dictionary_to_zeros!(simulation_measurements)
     else
         # Extract simulation information
         (; datafolder, pID) = simulation_info
