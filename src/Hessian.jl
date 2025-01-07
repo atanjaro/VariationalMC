@@ -260,16 +260,16 @@ end
 Update variational parameters through stochastic optimization.
 
 """
-function sr_update!(measurement_container, determinantal_parameters, jastrow, η, dt, N_updates)
+function sr_update!(measurement_container, determinantal_parameters, jastrow, η, dt, bin_size)
     if debug
         println("Optimizing...")
     end
 
     # get covariance (Hessian) matrix
-    S = get_hessian_matrix(measurement_container, N_updates)
+    S = get_hessian_matrix(measurement_container, bin_size)
 
     # get force vector
-    f = get_force_vector(measurement_container, N_updates)
+    f = get_force_vector(measurement_container, bin_size)
 
     # perform gradient descent
     δvpars = parameter_gradient(S,f,η)     
