@@ -20,6 +20,6 @@ This material is based upon work supported by the U.S. Department of Energy, Off
 
 ## Contact
 
-For questions and comments regarding this package, please email either Andy Tanjaroon Ly at [atanjaro@vols.utk.edu](mailto:atanjaro@vols.utk.edu).
+For questions and comments regarding this package, please email Andy Tanjaroon Ly at [atanjaro@vols.utk.edu](mailto:atanjaro@vols.utk.edu).
 
 
