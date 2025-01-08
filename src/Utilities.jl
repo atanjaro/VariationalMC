@@ -310,20 +310,49 @@ end
 """
 Resets value of a dictionary (measurement container) to zero.
 """
-function reset_dictionary_to_zeros!(dict::AbstractDict)
-    for key in keys(dict)
-        dict[key] = reset_to_zeros(dict[key])
+function reset_measurements!(measurements::Dict{String, Any})
+    for key in keys(measurements)
+        value = measurements[key]
+        if key == "pconfig"
+            # Skip resetting pconfig
+            continue
+        elseif isa(value, Tuple)
+            # Reset tuples: preserve the structure and types
+            measurements[key] = map(zero, value)
+        elseif isa(value, AbstractVector)
+            if eltype(value) <: AbstractVector
+                # Nested vectors (e.g., ΔkΔkp or Δk)
+                for v in value
+                    empty!(v)
+                end
+            else
+                # Single-level vectors (e.g., not applicable anymore here)
+                empty!(value)
+            end
+        elseif isa(value, Number)
+            # Reset numbers
+            measurements[key] = zero(value)
+        else
+            # Handle other types if needed (fallback: do nothing)
+            @warn "Unhandled type for key $key: $(typeof(value))"
+        end
     end
 end
 
-function reset_to_zeros(value)
-    if isa(value, Tuple)
-        return tuple(reset_to_zeros(v) for v in value)
-    elseif isa(value, AbstractArray)
-        return zeros(eltype(value), size(value))
-    elseif isa(value, Number)
-        return zero(value)
-    else
-        throw(ArgumentError("Unsupported type for reset: $(typeof(value))"))
-    end
-end
+# function reset_dictionary_to_zeros!(dict::AbstractDict)
+#     for key in keys(dict)
+#         dict[key] = reset_to_zeros(dict[key])
+#     end
+# end
+
+# function reset_to_zeros(value)
+#     if isa(value, Tuple)
+#         return tuple(reset_to_zeros(v) for v in value)
+#     elseif isa(value, AbstractArray)
+#         return zeros(eltype(value), size(value))
+#     elseif isa(value, Number)
+#         return zero(value)
+#     else
+#         throw(ArgumentError("Unsupported type for reset: $(typeof(value))"))
+#     end
+# end
