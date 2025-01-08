@@ -7,7 +7,7 @@ WARNING! Modules are currently in the developmental phase and are highly experim
 
 ## Funding 
 
-TBA
+This material is based upon work supported by the U.S. Department of Energy, Office of Science, Office of Workforce Development for Teachers and Scientists, Office of Science Graduate Student Research (SCGSR) program. The SCGSR program is administered by the Oak Ridge Institute for Science and Education (ORISE) for the DOE. ORISE is managed by ORAU under contract number DE-SC0014664.
 
 
 ## Notable Package Dependencies
@@ -16,7 +16,6 @@ TBA
 
 ## External Dependencies
 
-- [Distributions.jl](https://github.com/JuliaStats/Distributions.jl): Package used for probability distributions and associated functions. 
 - [JLD2.jl](https://github.com/JuliaIO/JLD2.jl.git): Package used to write data to binary files in an HDF5 compatible format. 
 
 ## Contact

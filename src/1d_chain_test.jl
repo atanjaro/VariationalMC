@@ -59,15 +59,15 @@ U = 1.0
 # antiferromagnetic order parameter
 Δa = 0.001
 
-# # Parameters to be optimized and initial value(s)
-# parameters_to_optimize = ["Δs", "μ_BCS"]                              # s-wave (BCS) order parameter
-# parameter_values = [[Δs],[μ_BCS]]                                 
-# pht = true
-
 # Parameters to be optimized and initial value(s)
-parameters_to_optimize = ["Δa"]                                       # antiferromagnetic (Neél) order parameter
-parameter_values = [[Δa]]                                            
-pht = false
+parameters_to_optimize = ["Δs", "μ_BCS"]                              # s-wave (BCS) order parameter
+parameter_values = [[Δs],[μ_BCS]]                                 
+pht = true
+
+# # Parameters to be optimized and initial value(s)
+# parameters_to_optimize = ["Δa"]                                       # antiferromagnetic (Neél) order parameter
+# parameter_values = [[Δa]]                                            
+# pht = false
 
 # specify filepath
 filepath = "."
