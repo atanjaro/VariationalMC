@@ -40,6 +40,7 @@ function build_determinantal_state(H_mf)
         if is_invertible(D) 
 
             if debug
+                println("")
                 println("Initial configuration: ", pconfig)
             end
 

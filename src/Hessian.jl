@@ -262,7 +262,7 @@ Update variational parameters through stochastic optimization.
 """
 function sr_update!(measurement_container, determinantal_parameters, jastrow, η, dt, bin_size)
     if debug
-        println("Optimizing...")
+        println("Begin optimization...")
     end
 
     # get covariance (Hessian) matrix
@@ -274,9 +274,17 @@ function sr_update!(measurement_container, determinantal_parameters, jastrow, η
     # perform gradient descent
     δvpars = parameter_gradient(S,f,η)     
 
+    if debug
+        println("Parameters updated!")
+    end
+
     # new varitaional parameters
     vpars = all_vpars(determinantal_parameters, jastrow)
     vpars += dt * δvpars
+
+    if debug
+        println("New parameters: ", vpars)
+    end
 
     # push back Jastrow parameters
     update_jastrow!(jastrow, vpars)
@@ -284,22 +292,26 @@ function sr_update!(measurement_container, determinantal_parameters, jastrow, η
     # push back determinantal_parameters
     update_detpars!(determinantal_parameters, vpars)
 
-    # measure parameters
-    # get current values from the container
-    current_container = measurement_container.optimization_measurements["parameters"]
+    if debug
+        println("End of optimization...")
+    end
 
-    # update value for the current bin
-    current_bin_values = current_container[2]
-    current_bin_values .= vpars 
+    # # measure parameters
+    # # get current values from the container
+    # current_container = measurement_container.optimization_measurements["parameters"]
 
-    # update accumuator for average measurements
-    new_avg_value = current_container[1] .+ vpars
+    # # update value for the current bin
+    # current_bin_values = current_container[2]
+    # current_bin_values .= vpars 
 
-    # combine the updated values 
-    updated_values = (new_avg_value, current_bin_values)
+    # # update accumuator for average measurements
+    # new_avg_value = current_container[1] .+ vpars
 
-    # write the new values to the container
-    measurement_container.optimization_measurements["parameters"] = updated_values
+    # # combine the updated values 
+    # updated_values = (new_avg_value, current_bin_values)
+
+    # # write the new values to the container
+    # measurement_container.optimization_measurements["parameters"] = updated_values
 
     return nothing
 end

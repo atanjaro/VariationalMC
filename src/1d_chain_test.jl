@@ -59,15 +59,15 @@ U = 1.0
 # antiferromagnetic order parameter
 Δa = 0.001
 
-# Parameters to be optimized and initial value(s)
-parameters_to_optimize = ["Δs", "μ_BCS"]                              # s-wave (BCS) order parameter
-parameter_values = [[Δs],[μ_BCS]]                                 
-pht = true
-
 # # Parameters to be optimized and initial value(s)
-# parameters_to_optimize = ["Δa"]                                       # antiferromagnetic (Neél) order parameter
-# parameter_values = [[Δa]]                                            
-# pht = false
+# parameters_to_optimize = ["Δs", "μ_BCS"]                              # s-wave (BCS) order parameter
+# parameter_values = [[Δs],[μ_BCS]]                                 
+# pht = true
+
+# Parameters to be optimized and initial value(s)
+parameters_to_optimize = ["Δa"]                                       # antiferromagnetic (Neél) order parameter
+parameter_values = [[Δa]]                                            
+pht = false
 
 # specify filepath
 filepath = "."
@@ -102,19 +102,19 @@ simulation_info = SimulationInfo(
 initialize_datafolder(simulation_info)
 
 # random seed
-seed = 1829519153600081228 #abs(rand(Int)) # 
+seed = abs(rand(Int)) # 1829519153600081228 # 664773671729905110
 
 # Initialize random number generator
 rng = Xoshiro(seed)
        
 # Number of minimization/optimization updates
-N_opts = 100
+N_opts = 10
 
 # Optimization bin size
 opt_bin_size = 10
 
 # Number of simulation updates 
-N_updates = 100
+N_updates = 10
 
 # Number of simulation bins
 N_bins = 10
@@ -132,7 +132,7 @@ n_stab = 50
 η = 1e-4      
 
 # Optimization rate for Stochastic Reconfiguration
-dt = 0.03        
+dt = 0.01         # 0.03
 
 # Debugging flag
 # This will output print statements to the terminal during runtime
@@ -199,60 +199,47 @@ initialize_measurement_directories(simulation_info, measurement_container);
 ##
 
 
-## There seems to be never be any change in the derivatives associated with determinantal parameters. 
-## As a result, it is like the parameter is never optimized, unlike the Jastrow parameters. Will have to take a closer look.
 
 # Here are some vector 'bins' for storing data during this test
-global energy_bin = Float64[]
-global dblocc_bin = Float64[]
-global parameter_bin = Float64[]
+energy_bin = Float64[]
+dblocc_bin = Float64[]
+param_bin = []
 
+
+# optimization updates
 for bin in 1:N_opts
     for n in 1:opt_bin_size
-
         # perform local fermion update for a certain number of equilibration steps
         (pconfig, κ, jastrow_den, W, D) = local_fermion_update!(W, D, model_geometry, jastrow_den, pconfig, κ, rng, n, n_stab, mc_meas_freq)
 
-        # make basic measurements
+         # make basic measurements
         make_measurements!(measurement_container,determinantal_parameters, jastrow_den, model_geometry, 
-                                tight_binding_model, pconfig, κ, Np, W, A)
-
+                            tight_binding_model, pconfig, κ, Np, W, A)
     end
 
     # perform Stochastic Reconfiguration
     sr_update!(measurement_container, determinantal_parameters, jastrow_den, η, dt, opt_bin_size)
 
-    # write measurements to file
-    write_measurements!(measurement_container, simulation_info, debug)                            
+    # write all measurements to file
+    write_measurements!(measurement_container, simulation_info, energy_bin, dblocc_bin, param_bin, debug)                                                                                                             
 end
 
-# this is the deconstructed SR updating scheme
+# simulation updates
+for bin in 1:N_updates
+    for n in 1:N_bins
+        # perform local fermion update for a certain number of equilibration steps
+        (pconfig, κ, jastrow_den, W, D) = local_fermion_update!(W, D, model_geometry, jastrow_den, pconfig, κ, rng, n, n_stab, mc_meas_freq)
 
-S = get_hessian_matrix(measurement_container, opt_bin_size)
-f = get_force_vector(measurement_container, opt_bin_size)
+         # make basic measurements
+        make_measurements!(measurement_container,determinantal_parameters, jastrow_den, model_geometry, 
+                            tight_binding_model, pconfig, κ, Np, W, A)
+    end
 
-δvpars =  parameter_gradient(S, f, η)
-
-# new varitaional parameters
-vpars = all_vpars(determinantal_parameters, jastrow_den)
-vpars += dt * δvpars
-
-# push back Jastrow parameters
-update_jastrow!(jastrow_den, vpars)     
-                                             
-
-# push back determinantal_parameters
-update_detpars!(determinantal_parameters, vpars)
+    # write all measurements to file
+    write_measurements!(measurement_container, simulation_info, energy_bin, dblocc_bin, param_bin, debug)                                                                                                             
+end
 
 
-
-
-# after opt_bin_size iterations, begin SR update
-# retrive value of this_bin_sum, averaging by opt_bin_size
-# use derivative and energy measurements to build S and f
-# solve
-# update parameters 
-# overwrite this_bin_sum of each measruement container
 
 
 
