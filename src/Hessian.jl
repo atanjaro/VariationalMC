@@ -1,46 +1,43 @@
 """
 
-    VariataionalParameters
+    get_local_detpar_derivative( determinantal_parameters::DeterminantalParameters, model_geometry::ModelGeometry
+                                     pconfig::Vector{Int}, W::Matrix{AbstractFloat}, A::Matrix{AbstractFloat}  )
 
-A type defining a set of variational parameters.
+Calculates the local logarithmic derivative Δₖ(x) = ∂lnΨ(x)/∂αₖ, with respect to the kth variational parameter αₖ,
+in the determinantal part of the wavefunction. Returns a vector of derivatives.
 
 """
-struct VariationalParameters
-    # vector of parameters to be optimized
-    variational_parameters::Vector{AbstractFloat}
+function get_local_detpar_derivative(determinantal_parameters::DeterminantalParameters, model_geometry::ModelGeometry, 
+                                        κ::Vector{Int64}, Ne::Int64, W::Matrix{ComplexF64}, A::Vector{Any})  
+
+    # number of lattice sites
+    N = model_geometry.unit_cell.n * model_geometry.lattice.N
 
     # number of determinantal parameters
-    num_detpars::Int
-
-    # number of Jastrow parameters
-    num_jpars::Int
-end
-
-
-"""
-
-    VariataionlParameters(pars:;Vector{AbstractString}, vals::Vector{AbstractFloat} ) 
-
-Constructor for the variational parameters type.
-
-"""
-function VariationalParameters(determinantal_parameters::DeterminantalParameters, jastrow::Jastrow)
-    variational_parameters = all_vpars(determinantal_parameters, jastrow)
     num_detpars = determinantal_parameters.num_detpars
-    num_jpars = jastrow.num_jpars - 1
 
-    return VariationalParameters(variational_parameters, num_detpars, num_jpars)
-end
+    # vector to store derivatives
+    derivatives = zeros(AbstractFloat, num_detpars)
+    
 
-function VariationalParameters(determinantal_parameters::DeterminantalParameters, jastrow1::Jastrow, jastrow2::Jastrow)
-    variational_parameters = all_vpars(determinantal_parameters, jastrow1, jastrow2)
-    num_detpars = determinantal_parameters.num_detpars
-    num_jpars1 = jastrow1.num_jpars - 1
-    num_jpars2 = jastrow2.num_jpars - 1
+    # loop over Nₚ particles 
+    G = zeros(Complex, 2*N, 2*N)
+    for β in 1:Ne
+        # spindex occupation number of particle β
+        β_spindex = findfirst(x -> x == β, κ)
 
-    num_jpars = num_jpars1 + num_jpars2
+        # real position 'k' of particle 'β' 
+        k = get_index_from_spindex(β_spindex, model_geometry) 
 
-    return VariationalParameters(variational_parameters, num_detpars, num_jpars)
+        G[k,:] .= W[:,β]
+    end
+
+    # loop over the number of determinantal parameters
+    for num in 1:num_detpars
+        derivatives[num] += sum(A[num] .* G)
+    end
+
+    return derivatives
 end
 
 
@@ -52,7 +49,7 @@ Calculates the local logarithmic derivative Δₖ(x) = ∂lnΨ(x)/∂vₗₘ, wi
 a vector of derivatives.
 
 """
-function get_local_jpar_derivative(jastrow::Jastrow, pconfig::Vector{Int}, pht::Bool)
+function get_local_jpar_derivative(jastrow::Jastrow, pconfig::Vector{Int64}, pht::Bool)
     # jastrow type
     jastrow_type = jastrow.jastrow_type;
 
@@ -126,48 +123,6 @@ end
 
 """
 
-    get_local_detpar_derivative( determinantal_parameters::DeterminantalParameters, model_geometry::ModelGeometry
-                                     pconfig::Vector{Int}, W::Matrix{AbstractFloat}, A::Matrix{AbstractFloat}  )
-
-Calculates the local logarithmic derivative Δₖ(x) = ∂lnΨ(x)/∂αₖ, with respect to the kth variational parameter αₖ,
-in the determinantal part of the wavefunction. Returns a vector of derivatives.
-
-"""
-function get_local_detpar_derivative(determinantal_parameters, model_geometry, κ, Ne, W, A)  
-
-    # number of lattice sites
-    N = model_geometry.unit_cell.n * model_geometry.lattice.N
-
-    # number of determinantal parameters
-    num_detpars = determinantal_parameters.num_detpars
-
-    # vector to store derivatives
-    derivatives = zeros(AbstractFloat, num_detpars)
-    
-
-    # loop over Nₚ particles 
-    G = zeros(Complex, 2*N, 2*N)
-    for β in 1:Ne
-        # spindex occupation number of particle β
-        β_spindex = findfirst(x -> x == β, κ)
-
-        # real position 'k' of particle 'β' 
-        k = get_index_from_spindex(β_spindex, model_geometry) 
-
-        G[k,:] .= W[:,β]
-    end
-
-    # loop over the number of determinantal parameters
-    for num in 1:num_detpars
-        derivatives[num] += sum(A[num] .* G)
-    end
-
-    return derivatives
-end
-
-
-"""
-
     get_hessian_matrix( measurement_container, bin )
 
 Generates the covariance (Hessian) matrix S, for Stochastic Reconfiguration
@@ -175,13 +130,13 @@ Generates the covariance (Hessian) matrix S, for Stochastic Reconfiguration
 The matrix S has elements S_kk' = <Δ_kΔk'> - <Δ_k><Δ_k'>
 
 """
-function get_hessian_matrix(measurement_container, bin_size)
+function get_hessian_matrix(measurement_container, opt_bin_size)
 
     # measure local parameters derivatives ⟨Δₖ⟩ for the current bin
-    Δk = measurement_container.optimization_measurements["Δk"][1]/bin_size
+    Δk = measurement_container.optimization_measurements["Δk"][1]/opt_bin_size
     
     # measure the product of local derivatives ⟨ΔₖΔₖ'⟩ for the current bin
-    ΔkΔkp = measurement_container.optimization_measurements["ΔkΔkp"][1]/bin_size
+    ΔkΔkp = measurement_container.optimization_measurements["ΔkΔkp"][1]/opt_bin_size
     
     # calculate the product of local derivatives ⟨Δₖ⟩⟨Δₖ'⟩
     ΔkΔk = Δk * Δk'  
@@ -202,19 +157,19 @@ Generates the force vector f, for Stochastic Reconfiguration.
 The vector f has elements f_k = <Δ_k><H> - <Δ_kH>
 
 """
-function get_force_vector(measurement_container, bin_size)
+function get_force_vector(measurement_container, opt_bin_size)
     
     # initialize force vector
     f = [] 
 
     # measure local parameters derivatives ⟨Δₖ⟩ for the current bin
-    Δk = measurement_container.optimization_measurements["Δk"][1]/bin_size
+    Δk = measurement_container.optimization_measurements["Δk"][1]/opt_bin_size
 
     # measure local energy E = ⟨H⟩ for the current bin
-    E = measurement_container.simulation_measurements["energy"][1]/bin_size
+    E = measurement_container.simulation_measurements["energy"][1]/opt_bin_size
 
     # measure product of local derivatives with energy ⟨ΔkE⟩ for the current bin
-    ΔkE = measurement_container.optimization_measurements["ΔkE"][1]/bin_size
+    ΔkE = measurement_container.optimization_measurements["ΔkE"][1]/opt_bin_size
 
     # calculate product of local derivative with the local energy ⟨Δk⟩⟨H⟩
     ΔktE = Δk * E
@@ -237,17 +192,62 @@ Reconfiguration.
 
 """
 function parameter_gradient(S, f, η)
-
     # Convert f to a vector of Float64
     f = convert(Vector{Float64}, f)
 
     # add small variation to diagonal of S for numerical stabilization
-    S += η * I
+    S̃ = S + η * I
 
     # solve for δα 
-    δvpars = S \ f
-    
-    return δvpars   # the length of δvpars == number of vpars where the first p are the determinantal parameters and the rest are Jastrow parameters
+    δvpars = S̃ \ f
+
+    return δvpars
+end
+
+
+"""
+
+    sr_update!(measurement_container, determinantal_parameters, 
+                model_geometry, tight_binding_model, 
+                pconfig, Np, W, A, η, dt)
+
+Update variational parameters through stochastic optimization.
+
+"""
+function sr_update!(measurement_container, determinantal_parameters, η, dt, opt_bin_size)
+    if debug
+        println("Begin optimization...")
+    end
+
+    # get covariance (Hessian) matrix
+    S = get_hessian_matrix(measurement_container, opt_bin_size)
+
+    # get force vector
+    f = get_force_vector(measurement_container, opt_bin_size)
+
+    # perform gradient descent
+    δvpars = parameter_gradient(S,f,η)     
+
+    if debug
+        println("Parameters updated!")
+    end
+
+    # new varitaional parameters
+    vpars = reduce(vcat, determinantal_parameters.vals)
+    vpars += dt * δvpars
+
+    if debug
+        println("New parameters: ", vpars)
+    end
+
+    # push back determinantal_parameters
+    update_detpars!(determinantal_parameters, vpars)
+
+    if debug
+        println("End of optimization...")
+    end
+
+    return nothing
 end
 
 
@@ -295,23 +295,6 @@ function sr_update!(measurement_container, determinantal_parameters, jastrow, η
     if debug
         println("End of optimization...")
     end
-
-    # # measure parameters
-    # # get current values from the container
-    # current_container = measurement_container.optimization_measurements["parameters"]
-
-    # # update value for the current bin
-    # current_bin_values = current_container[2]
-    # current_bin_values .= vpars 
-
-    # # update accumuator for average measurements
-    # new_avg_value = current_container[1] .+ vpars
-
-    # # combine the updated values 
-    # updated_values = (new_avg_value, current_bin_values)
-
-    # # write the new values to the container
-    # measurement_container.optimization_measurements["parameters"] = updated_values
 
     return nothing
 end

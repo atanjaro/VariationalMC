@@ -1,15 +1,17 @@
 """
-    build_determinantal_state( H_mf::Matrix{AbstractFloat} ) 
 
-Returns initial energies ε₀, matrix M, and Slater matrix D in the many-particle configuration 
-basis.
+    build_determinantal_state( H_mf::Matrix{ComplexF64} ) 
+
+Constructs a Slater determinant state matrix D in the the many-particle configuration basis, 
+reduced matrix M, and initial particle energies ε₀ from a random initial configuration. 
+Ensures that generated initial configuration is not singular. 
 
 """
-function build_determinantal_state(H_mf)
-    # Diagonalize Hamiltonian
+function build_determinantal_state(H_mf::Matrix{ComplexF64})
+    # diagonalize Hamiltonian
     ε, Uₑ = diagonalize(H_mf);
 
-    # Check for open shell configuration
+    # check for open shell configuration
     if is_openshell(ε, Ne)
         debug && println("WARNING! Open shell detected")
         # exit(1)
@@ -17,17 +19,17 @@ function build_determinantal_state(H_mf)
         debug && println("Generating shell...")
     end
 
-    # Store energies
+    # store energies
     ε₀ = ε[1:Ne];
 
     if debug
         print("Initial energies = ", ε₀)
     end
 
-    # Store M matrix
+    # store M matrix
     M = hcat(Uₑ[:,1:Ne]);
 
-    # Build Slater determinant
+    # build Slater determinant
     while true
         pconfig = generate_initial_fermion_configuration();
 
@@ -36,7 +38,7 @@ function build_determinantal_state(H_mf)
         config_indices = findall(x -> x == 1, pconfig);
         D = M[config_indices, :];
 
-        # Check that starting configuration is not singular
+        # check that starting configuration is not singular
         if is_invertible(D) 
 
             if debug
@@ -51,17 +53,19 @@ end
 
 
 """
-    build_determinantal_state( H_mf::Matrix{AbstractFloat}, init_pconfig ) 
 
-Given a initial particle configuration, returns initial energies ε₀, matrix M, and Slater matrix D in 
-the many-particle configuration basis.
+    build_determinantal_state( H_mf::Matrix{AbstractFloat}, init_pconfig::Vector{Float64} ) 
+
+Constructs a Slater determinant state matrix D in the the many-particle configuration basis, 
+reduced matrix M, and initial particle energies ε₀ from a known particle configuration.
+Ensures that generated initial configuration is not singular. 
 
 """
-function build_determinantal_state(H_mf, init_pconfig)
-    # Diagonalize Hamiltonian
+function build_determinantal_state(H_mf::Matrix{ComplexF64}, init_pconfig::Vector{Float64})
+    # diagonalize Hamiltonian
     ε, Uₑ = diagonalize(H_mf)
 
-    # Check for open shell configuration
+    # check for open shell configuration
     if is_openshell(ε, Ne)
         debug && println("WARNING! Open shell detected")
         exit(1)
@@ -69,19 +73,19 @@ function build_determinantal_state(H_mf, init_pconfig)
         debug && println("Generating shell...")
     end
 
-    # Store energies
+    # store energies
     ε₀ = ε[1:Ne]
 
     # Store M matrix
     M = hcat(U[:,1:Ne])
 
-    # Build Slater determinant
+    # build Slater determinant
     while true
         pconfig = init_pconfig
         config_indices = findall(x -> x == 1, pconfig)
         D = M[config_indices, :]
 
-        # Check that starting configuration is not singular
+        # check that starting configuration is not singular
         if is_invertible(D) 
 
             return D, pconfig, ε, ε₀, M, Uₑ
@@ -91,36 +95,41 @@ end
 
 
 """
-    get_equal_greens( M::Matrix{Float64}, D::Matrix{Float64} )::Matrix{Float64}
+
+    get_equal_greens( M::Matrix{ComplexF64}, D::Matrix{ComplexF64} )
     
-Returns the equal-time Green's function by solving DᵀWᵀ = Mᵀ using full pivot LU decomposition.
+Computes the equal-time Green's function by solving DᵀWᵀ = Mᵀ using full pivot LU decomposition.
 
 """
 function get_equal_greens(M::Matrix{ComplexF64}, D::Matrix{ComplexF64})
     debug && println("Getting equal-time Green's function...")
 
-    # perform the linear solve directly
-    Wt = D' \ M';     
+    # perform LU decomposition on D'
+    lu_fact = lu(D')
+
+    # solve for Wt using forward and backward substitution
+    Wt = lu_fact \ M'  
 
     # transpose the result back to the original shape
-    W = Wt';
+    W = Wt'
 
-    debug && print("W = $W")
- 
-    return W;                
-end          
+    # convert back to a regular matrix
+    W = Matrix(W)
+
+    debug && println("W = ", W)
+
+    return W                
+end
 
 
 """
-    update_equal_greens!( local_acceptance::LocalAcceptance, W ) 
+
+    update_equal_greens!( local_acceptance::LocalAcceptance, W::Matrix{ComplexF64} ) 
     
 Perform in-place update of the equal-time Green's function. 
 
 """
-function update_equal_greens!(local_acceptance::LocalAcceptance, W)
-    # convert W back into a regular matrix
-    W = copy(W)
-
+function update_equal_greens(local_acceptance::LocalAcceptance, W::Matrix{ComplexF64})
     # final site of the hopping particle
     l = local_acceptance.fsite
 
@@ -136,47 +145,55 @@ function update_equal_greens!(local_acceptance::LocalAcceptance, W)
     # get the βth column of the Green's function
     cᵦ = W[:,β]
 
-    # perform rank 1 update of the Green's function
-    BLAS.ger!(-1.0 / W[l,β], cᵦ, rₗ, W)
+    # perform rank-1 update
+    W -= cᵦ * rₗ' / W[l, β]
 
-    return nothing
+    # # perform rank-1 update (bugged)
+    # BLAS.ger!(-1.0 / W[l, β], cᵦ, rₗ, W)
+
+    return W
 end
 
 
 """
-    recalc_equal_greens( Wᵤ::Matrix{Float64}, δW::Float64, D::Matrix{Float64}, pconfig::Vector{Int64} ) 
+
+    recalc_equal_greens( W::Matrix{ComplexF64}, δW::Float64, D::Matrix{Float64}, pconfig::Vector{Int64} ) 
     
 Checks floating point error accumulation in the equal-time Green's function and if ΔW < δW, then the 
-recalculated Green's function Wᵣ replaces the updated Green's function Wᵤ as well as the D matrix
+recalculated Green's function Wᵣ replaces the updated Green's function Wᵤ as well as the Slater matrix D
 for the current configuration.
 
 """
-function recalc_equal_greens(Wᵤ::Matrix{Float64}, δW::Float64, D::Matrix{Float64}, pconfig::Vector{Int64})
-    # L = model_geometry.lattice.N
-    # Ne = size(Wᵤ, 2)  # Assuming Ne is the number of columns in Wᵤ
+function recalc_equal_greens(W::Matrix{ComplexF64}, δW::Float64, D::Matrix{ComplexF64}, pconfig::Vector{Int64})
 
-    # reconstruct the Hamiltonian to reconstruct D
+    if debug
+        println("Checking Green's function...")
+    end
 
     # recalculate D for current configuration
-    Dᵣ = M[findall(x -> x == 1, pconfig), :]
+    if debug
+        println("Recalculating Slater matrix...")
+    end
+    Dᵣ = M[findall(x -> x == 1, pconfig), :];
     
     # Recalculate Green's function from scratch
-    Wᵣ = get_equal_greens(M, Dᵣ)
+    Wᵣ = get_equal_greens(M, Dᵣ);
     
     # Difference in updated Green's function and recalculated Green's function
-    diff = Wᵤ .- Wᵣ
+    difference = W .- Wᵣ;
 
     # Sum the absolute differences and the recalculated Green's function elements
-    diff_sum = sum(abs.(diff))
-    W_sum = sum(abs.(Wᵣ))
+    diff_sum = sum(abs.(difference));
+    W_sum = sum(abs.(Wᵣ));
 
-    ΔW = sqrt(diff_sum / W_sum)
+    # condition for recalculation
+    ΔW = sqrt(diff_sum / W_sum);
 
     if ΔW > δW
         debug && println("WARNING! Green's function has been recalculated: ΔW = ", ΔW, " > δW = ", δW)
-        return Wᵣ, Dᵣ
+        return Wᵣ, Dᵣ;
     else
         debug && println("Green's function is stable: ΔW = ", ΔW, " < δW = ", δW)
-        return Wᵤ, D
+        return W, D;
     end  
 end

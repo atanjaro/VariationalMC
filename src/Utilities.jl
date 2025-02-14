@@ -204,22 +204,38 @@ end
 
 """
 
-    reduce_index( i::Int, j::Int, model_geometry::ModelGeometry )
+    reduce_index_2d( i::Int, j::Int, model_geometry::ModelGeometry )
 
 Reduces the indices of 2 lattice sites (i,j) to irreducible indices (0,k), where k is an integer.
 
 """
-function reduce_index(i, j, model_geometry)
+function reduce_index_2d(i, j, model_geometry)
     L = model_geometry.lattice.L[1]
 
     dx = abs(d(x(i, model_geometry), x(j, model_geometry), model_geometry))
-    dy = abs(d(y(i, model_geometry), y(j, model_geometry), model_geometry))
+        dy = abs(d(y(i, model_geometry), y(j, model_geometry), model_geometry))
 
-    if dy > dx
-        dx, dy = dy, dx
-    end
+        if dy > dx
+            dx, dy = dy, dx
+        end
+    
+        return dx + L * dy
+end
 
-    return dx + L * dy
+
+"""
+
+    reduce_index_1d( i::Int, j::Int, model_geometry::ModelGeometry )
+
+Reduces the indices of 2 lattice sites (i,j) to irreducible indices (0,k), where k is an integer.
+
+"""
+function reduce_index_1d(i, j, model_geometry)
+    L = model_geometry.lattice.L[1]
+
+    dx = abs(d(x(i, model_geometry), x(j, model_geometry), model_geometry))
+
+    return dx
 end
 
 
@@ -356,3 +372,4 @@ end
 #         throw(ArgumentError("Unsupported type for reset: $(typeof(value))"))
 #     end
 # end
+

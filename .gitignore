@@ -1,2 +1,13 @@
 opt_stats.csv
 sim_stats.csv
+hubbard_chain_U1.00_n1.00_Lx4_Ly1_Deltaa-1/global/double_occ/dblocc.csv
+hubbard_chain_U1.00_n1.00_Lx4_Ly1_Deltaa-1/optimization/determinantal/vpar_deltaa.csv
+hubbard_chain_U1.00_n1.00_Lx4_Ly1_Deltaa-1/optimization/Jastrow/jpar_vij_2.csv
+hubbard_chain_U1.00_n1.00_Lx4_Ly1_Deltaa-1/simulation/energy/energy_bins.csv
+hubbard_chain_U1.00_n1.00_Lx4_Ly1_Deltaa-1/optimization/Jastrow/jpar_vij_1.csv
+hubbard_chain_U1.00_n1.00_Lx4_Ly1_Deltas_muBCS-1/global/double_occ/dblocc.csv
+hubbard_chain_U1.00_n1.00_Lx4_Ly1_Deltas_muBCS-1/optimization/determinantal/vpar_deltas.csv
+hubbard_chain_U1.00_n1.00_Lx4_Ly1_Deltas_muBCS-1/optimization/determinantal/vpar_mus.csv
+hubbard_chain_U1.00_n1.00_Lx4_Ly1_Deltas_muBCS-1/optimization/Jastrow/jpar_vij_1.csv
+hubbard_chain_U1.00_n1.00_Lx4_Ly1_Deltas_muBCS-1/optimization/Jastrow/jpar_vij_2.csv
+hubbard_chain_U1.00_n1.00_Lx4_Ly1_Deltas_muBCS-1/simulation/energy/energy_bins.csv

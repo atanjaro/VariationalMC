@@ -7,6 +7,7 @@ using Profile
 using OrderedCollections
 using CSV
 using DataFrames
+
 using DataStructures
 using Printf
 using JLD2
@@ -48,26 +49,26 @@ t = 1.0
 tp = 0.0
 
 # Onsite Hubbard repulsion
-U = 1.0
+U = 8.0
 
-# (BCS) chemical potential
+# chemical potential (BCS)
 μ_BCS = 0.0
 
-# BCS (s-wave) pairing
+# s-wave pairing (BCS)
 Δs = 0.1
 
 # antiferromagnetic order parameter
-Δa = 0.001
-
-# Parameters to be optimized and initial value(s)
-parameters_to_optimize = ["Δs", "μ_BCS"]                              # s-wave (BCS) order parameter
-parameter_values = [[Δs],[μ_BCS]]                                 
-pht = true
+Δa = 0.1
 
 # # Parameters to be optimized and initial value(s)
-# parameters_to_optimize = ["Δa"]                                       # antiferromagnetic (Neél) order parameter
-# parameter_values = [[Δa]]                                            
-# pht = false
+# parameters_to_optimize = ["Δs", "μ_BCS"]                              # s-wave (BCS) order parameter
+# parameter_values = [[Δs],[μ_BCS]]                                 
+# pht = true
+
+# Parameters to be optimized and initial value(s)
+parameters_to_optimize = ["Δa"]                                       # antiferromagnetic (Neél) order parameter
+parameter_values = [[Δa]]                                            
+pht = false
 
 # specify filepath
 filepath = "."
@@ -102,19 +103,19 @@ simulation_info = SimulationInfo(
 initialize_datafolder(simulation_info)
 
 # random seed
-seed = abs(rand(Int)) # 1829519153600081228 # 664773671729905110
+seed = 4249684800071112050 #6431290886380112751 #abs(rand(Int)) # 7778951059202733546
 
 # Initialize random number generator
 rng = Xoshiro(seed)
        
 # Number of minimization/optimization updates
-N_opts = 10
+N_opts = 1000
 
 # Optimization bin size
 opt_bin_size = 10
 
 # Number of simulation updates 
-N_updates = 10
+N_updates = 100
 
 # Number of simulation bins
 N_bins = 10
@@ -123,16 +124,22 @@ N_bins = 10
 bin_size = div(N_updates, N_bins)
 
 # Number of MC cycles until measurement
-mc_meas_freq = 100
+mc_meas_freq = 1000
 
-# number of steps until numerical stability is performed (null)
+# number of steps until numerical stability is performed 
 n_stab = 50
+
+# Maximum allowed error in the equal-time Green's function
+δW = 1e-3
+
+# Maximum allowed error in the T vector
+δT = 1e-3
 
 # Stabilization factor for Stochastic Reconfiguration
 η = 1e-4      
 
 # Optimization rate for Stochastic Reconfiguration
-dt = 0.01         # 0.03
+dt = 0.03 #0.03      
 
 # Debugging flag
 # This will output print statements to the terminal during runtime
@@ -175,54 +182,144 @@ determinantal_parameters = initialize_determinantal_parameters(parameters_to_opt
 (D, pconfig, κ,  ε, ε₀, M, Uₑ) = build_determinantal_state(H_mf);  
 
 # Initialize variational parameter matrices
-A = get_Ak_matrices(V, Uₑ, ε, model_geometry);           # DEBUG
+A = get_Ak_matrices(V, Uₑ, ε, model_geometry);           
 
 # Initialize equal-time Green's function (W matrix)
-W = get_equal_greens(M, D);                              # DEBUG
+W = get_equal_greens(M, D);                              
 
 # Construct electron density-density Jastrow factor
-jastrow_den = build_jastrow_factor("e-den-den", model_geometry, pconfig, pht, rng, false);
-
-# Initialize all variational parameters to be optimized
-variational_parameters = VariationalParameters(determinantal_parameters, jastrow_den);
+jastrow = build_jastrow_factor("e-den-den", model_geometry, pconfig, pht, rng, false);
 
 # Initialize measurement container for VMC measurements
-measurement_container = initialize_measurement_container(model_geometry, variational_parameters, N_opts, opt_bin_size, N_bins, bin_size);
+measurement_container = initialize_measurement_container(model_geometry::ModelGeometry, determinantal_parameters::DeterminantalParameters, jastrow::Jastrow, N_opts, opt_bin_size, N_bins, bin_size);
 
 # Initialize the sub-directories to which the various measurements will be written
 initialize_measurement_directories(simulation_info, measurement_container);
 
 
-
-##
-## OPTIMIZATION TEST
-##
-
-
-
 # Here are some vector 'bins' for storing data during this test
+# These will be replaced by the data being written to file instead (with proper statistics reported)
 energy_bin = Float64[]
 dblocc_bin = Float64[]
 param_bin = []
 
+acceptance_rate = 0.0
 
 # optimization updates
+
 for bin in 1:N_opts
     for n in 1:opt_bin_size
         # perform local fermion update for a certain number of equilibration steps
-        (pconfig, κ, jastrow_den, W, D) = local_fermion_update!(W, D, model_geometry, jastrow_den, pconfig, κ, rng, n, n_stab, mc_meas_freq)
+        (local_acceptance_rate, W, D, pconfig, κ) = local_fermion_update!(W, D, model_geometry, jastrow, pconfig, κ, rng, n_stab, mc_meas_freq)    
 
-         # make basic measurements
-        make_measurements!(measurement_container,determinantal_parameters, jastrow_den, model_geometry, 
+        acceptance_rate += local_acceptance_rate
+
+        # make basic measurements
+        make_measurements!(measurement_container,determinantal_parameters, jastrow, model_geometry, 
                             tight_binding_model, pconfig, κ, Np, W, A)
     end
 
     # perform Stochastic Reconfiguration
-    sr_update!(measurement_container, determinantal_parameters, jastrow_den, η, dt, opt_bin_size)
+    sr_update!(measurement_container, determinantal_parameters, jastrow, η, dt, opt_bin_size)
 
     # write all measurements to file
     write_measurements!(measurement_container, simulation_info, energy_bin, dblocc_bin, param_bin, debug)                                                                                                             
 end
+
+
+# DEBUG: check updating of parameters? Possible source of instability.
+# DEBUG: check placement of stabilization? There are mc_meas_freq numbers of updates before measurement. Should we include these in 
+#           in the stabilization counter? 
+
+# make some plots for testing purposes
+using Plots
+using LaTeXStrings
+
+# mu = [v[1] for v in param_bin]
+deltaa = [v[1] for v in param_bin]
+vij_1 = [v[2] for v in param_bin]
+vij_2 = [v[3] for v in param_bin]
+
+# deltas = [v[1] for v in param_bin]
+# mus = [v[2] for v in param_bin]
+# vij_1 = [v[3] for v in param_bin]
+# vij_2 = [v[4] for v in param_bin]
+
+
+# # write the "bins" to file
+# df = DataFrame(Value = energy_bin)
+# # Write to CSV
+# CSV.write("energy_bins.csv", df)
+
+# df = DataFrame(Value = deltas)
+# # Write to CSV
+# CSV.write("vpar_deltas.csv", df)
+
+# df = DataFrame(Value = mus)
+# # Write to CSV
+# CSV.write("vpar_mus.csv", df)
+
+# df = DataFrame(Value = vij_1)
+# # Write to CSV
+# CSV.write("jpar_vij_1.csv", df)
+
+# df = DataFrame(Value = vij_2)
+# # Write to CSV
+# CSV.write("jpar_vij_2.csv", df)
+
+# df = DataFrame(Value = dblocc_bin)
+# # Write to CSV
+# CSV.write("dblocc.csv", df)
+
+# plot energy per site as a function of optimization steps
+scatter(1:1000, energy_bin/opt_bin_size, marker=:square, color=:red, markersize=5, markerstrokewidth=0,
+        legend=false, xlabel="Optimization steps", ylabel=L"E/N", tickfontsize=14, guidefontsize=14, legendfontsize=14,
+        xlims=(0,1000), ylims=(-5,5)) #
+
+# plot energy per site as a function of optimization steps
+scatter(1:1000, dblocc_bin/opt_bin_size, marker=:square, color=:red, markersize=5, markerstrokewidth=0,
+        legend=false, xlabel="Optimization steps", ylabel=L"D", tickfontsize=14, guidefontsize=14, legendfontsize=14,
+        xlims=(0,1000), ylims=(0,0.5))
+
+# plot determinantal parameter(s)
+scatter(1:1000, deltaa/opt_bin_size, marker=:circle, color=:blue, markersize=5, markerstrokewidth=0,
+        legend=false, xlabel="Optimization steps", ylabel=L"\Delta_a", tickfontsize=14, guidefontsize=14, legendfontsize=14,
+        xlims=(0,1000),ylims=(0.095,0.105)) #
+
+# plot Jastrow parameters
+scatter(1:1000, vij_1/opt_bin_size, marker=:circle, color=:blue, markersize=5, markerstrokewidth=0,
+        label=L"v_{ij}^1", xlabel="Optimization steps", ylabel=L"v_{ij}", tickfontsize=14, guidefontsize=14, legendfontsize=14,
+        xlims=(0,1000), ylims=(-1,2)) #, ylims=(0,2)
+scatter!(1:1000, vij_2/opt_bin_size, marker=:square, color=:red, markersize=5, markerstrokewidth=0,
+        label=L"v_{ij}^2", xlabel="Optimization steps", ylabel=L"v_{ij}", tickfontsize=14, guidefontsize=14, legendfontsize=14,
+        xlims=(0,1000), ylims=(-1,2))#
+
+
+energy_data = energy_bin/opt_bin_size
+energy_mean = sum(energy_bin[200:1000]/opt_bin_size)/800
+subset_data = energy_bin[200:1000]/opt_bin_size
+
+using Jackknife
+using Statistics
+
+
+function jackknife_error(data)
+    N = length(data)
+    mean_full = mean(data)
+
+    # Compute jackknife estimates by leaving one element out at a time
+    means_leave_one_out = [mean(vcat(data[1:i-1], data[i+1:end])) for i in 1:N]
+
+    # Compute jackknife variance
+    variance_jk = (N - 1) / N * sum((means_leave_one_out .- mean_full) .^ 2)
+
+    return sqrt(variance_jk)  # Jackknife standard error
+end
+
+jackknife_err = jackknife_error(subset_data)
+
+
+
 
 # simulation updates
 for bin in 1:N_updates

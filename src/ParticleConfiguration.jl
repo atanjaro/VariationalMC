@@ -246,18 +246,18 @@ If proposed particle hop is accepted, perform the particle hop, and update the p
 configuration and positions.
 
 """
-function do_particle_hop!(met_step, pconfig::Vector{Int}, κ::Vector{Int64}, model_geometry::ModelGeometry)
+function do_particle_hop!(markov_move, pconfig::Vector{Int}, κ::Vector{Int64}, model_geometry::ModelGeometry)
     # particle number
-    β = met_step.particle
+    β = markov_move.particle
 
     # spin of the particle
-    spin = met_step.spin
+    spin = markov_move.spin
 
     # initial site
-    k = met_step.isite
+    k = markov_move.isite
 
     # final site
-    l = met_step.fsite
+    l = markov_move.fsite
 
     # account for spin-up and spin-down sectors
     if spin == 2

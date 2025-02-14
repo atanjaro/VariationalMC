@@ -994,3 +994,21 @@ Add FFLO wavefunction.
 Add additional starting configuration method where a certain order is generated. For instance,
       starting the simulation out in an AFM state: pconfig(4x4) = [1,0,1,0,0,1,0,1,1,0,1,0,0,1,0,1,0,1,0,1,1,0,1,0,0,1,0,1,1,0,1,0]
 Add backflow correlations for SSH phonons.
+
+
+
+
+
+February 05, 2025
+
+BUGS TO INVESTIGATE:
+
+- the Green's function is now updating but need to check discrepancy bewteen scratch calculation and update
+- need to check discrepancy between updated T vector and recalculated T vector (check that the definitions in teh calculation are correct)
+- Check energy calculation again!
+
+February 07, 2025
+
+- the VariationalParameter type has been deprecated
+- it appears that there is a bug in the optimization algorithm. Depsite changing the SR optimization rate and dt, there is never a change
+      in how the optimization does. The value always remains around the starting value, regardless of starting value. 
