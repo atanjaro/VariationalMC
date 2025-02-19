@@ -2,16 +2,18 @@ using LatticeUtilities
 using Random
 using LinearAlgebra
 using DelimitedFiles
-using BenchmarkTools
 using Profile
 using OrderedCollections
 using CSV
 using DataFrames
-
 using DataStructures
 using Printf
 using JLD2
 using Revise
+
+# make some plots for testing purposes
+using Plots
+using LaTeXStrings
 
 # files to include
 include("Hamiltonian.jl")
@@ -60,15 +62,15 @@ U = 8.0
 # antiferromagnetic order parameter
 Δa = 0.1
 
-# # Parameters to be optimized and initial value(s)
-# parameters_to_optimize = ["Δs", "μ_BCS"]                              # s-wave (BCS) order parameter
-# parameter_values = [[Δs],[μ_BCS]]                                 
-# pht = true
-
 # Parameters to be optimized and initial value(s)
-parameters_to_optimize = ["Δa"]                                       # antiferromagnetic (Neél) order parameter
-parameter_values = [[Δa]]                                            
-pht = false
+parameters_to_optimize = ["Δs", "μ_BCS"]                              # s-wave (BCS) order parameter
+parameter_values = [[Δs],[μ_BCS]]                                 
+pht = true
+
+# # Parameters to be optimized and initial value(s)
+# parameters_to_optimize = ["Δa"]                                       # antiferromagnetic (Neél) order parameter
+# parameter_values = [[Δa]]                                            
+# pht = false
 
 # specify filepath
 filepath = "."
@@ -143,7 +145,7 @@ dt = 0.03 #0.03
 
 # Debugging flag
 # This will output print statements to the terminal during runtime
-debug = true
+debug = false
 
 # Chain unit cell
 unit_cell = UnitCell(lattice_vecs = [[1.0]],
@@ -227,23 +229,15 @@ for bin in 1:N_opts
 end
 
 
-# DEBUG: check updating of parameters? Possible source of instability.
-# DEBUG: check placement of stabilization? There are mc_meas_freq numbers of updates before measurement. Should we include these in 
-#           in the stabilization counter? 
-
-# make some plots for testing purposes
-using Plots
-using LaTeXStrings
-
 # mu = [v[1] for v in param_bin]
 deltaa = [v[1] for v in param_bin]
 vij_1 = [v[2] for v in param_bin]
 vij_2 = [v[3] for v in param_bin]
 
-# deltas = [v[1] for v in param_bin]
-# mus = [v[2] for v in param_bin]
-# vij_1 = [v[3] for v in param_bin]
-# vij_2 = [v[4] for v in param_bin]
+deltas = [v[1] for v in param_bin]
+mus = [v[2] for v in param_bin]
+vij_1 = [v[3] for v in param_bin]
+vij_2 = [v[4] for v in param_bin]
 
 
 # # write the "bins" to file
@@ -284,7 +278,7 @@ scatter(1:1000, dblocc_bin/opt_bin_size, marker=:square, color=:red, markersize=
 # plot determinantal parameter(s)
 scatter(1:1000, deltaa/opt_bin_size, marker=:circle, color=:blue, markersize=5, markerstrokewidth=0,
         legend=false, xlabel="Optimization steps", ylabel=L"\Delta_a", tickfontsize=14, guidefontsize=14, legendfontsize=14,
-        xlims=(0,1000),ylims=(0.095,0.105)) #
+        xlims=(0,1000)) #
 
 # plot Jastrow parameters
 scatter(1:1000, vij_1/opt_bin_size, marker=:circle, color=:blue, markersize=5, markerstrokewidth=0,
