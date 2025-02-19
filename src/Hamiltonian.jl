@@ -666,22 +666,6 @@ end
 
 """
 
-    build_mean_field_hamiltonian( tight_binding_model::TightBindingModel, determinantal_parameters::DeterminantalParameters ) 
-
-Constructs a matrix by combining the non-interacting Hamiltonian with
-matrix of variational terms.
-
-"""
-function build_mean_field_hamiltonian(tight_binding_model::TightBindingModel, determinantal_parameters::DeterminantalParameters)
-    if debug
-        println("Building mean-field Hamiltonian...")
-    end
-    return build_tight_binding_model(tight_binding_model) + build_variational_terms(determinantal_parameters)[1], build_variational_terms(determinantal_parameters)[2];
-end
-
-
-"""
-
     get_Ak_matrices( V::Vector{Matrix{AbstractFloat}}, U::Matrix{AbstractFloat}, ε::Vector{AbstractFloat}, model_geometry::ModelGeometry ) 
     
 Returns variational parameter matrices Aₖ from the corresponding Vₖ. Computes Qₖ = (U⁺VₖU)_(ην) / (ε_η - ε_ν), for η > Nₚ and ν ≤ Nₚ and is 0 otherwise
@@ -712,6 +696,118 @@ function get_Ak_matrices(V, Uₑ, ε, model_geometry)
     end
 
     return int_A;
+end
+
+
+"""
+
+    build_mean_field_hamiltonian( tight_binding_model::TightBindingModel, determinantal_parameters::DeterminantalParameters ) 
+
+Constructs a matrix by combining the non-interacting Hamiltonian with
+matrix of variational terms.
+
+"""
+function build_mean_field_hamiltonian(tight_binding_model::TightBindingModel, determinantal_parameters::DeterminantalParameters)
+    if debug
+        println("Building mean-field Hamiltonian...")
+    end
+    return build_tight_binding_model(tight_binding_model) + build_variational_terms(determinantal_parameters)[1], build_variational_terms(determinantal_parameters)[2];
+end
+
+
+function get_fermi_energy(Ne, tight_binding_model, model_geometry)
+    N = model_geometry.lattice.N
+
+    H_t = zeros(Complex, 2*N, 2*N);
+    H_tp = zeros(Complex, 2*N, 2*N);
+
+    # nearest neighbor hopping
+    if Lx == 2 && Ly == 2 
+        for (i,j) in eachcol(nbr_table)
+            H_t[i,j] += -tight_binding_model.t[1];
+        end
+        for (i,j) in eachcol(nbr_table .+ N)    
+            H_t[i,j] += -tight_binding_model.t[1];
+        end
+    # special case for 1D  
+    elseif  Lx == 1 && Ly > Lx || Ly == 1 && Lx > Ly
+        for (i,j) in eachcol(nbr_table[:,1:N])
+            H_t[i,j] += -tight_binding_model.t[1];
+            if model_geometry.lattice.N > 2
+                H_t[j,i] += -tight_binding_model.t[1];
+            end
+        end
+        for (i,j) in eachcol(nbr_table[:,1:model_geometry.lattice.N] .+ N)    
+            H_t[i,j] += -tight_binding_model.t[1];
+            if model_geometry.lattice.N > 2
+                H_t[j,i] += -tight_binding_model.t[1];
+            end
+        end
+    # special case for Lx = 2 
+    elseif Lx == 2 && Ly > Lx
+        for (i,j) in eachcol(nbr_table[:,1:(size(nbr_table,2) - Ly)])
+            H_t[i,j] += -tight_binding_model.t[1];
+            H_t[j,i] += -tight_binding_model.t[1];
+        end
+        for (i,j) in eachcol(nbr_table[:,1:(size(nbr_table,2) - Ly)] .+ N)
+            H_t[i,j] += -tight_binding_model.t[1];
+            H_t[j,i] += -tight_binding_model.t[1];
+        end 
+    # special case for Ly = 2 
+    elseif Ly == 2 && Lx > Ly
+        for (i,j) in eachcol(nbr_table[:,1:(size(nbr_table,2) - Lx)])
+            H_t[i,j] += -tight_binding_model.t[1];
+            H_t[j,i] += -tight_binding_model.t[1];
+        end
+        for (i,j) in eachcol(nbr_table[:,1:(size(nbr_table,2) - Lx)] .+ N)
+            H_t[i,j] += -tight_binding_model.t[1];
+            H_t[j,i] += -tight_binding_model.t[1];
+        end  
+    else
+        for (i,j) in eachcol(nbr_table)
+            H_t[i,j] += -tight_binding_model.t[1];
+            if model_geometry.lattice.N > 2
+                H_t[j,i] += -tight_binding_model.t[1];
+            else
+            end
+        end
+        for (i,j) in eachcol(nbr_table .+ N)    
+            H_t[i,j] += -tight_binding_model.t[1];
+            if model_geometry.lattice.N > 2
+                H_t[j,i] += -tight_binding_model.t[1];
+            else
+            end
+        end
+    end
+    # next nearest neighbor hopping
+    if tight_binding_model.t[2] != 0.0
+        nbr_table_p = build_neighbor_table(bonds[2],
+                                        model_geometry.unit_cell,
+                                        model_geometry.lattice);
+        if Lx == 2 && Ly ==2 
+            for (i,j) in eachcol(nbr_table_p)
+                H_tp[i,j] += tight_binding_model.t[2]/2;
+            end
+            for (i,j) in eachcol(nbr_table_p .+ N)    
+                H_tp[i,j] += tight_binding_model.t[2]/2;
+            end
+        else
+            for (i,j) in eachcol(nbr_table_p)
+                H_tp[i,j] += tight_binding_model.t[2];
+                H_tp[j,i] += tight_binding_model.t[2];
+            end
+            for (i,j) in eachcol(nbr_table_p .+ N)    
+                H_tp[i,j] += tight_binding_model.t[2];
+                H_tp[j,i] += tight_binding_model.t[2];
+            end
+        end
+    end
+
+    H_tb = H_t + H_tp
+
+    ε_F, Uₑ = diagonalize(H_tb)
+
+    return 0.5 * (ε_F[Ne + 1] + ε_F[Ne])
 end
 
 
