@@ -300,23 +300,27 @@ function write_measurements!(measurement_container, simulation_info, energy_bin,
         reset_measurements!(simulation_measurements)
         reset_measurements!(optimization_measurements)
     else
-        (; datafolder, pID) = simulation_info
+        # Append accumulated values to the storage vectors
+        push!(energy_bin, simulation_measurements["energy"][1])
+        push!(dblocc_bin, simulation_measurements["double_occ"][1])
+        push!(param_bin, optimization_measurements["parameters"][1])
+        # (; datafolder, pID) = simulation_info
 
-        # Extract other container components
-        (; optimization_measurements, simulation_measurements, num_detpars) = measurement_container
+        # # Extract other container components
+        # (; optimization_measurements, simulation_measurements, num_detpars) = measurement_container
 
-        # Construct filenames
-        fn = @sprintf "bin-%d_pID-%d.jld2" bin pID  
-        file_path_energy = joinpath(datafolder, "simulation", "energy", fn)
-        file_path_dblocc = joinpath(datafolder, "simulation", "double_occ", fn)
+        # # Construct filenames
+        # fn = @sprintf "bin-%d_pID-%d.jld2" bin pID  
+        # file_path_energy = joinpath(datafolder, "simulation", "energy", fn)
+        # file_path_dblocc = joinpath(datafolder, "simulation", "double_occ", fn)
 
-        # Append energy measurements to file
-        energy_measurements = simulation_measurements["energy"][1]
-        JLD2.@save file_path_energy energy_measurements append=true
+        # # Append energy measurements to file
+        # energy_measurements = simulation_measurements["energy"][1]
+        # JLD2.@save file_path_energy energy_measurements append=true
 
-        # Append double occupancy to file
-        dblocc_measurements = simulation_measurements["double_occ"][1]
-        JLD2.@save file_path_dblocc dblocc_measurements append=true
+        # # Append double occupancy to file
+        # dblocc_measurements = simulation_measurements["double_occ"][1]
+        # JLD2.@save file_path_dblocc dblocc_measurements append=true
 
         # Reset the simulation measurements
         reset_measurements!(simulation_measurements)

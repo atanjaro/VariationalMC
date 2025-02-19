@@ -697,23 +697,35 @@ function get_Ak_matrices(V, Uₑ, ε, model_geometry)
 
     # define perturbation mask
     ptmask = zeros(Float64, 2*N, 2*N);
+    # for η in 1:2*N
+    #     for ν in 1:2*N
+    #         if η >= Ne + 1 && ν < Ne + 1
+    #             ptmask[η, ν] = 1.0 / (ε[ν] - ε[η]);
+    #         end
+    #     end
+    # end
+
+    # # calculate A matrices of variational parameters
+    # int_A = [];
+    # for it in V
+    #     A = Uₑ * (Uₑ' * it * Uₑ) .* ptmask * Uₑ';
+    #     A = A[end:-1:1,:];
+    #     push!(int_A, A);
+    # end
+        
     for η in 1:2*N
         for ν in 1:2*N
-            if η >= Ne + 1 && ν < Ne + 1
-                ptmask[η, ν] = 1.0 / (ε[ν] - ε[η]);
+            if η > Ne && ν <= Ne
+                ptmask[η, ν] = 1.0 / ε[ν] - ε[η]
             end
         end
     end
 
-    # calculate A matrices of variational parameters
     int_A = [];
-    for it in V
-        A = Uₑ * (Uₑ' * it * Uₑ) .* ptmask * Uₑ';
-        A = A[end:-1:1,:];
-        push!(int_A, A);
+    for v in V
+        push!(int_A, Uₑ * ((Uₑ' * v * Uₑ) .* ptmask) * Uₑ')
     end
-        
-
+    
     return int_A;
 end
 

@@ -27,7 +27,7 @@ function build_determinantal_state(H_mf::Matrix{ComplexF64})
     end
 
     # store M matrix
-    M = hcat(Uₑ[:,1:Ne]);
+    M = Matrix{ComplexF64}(view(Uₑ, 1:size(Uₑ,1), 1:Ne));
 
     # build Slater determinant
     while true
