@@ -83,7 +83,7 @@ function get_local_jpar_derivative(jastrow::Jastrow, pconfig::Vector{Int64}, pht
                 nup_j = get_onsite_fermion_occupation(j+1, pconfig)[1]
                 ndn_j = get_onsite_fermion_occupation(j+1, pconfig)[2]
                 if pht
-                    derivatives[num] += -dblcount_correction * (nup_i + ndn_i) * (nup_j + ndn_j)
+                    derivatives[num] += -dblcount_correction * (nup_i - ndn_i) * (nup_j - ndn_j)
                 else
                     derivatives[num] += -dblcount_correction * (nup_i + ndn_i) * (nup_j + ndn_j)
                 end
@@ -109,7 +109,7 @@ function get_local_jpar_derivative(jastrow::Jastrow, pconfig::Vector{Int64}, pht
                 nup_j = get_onsite_fermion_occupation(j+1, pconfig)[1]
                 ndn_j = get_onsite_fermion_occupation(j+1, pconfig)[2]
                 if pht
-                    derivatives[num] += -0.5 * (nup_i + ndn_i) * (nup_j + ndn_j)
+                    derivatives[num] += -0.5 * (nup_i - ndn_i) * (nup_j - ndn_j)
                 else
                     derivatives[num] += -0.5 * (nup_i + ndn_i) * (nup_j + ndn_j)
                 end
