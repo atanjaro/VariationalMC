@@ -62,15 +62,15 @@ U = 8.0
 # antiferromagnetic order parameter
 Δa = 0.1
 
-# Parameters to be optimized and initial value(s)
-parameters_to_optimize = ["Δs", "μ_BCS"]                              # s-wave (BCS) order parameter
-parameter_values = [[Δs],[μ_BCS]]                                 
-pht = true
-
 # # Parameters to be optimized and initial value(s)
-# parameters_to_optimize = ["Δa"]                                       # antiferromagnetic (Neél) order parameter
-# parameter_values = [[Δa]]                                            
-# pht = false
+# parameters_to_optimize = ["Δs", "μ_BCS"]                              # s-wave (BCS) order parameter
+# parameter_values = [[Δs],[μ_BCS]]                                 
+# pht = true
+
+# Parameters to be optimized and initial value(s)
+parameters_to_optimize = ["Δa"]                                       # antiferromagnetic (Neél) order parameter
+parameter_values = [[Δa]]                                            
+pht = false
 
 # specify filepath
 filepath = "."
@@ -193,7 +193,8 @@ W = get_equal_greens(M, D);
 jastrow = build_jastrow_factor("e-den-den", model_geometry, pconfig, pht, rng, false);
 
 # Initialize measurement container for VMC measurements
-measurement_container = initialize_measurement_container(model_geometry::ModelGeometry, determinantal_parameters::DeterminantalParameters, jastrow::Jastrow, N_opts, opt_bin_size, N_bins, bin_size);
+measurement_container = initialize_measurement_container(model_geometry::ModelGeometry, determinantal_parameters::DeterminantalParameters, 
+                                                            jastrow::Jastrow, N_opts, opt_bin_size, N_bins, bin_size);
 
 # Initialize the sub-directories to which the various measurements will be written
 initialize_measurement_directories(simulation_info, measurement_container);

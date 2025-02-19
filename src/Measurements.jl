@@ -693,14 +693,12 @@ Measure the average double occupancy ⟨D⟩ = N⁻¹ ∑ᵢ ⟨nᵢ↑nᵢ↓�
 
 """
 function measure_double_occ!(measurement_container, pconfig, model_geometry)
-    nup_ndn = 0.0
+    N = model_geometry.lattice.N
 
-    for i in 1:model_geometry.lattice.N
-        nup_ndn += get_onsite_fermion_occupation(i, pconfig)[1] * (1 - get_onsite_fermion_occupation(i, pconfig)[2])
-    end
+    dblocc_dens = sum(pconfig[1:N] .* (1 .- pconfig[end-N+1:end])) / N
 
     # calculate the current double occupancy
-    dblocc_current = nup_ndn / model_geometry.lattice.N
+    dblocc_current = dblocc_dens
 
     # get current values from the container
     dblocc_container = measurement_container.simulation_measurements["double_occ"]
@@ -935,7 +933,7 @@ function get_local_hubbard_energy(U, model_geometry, pconfig)
 
     # get spindex occupations
     occ_up = pconfig[1:N]
-    occ_dn = pconfig[N+1:2*N]
+    occ_dn = pconfig[end-N+1:end]
 
     if pht
         E_loc_hubbard = U * sum(occ_up .* (1 .- occ_dn))
