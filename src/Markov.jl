@@ -90,7 +90,8 @@ function metropolis(W::Matrix{ComplexF64}, κ::Vector{Int64}, rng::Xoshiro)
             println("accept prob. = $acceptance_prob")
         end
 
-        if rand(rng) < acceptance_prob
+        #if rand(rng) < acceptance_prob
+        if acceptance_prob >= 1.0 || rand(rng) < acceptance_prob
             if debug 
                 println("Hop accepted!")
             end
@@ -166,7 +167,8 @@ function metropolis(W::Matrix{ComplexF64}, jastrow::Jastrow, κ::Vector{Int64}, 
             println("accept prob. = $acceptance_prob")
         end
 
-        if rand(rng) < acceptance_prob
+        # if rand(rng) < acceptance_prob
+        if acceptance_prob >= 1.0 || rand(rng) < acceptance_prob
             if debug 
                 println("Hop accepted!")
             end

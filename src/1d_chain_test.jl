@@ -54,13 +54,13 @@ tp = 0.0
 U = 8.0
 
 # chemical potential (BCS)
-μ_BCS = 0.0
+μ_BCS = 3.0
 
 # s-wave pairing (BCS)
 Δs = 0.1
 
 # antiferromagnetic order parameter
-Δa = 0.1
+Δa = -0.1
 
 # # Parameters to be optimized and initial value(s)
 # parameters_to_optimize = ["Δs", "μ_BCS"]                              # s-wave (BCS) order parameter
@@ -230,7 +230,6 @@ for bin in 1:N_opts
 end
 
 
-# mu = [v[1] for v in param_bin]
 deltaa = [v[1] for v in param_bin]
 vij_1 = [v[2] for v in param_bin]
 vij_2 = [v[3] for v in param_bin]
@@ -280,6 +279,14 @@ scatter(1:1000, dblocc_bin/opt_bin_size, marker=:square, color=:red, markersize=
 scatter(1:1000, deltaa/opt_bin_size, marker=:circle, color=:blue, markersize=5, markerstrokewidth=0,
         legend=false, xlabel="Optimization steps", ylabel=L"\Delta_a", tickfontsize=14, guidefontsize=14, legendfontsize=14,
         xlims=(0,1000)) #
+
+scatter(1:1000, deltas/opt_bin_size, marker=:circle, color=:blue, markersize=5, markerstrokewidth=0,
+    legend=false, xlabel="Optimization steps", ylabel=L"\Delta_a", tickfontsize=14, guidefontsize=14, legendfontsize=14,
+    xlims=(0,1000)) #
+
+scatter(1:1000, mus/opt_bin_size, marker=:circle, color=:blue, markersize=5, markerstrokewidth=0,
+    legend=false, xlabel="Optimization steps", ylabel=L"\Delta_a", tickfontsize=14, guidefontsize=14, legendfontsize=14,
+    xlims=(0,1000)) #
 
 # plot Jastrow parameters
 scatter(1:1000, vij_1/opt_bin_size, marker=:circle, color=:blue, markersize=5, markerstrokewidth=0,
