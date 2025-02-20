@@ -13,10 +13,10 @@ function build_determinantal_state(H_mf::Matrix{ComplexF64})
 
     # check for open shell configuration
     if is_openshell(ε, Ne)
-        debug && println("WARNING! Open shell detected")
+        println("WARNING! Open shell detected")
         # exit(1)
     else
-        debug && println("Generating shell...")
+        println("Generating shell...")
     end
 
     # store energies

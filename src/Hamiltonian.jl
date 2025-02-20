@@ -8,8 +8,10 @@ A type defining model geometry.
 struct ModelGeometry
     # unit cell
     unit_cell::UnitCell
+
     # extent of the lattice
     lattice::Lattice
+
     # lattice bonds
     bond::Vector{Vector{Any}}
 end
@@ -17,17 +19,19 @@ end
 
 
 """
+
     TightBindingModel( t::Vector{AbstractFloat}, μ::AbstractFloat, 
                     model_geometry::ModelGeometry, nbr_table::Matrix{Int64} )
 
 A type defining a non-interacting tight binding model
 
 """
-struct TightBindingModel    # TODO: add onsite energy?
+struct TightBindingModel    
     # hopping amplitudes
-    t::Vector{AbstractFloat}   # [t, t']    # TODO: change to [[t₁, t₂, t₃], t'] for SSH models
+    t::Vector{AbstractFloat}   # [t, t']  
+
     # chemical potentials
-    μ::AbstractFloat           # TODO: change to vector based on number of orbitals [μ₁,μ₂,μ₃,...]
+    μ::AbstractFloat           
 end
 
 
@@ -42,8 +46,10 @@ A type defining a set of variational parameters obtained from the fermionic dete
 struct DeterminantalParameters
     # name of order parameter
     pars::Vector{AbstractString}
+
     # variational parameter values
     vals::Vector{Vector{AbstractFloat}}
+
     # number of determinantal parameters
     num_detpars::Int
 end
@@ -115,19 +121,31 @@ parameters to tx,ty,t' for future SSH model functionality.
 
 """
 function build_tight_binding_model(tight_binding_model)
+    # number of sites
     N = model_geometry.unit_cell.n*model_geometry.lattice.N 
+
+    # generate neighbor table
     nbr_table = build_neighbor_table(bonds[1],
                                     model_geometry.unit_cell,
                                     model_geometry.lattice);
+
+    # initialize matrices
     H_t = zeros(Complex, 2*N, 2*N);
     H_tp = zeros(Complex, 2*N, 2*N);
     μ_vec = Vector{Complex}(undef, 2*N);
 
+    # hopping parameters
+    t0 = tight_binding_model.t[1]
+    t1 = tight_binding_model.t[2]
+
+    # initial chemical potential
+    μ = tight_binding_model.μ
+
     if debug
         println("Building tight binding model...")
         println("Hopping parameters:")
-        println("t0 = ", tight_binding_model.t[1])
-        println("t1 = ", tight_binding_model.t[2])
+        println("t0 = ", t0)
+        println("t1 = ", t1)
     end
 
     if pht == true
@@ -135,89 +153,75 @@ function build_tight_binding_model(tight_binding_model)
         if !("μ_BCS" in parameters_to_optimize)     
             for i in 1:N
                 for j in N+1:2*N
-                    μ_vec[i] = -tight_binding_model.μ;
-                    μ_vec[j] = tight_binding_model.μ;
+                    μ_vec[i] = -μ;
+                    μ_vec[j] = μ;
                 end 
             end
         end
         # particle-hole transformed nearest neighbor hopping
         if Lx == 2 && Ly == 2 
             for (i,j) in eachcol(nbr_table)
-                H_t[i,j] += -tight_binding_model.t[1];
+                H_t[i,j] += -t0;
             end
             for (i,j) in eachcol(nbr_table .+ N)    
-                H_t[i,j] += tight_binding_model.t[1];
-            end
-        # special case for 1D
-        elseif  Lx == 1 && Ly > Lx || Ly == 1 && Lx > Ly
-            for (i,j) in eachcol(nbr_table[:,1:N])
-                H_t[i,j] += -tight_binding_model.t[1];
-                if model_geometry.lattice.N > 2
-                    H_t[j,i] += -tight_binding_model.t[1];
-                end
-            end
-            for (i,j) in eachcol(nbr_table[:,1:N] .+ N)    
-                H_t[i,j] += tight_binding_model.t[1];
-                if model_geometry.lattice.N > 2
-                    H_t[j,i] += tight_binding_model.t[1];
-                end
+                H_t[i,j] += t0;
             end
         # special case for Lx = 2 
         elseif Lx == 2 && Ly > Lx
             for (i,j) in eachcol(nbr_table[:,1:(size(nbr_table,2) - Ly)])
-                H_t[i,j] += -tight_binding_model.t[1];
-                H_t[j,i] += -tight_binding_model.t[1];
+                H_t[i,j] += -t0;
+                H_t[j,i] += -t0;
             end
             for (i,j) in eachcol(nbr_table[:,1:(size(nbr_table,2) - Ly)] .+ N)
-                H_t[i,j] += tight_binding_model.t[1];
-                H_t[j,i] += tight_binding_model.t[1];
+                H_t[i,j] += t0;
+                H_t[j,i] += t0;
             end 
         # special case for Ly = 2 
         elseif Ly == 2 && Lx > Ly
             for (i,j) in eachcol(nbr_table[:,1:(size(nbr_table,2) - Lx)])
-                H_t[i,j] += -tight_binding_model.t[1];
-                H_t[j,i] += -tight_binding_model.t[1];
+                H_t[i,j] += -t0;
+                H_t[j,i] += -t0;
             end
             for (i,j) in eachcol(nbr_table[:,1:(size(nbr_table,2) - Lx)] .+ N)
-                H_t[i,j] += tight_binding_model.t[1];
-                H_t[j,i] += tight_binding_model.t[1];
+                H_t[i,j] += t0;
+                H_t[j,i] += t0;
             end 
         else
             for (i,j) in eachcol(nbr_table)
-                H_t[i,j] += -tight_binding_model.t[1];
+                H_t[i,j] += -t0;
                 if model_geometry.lattice.N > 2
-                    H_t[j,i] += -tight_binding_model.t[1];
+                    H_t[j,i] += -t0;
                 else
                 end
             end
             for (i,j) in eachcol(nbr_table .+ N)    
-                H_t[i,j] += tight_binding_model.t[1];
+                H_t[i,j] += t0;
                 if model_geometry.lattice.N > 2
-                    H_t[j,i] += tight_binding_model.t[1];
+                    H_t[j,i] += t0;
                 else
                 end
             end
         end
         # particle-hole transformed next nearest neighbor hopping
-        if tight_binding_model.t[2] != 0.0
+        if t1 != 0.0
             nbr_table_p = build_neighbor_table(bonds[2],
                                             model_geometry.unit_cell,
                                             model_geometry.lattice);
             if Lx == 2 && Ly == 2
                 for (i,j) in eachcol(nbr_table_p)
-                    H_tp[i,j] += tight_binding_model.t[2]/2;
+                    H_tp[i,j] += t1/2;
                 end
                 for (i,j) in eachcol(nbr_table_p .+ N)    
-                    H_tp[i,j] += -tight_binding_model.t[2]/2;
+                    H_tp[i,j] += -t1/2;
                 end
             else
                 for (i,j) in eachcol(nbr_table_p)
-                    H_tp[i,j] += tight_binding_model.t[2];
-                    H_tp[j,i] += tight_binding_model.t[2];
+                    H_tp[i,j] += t1;
+                    H_tp[j,i] += t1;
                 end
                 for (i,j) in eachcol(nbr_table_p .+ N)    
-                    H_tp[i,j] += -tight_binding_model.t[2];
-                    H_tp[j,i] += -tight_binding_model.t[2];
+                    H_tp[i,j] += -t1;
+                    H_tp[j,i] += -t1;
                 end
             end
         else
@@ -235,81 +239,67 @@ function build_tight_binding_model(tight_binding_model)
         # nearest neighbor hopping
         if Lx == 2 && Ly == 2 
             for (i,j) in eachcol(nbr_table)
-                H_t[i,j] += -tight_binding_model.t[1];
+                H_t[i,j] += -t0
             end
             for (i,j) in eachcol(nbr_table .+ N)    
-                H_t[i,j] += -tight_binding_model.t[1];
-            end
-        # special case for 1D  
-        elseif  Lx == 1 && Ly > Lx || Ly == 1 && Lx > Ly
-            for (i,j) in eachcol(nbr_table[:,1:N])
-                H_t[i,j] += -tight_binding_model.t[1];
-                if model_geometry.lattice.N > 2
-                    H_t[j,i] += -tight_binding_model.t[1];
-                end
-            end
-            for (i,j) in eachcol(nbr_table[:,1:model_geometry.lattice.N] .+ N)    
-                H_t[i,j] += -tight_binding_model.t[1];
-                if model_geometry.lattice.N > 2
-                    H_t[j,i] += -tight_binding_model.t[1];
-                end
+                H_t[i,j] += -t0;
             end
         # special case for Lx = 2 
         elseif Lx == 2 && Ly > Lx
             for (i,j) in eachcol(nbr_table[:,1:(size(nbr_table,2) - Ly)])
-                H_t[i,j] += -tight_binding_model.t[1];
-                H_t[j,i] += -tight_binding_model.t[1];
+                H_t[i,j] += -t0;
+                H_t[j,i] += -t0;
             end
             for (i,j) in eachcol(nbr_table[:,1:(size(nbr_table,2) - Ly)] .+ N)
-                H_t[i,j] += -tight_binding_model.t[1];
-                H_t[j,i] += -tight_binding_model.t[1];
+                H_t[i,j] += -t0;
+                H_t[j,i] += -t0;
             end 
         # special case for Ly = 2 
         elseif Ly == 2 && Lx > Ly
             for (i,j) in eachcol(nbr_table[:,1:(size(nbr_table,2) - Lx)])
-                H_t[i,j] += -tight_binding_model.t[1];
-                H_t[j,i] += -tight_binding_model.t[1];
+                H_t[i,j] += -t0;
+                H_t[j,i] += -t0;
             end
             for (i,j) in eachcol(nbr_table[:,1:(size(nbr_table,2) - Lx)] .+ N)
-                H_t[i,j] += -tight_binding_model.t[1];
-                H_t[j,i] += -tight_binding_model.t[1];
+                H_t[i,j] += -t0;
+                H_t[j,i] += -t0;
             end  
         else
             for (i,j) in eachcol(nbr_table)
-                H_t[i,j] += -tight_binding_model.t[1];
+                H_t[i,j] += -t0;
                 if model_geometry.lattice.N > 2
-                    H_t[j,i] += -tight_binding_model.t[1];
+                    H_t[j,i] += -t0;
                 else
                 end
             end
             for (i,j) in eachcol(nbr_table .+ N)    
-                H_t[i,j] += -tight_binding_model.t[1];
+                H_t[i,j] += -t0;
                 if model_geometry.lattice.N > 2
-                    H_t[j,i] += -tight_binding_model.t[1];
+                    H_t[j,i] += -t0;
                 else
                 end
             end
         end
         # next nearest neighbor hopping
-        if tight_binding_model.t[2] != 0.0
+        if t1 != 0.0
             nbr_table_p = build_neighbor_table(bonds[2],
                                             model_geometry.unit_cell,
                                             model_geometry.lattice);
             if Lx == 2 && Ly ==2 
                 for (i,j) in eachcol(nbr_table_p)
-                    H_tp[i,j] += tight_binding_model.t[2]/2;
+                    H_tp[i,j] += t1/2;
                 end
                 for (i,j) in eachcol(nbr_table_p .+ N)    
-                    H_tp[i,j] += tight_binding_model.t[2]/2;
+                    H_tp[i,j] += t1/2;
                 end
             else
                 for (i,j) in eachcol(nbr_table_p)
-                    H_tp[i,j] += tight_binding_model.t[2];
-                    H_tp[j,i] += tight_binding_model.t[2];
+                    H_tp[i,j] += t1;
+                    H_tp[j,i] += t1;
                 end
                 for (i,j) in eachcol(nbr_table_p .+ N)    
-                    H_tp[i,j] += tight_binding_model.t[2];
-                    H_tp[j,i] += tight_binding_model.t[2];
+                    H_tp[i,j] += t1;
+                    H_tp[j,i] += t1;
                 end
             end
         end
@@ -337,9 +327,13 @@ matrices and a vector of individual matrix terms.
 
 """
 function build_variational_terms(determinantal_parameters)
-    # model parameters
+    # lattice sites
     N = model_geometry.unit_cell.n*model_geometry.lattice.N
+
+    # exent of the lattice
     L = model_geometry.lattice.L
+
+    # map of available variational parameters
     vparam_map = map_determinantal_parameters(determinantal_parameters) 
 
     # initial matrices
@@ -449,12 +443,23 @@ function build_variational_terms(determinantal_parameters)
         if pht
             # stagger
             for s in 1:2*N
+                # get proper site index
                 idx = get_index_from_spindex(s, model_geometry)
-                loc = site_to_loc(idx, model_geometry.unit_cell, model_geometry.lattice)
+
+                # 1D
                 if length(L) == 1
-                    afm_vec[s] *= (-1)^(loc[1][1])
-                else
-                    afm_vec[s] *= (-1)^(loc[1][1]+loc[1][2])
+                    # get site coordinates
+                    ix = site_to_loc(idx, model_geometry.unit_cell, model_geometry.lattice)[1][1]
+
+                    # apply phase
+                    afm_vec[s] *= (-1)^(ix)
+                # 2D
+                elseif length(L) == 2
+                    # get site coordinates
+                    (ix, iy) = site_to_loc(idx, model_geometry.unit_cell, model_geometry.lattice)[1]
+
+                    # apply phase
+                    afm_vec[s] *= (-1)^(ix + iy)
                 end
             end
 
@@ -468,16 +473,31 @@ function build_variational_terms(determinantal_parameters)
         else
             # account for minus sign 
             afm_vec_neg = copy(afm_vec)
-            afm_vec_neg[N+1:2*N] .= -afm_vec_neg[N+1:2*N]
+
+            # flip the spin down sector in 2D
+            if length(L) == 2
+                afm_vec_neg[N+1:2*N] .= -afm_vec_neg[N+1:2*N]
+            end
 
             # stagger
             for s in 1:2*N
+                # get proper site index
                 idx = get_index_from_spindex(s, model_geometry)
-                loc = site_to_loc(idx, model_geometry.unit_cell, model_geometry.lattice)
+
+                # 1D
                 if length(L) == 1
-                    afm_vec_neg[s] *= (-1)^(loc[1][1])
-                else
-                    afm_vec_neg[s] *= (-1)^(loc[1][1]+loc[1][2])
+                    # get site coordinates
+                    ix = site_to_loc(idx, model_geometry.unit_cell, model_geometry.lattice)[1][1]
+
+                    # apply phase
+                    afm_vec_neg[s] *= (-1)^(ix)
+                # 2D
+                elseif length(L) == 2
+                    # get site coordinates
+                    (ix, iy) = site_to_loc(idx, model_geometry.unit_cell, model_geometry.lattice)[1]
+
+                    # apply phase
+                    afm_vec_neg[s] *= (-1)^(ix + iy)
                 end
             end
 
@@ -715,7 +735,15 @@ function build_mean_field_hamiltonian(tight_binding_model::TightBindingModel, de
 end
 
 
-function get_fermi_energy(Ne, tight_binding_model, model_geometry)
+"""
+
+    get_tb_chem_pot(Ne, tight_binding_model, model_geometry) 
+
+For a tight-binding model that has not been particle-hole transformed, returns the .
+
+"""
+function get_tb_chem_pot(Ne, tight_binding_model, model_geometry)
+    @assert pht == false
     N = model_geometry.lattice.N
 
     H_t = zeros(Complex, 2*N, 2*N);

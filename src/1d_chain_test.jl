@@ -54,7 +54,7 @@ tp = 0.0
 U = 8.0
 
 # chemical potential (BCS)
-μ_BCS = 0.0001
+μ_BCS = 0.0
 
 # s-wave pairing (BCS)
 Δs = 0.1
@@ -143,9 +143,11 @@ n_stab = 50
 # Optimization rate for Stochastic Reconfiguration
 dt = 0.03 # 0.03      
 
-# Debugging flag
-# This will output print statements to the terminal during runtime
+# Debugging 
 debug = false
+
+# Verbose
+verbose = false
 
 # Chain unit cell
 unit_cell = UnitCell(lattice_vecs = [[1.0]],
@@ -157,8 +159,11 @@ lattice = Lattice([Lx],[true]);
 # Define nearest neighbor bonds
 bond_x = Bond(orbitals = (1,1), displacement = [1]);
 
+# Define next nearest neighbor bonds
+bond_xp = Bond(orbitals = (1,1), displacement = [2]);
+
 # Collect all bond definitions
-bonds = [[bond_x]];
+bonds = [[bond_x],[bond_xp]];
 
 # Define model geometry
 model_geometry = ModelGeometry(unit_cell,lattice, bonds);
