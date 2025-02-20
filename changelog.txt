@@ -1012,3 +1012,8 @@ February 07, 2025
 - the VariationalParameter type has been deprecated
 - it appears that there is a bug in the optimization algorithm. Depsite changing the SR optimization rate and dt, there is never a change
       in how the optimization does. The value always remains around the starting value, regardless of starting value. 
+
+February 19, 2025
+
+- need to check low acceptance rate in Metropolis step
+- need to check discrepancy in pht model vs non-pht model

@@ -196,7 +196,7 @@ function parameter_gradient(S, f, η)
     f = convert(Vector{Float64}, f)
 
     # add small variation to diagonal of S for numerical stabilization
-    S̃ = S + η * I
+    S̃ = S + (η * I)
 
     # solve for δα 
     δvpars = S̃ \ f
