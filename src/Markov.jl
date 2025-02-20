@@ -236,7 +236,7 @@ function metropolis(phconfig::Vector{Int}, μₚₕ::AbstractFloat, jastrow_eph:
             println("accept prob. = $acceptance_prob")
         end
 
-        if acceptance_prob > rand(rng)
+        if acceptance_prob >= 1.0 || rand(rng) < acceptance_prob
             if debug 
                 println("Change accepted!")
             end
@@ -504,8 +504,7 @@ function local_fermion_update!(W::Matrix{ComplexF64}, D::Matrix{ComplexF64}, mod
             W =  update_equal_greens(markov_move, W)  
 
             # update T vector
-            update_Tvec!(markov_move, jastrow, model_geometry, pht)  ## BUG!! check possible discrepancy between reclaculated T vector and updated T vector
-                                                                                    # (we have stabilization for this but it happens too quickly)
+            update_Tvec!(markov_move, jastrow, model_geometry, pht)  
         end
 
         # check for numerical stability after a certain number of iterations
