@@ -347,33 +347,30 @@ function build_variational_terms(determinantal_parameters)
     H_vpars = []
     V = []
 
-    # s-wave pairing order
+    # s-wave pairing 
     if haskey(vparam_map, "Δs") == true
         # ensure that particle-hole transformation is on
         @assert pht == true
+
+        Vs = copy(Hs)
 
         if debug
             println("Adding Δs term...")
             println("Initial Δs = ", vparam_map["Δs"][1])
         end
 
-        bA = zeros(AbstractFloat, N, N);
-        bD = zeros(AbstractFloat, N, N);
-        Δ_vec_bB = Vector{AbstractFloat}(undef, N);
-        Δ_vec_bC = Vector{AbstractFloat}(undef, N);
-        for i in 1:N
-            Δ_vec_bB[i] = 1;
-            Δ_vec_bC[i] = 1;
+        # populate variational operator
+        for i in 0:(2 * N - 1)
+            Vs[i + 1, get_linked_spindex(i, N) + 1] = 1.0  
         end
-        bB = LinearAlgebra.Diagonal(Δ_vec_bB);
-        bC = LinearAlgebra.Diagonal(Δ_vec_bC);
-        Vs = Matrix([bA bB; bC bD]);
+
+        # add variational term
         Hs += vparam_map["Δs"][1]*Vs;
         push!(H_vpars,Hs);
         push!(V, Vs);
     end
 
-    # d-wave pairing order
+    # d-wave pairing 
     if haskey(vparam_map, "Δd") == true
         # ensure that particle-hole transformation is on
         @assert pht == true

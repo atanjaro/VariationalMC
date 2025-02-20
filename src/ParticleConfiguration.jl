@@ -187,6 +187,18 @@ end
 
 
 """
+    get_linked_spindex( i, N ) 
+
+Returns an index in the spin-down sector, given an index in the spin-up sector..
+
+"""
+function get_linked_spindex(i, N)
+    @assert i < 2 * N
+    return i + (1 - 2 * (i ÷ N)) * N
+end
+
+
+"""
     get_onsite_fermion_occupation( site::Int, pconfig::Vector{Int} )
 
 Returns the number of spin-up and spin-down electrons occupying a real lattice site i.  
