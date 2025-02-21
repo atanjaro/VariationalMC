@@ -30,76 +30,85 @@ function build_determinantal_state(H_mf::Matrix{ComplexF64})
     M = Matrix{ComplexF64}(view(U_int, 1:size(U_int,1), 1:Ne));
 
     # build Slater determinant
+    build_time1 = time();
     while true
+        # generate random starting configuration
         pconfig = generate_initial_fermion_configuration();
 
-        κ = get_particle_positions(pconfig, model_geometry, Ne);
-
+        # store Slater matrix
         config_indices = findall(x -> x == 1, pconfig);
         D = M[config_indices, :];
 
         # check that starting configuration is not singular
-        if is_invertible(D) 
+        if check_overlap(D)
+            build_time2 = time();
+            # store particle positions
+            κ = get_particle_positions(pconfig, model_geometry, Ne);
+
+            # calculate equal-time Green's function
+            W = get_equal_greens(M, D);
 
             if debug
                 println("")
                 println("Initial configuration: ", pconfig)
             end
 
-            return D, pconfig, κ, ε, ε₀, M, U_int;
+            println("Time until valid config: ", build_time2 - build_time1)
+
+            return W, D, pconfig, κ, ε, ε₀, M, U_int;
         end
     end    
 end
 
 
-"""
+# """
 
-    build_determinantal_state( H_mf::Matrix{AbstractFloat}, init_pconfig::Vector{Float64} ) 
+#     build_determinantal_state( H_mf::Matrix{AbstractFloat}, init_pconfig::Vector{Float64} ) 
 
-Constructs a Slater determinant state matrix D in the the many-particle configuration basis, 
-reduced matrix M, and initial particle energies ε₀ from a known particle configuration.
-Ensures that generated initial configuration is not singular. 
+# Constructs a Slater determinant state matrix D in the the many-particle configuration basis, 
+# reduced matrix M, and initial particle energies ε₀ from a known particle configuration.
+# Ensures that generated initial configuration is not singular. 
 
-"""
-function build_determinantal_state(H_mf::Matrix{ComplexF64}, init_pconfig::Vector{Float64})
-    # diagonalize Hamiltonian
-    ε, U_int = diagonalize(H_mf)
+# """
+# function build_determinantal_state(H_mf::Matrix{ComplexF64}, init_pconfig::Vector{Float64})
+#     # diagonalize Hamiltonian
+#     ε, U_int = diagonalize(H_mf)
 
-    # check for open shell configuration
-    if is_openshell(ε, Ne)
-        debug && println("WARNING! Open shell detected")
-        exit(1)
-    else
-        debug && println("Generating shell...")
-    end
+#     # check for open shell configuration
+#     if is_openshell(ε, Ne)
+#         debug && println("WARNING! Open shell detected")
+#         exit(1)
+#     else
+#         debug && println("Generating shell...")
+#     end
 
-    # store energies
-    ε₀ = ε[1:Ne]
+#     # store energies
+#     ε₀ = ε[1:Ne]
 
-    if debug
-        print("Initial energies = ", ε₀)
-    end
+#     if debug
+#         print("Initial energies = ", ε₀)
+#     end
 
-    # Store M matrix
-    M = hcat(U[:,1:Ne])
+#     # Store M matrix
+#     M = hcat(U[:,1:Ne])
 
-    # build Slater determinant
-    while true
-        pconfig = init_pconfig
-        config_indices = findall(x -> x == 1, pconfig)
-        D = M[config_indices, :]
+#     # build Slater determinant
+#     while true
+#         pconfig = init_pconfig
+#         config_indices = findall(x -> x == 1, pconfig)
+#         D = M[config_indices, :]
 
-        # check that starting configuration is not singular
-        if is_invertible(D) 
-            if debug
-                println("")
-                println("Initial configuration: ", pconfig)
-            end
+#         # check that starting configuration is not singular
+#         if is_invertible(D) 
+#             if debug
+#                 println("")
+#                 println("Initial configuration: ", pconfig)
+#             end
 
-            return D, pconfig, ε, ε₀, M, U_int
-        end
-    end    
-end
+#             return D, pconfig, ε, ε₀, M, U_int
+#         end
+#     end    
+# end
 
 
 """
@@ -111,17 +120,9 @@ Computes the equal-time Green's function by solving DᵀWᵀ = Mᵀ using full p
 """
 function get_equal_greens(M::Matrix{ComplexF64}, D::Matrix{ComplexF64})
     debug && println("Getting equal-time Green's function...")
-    
+
     # perform LU decomposition
     lu_decomp = lu(D)
-
-    # check for finite overlap
-    if !is_invertible(lu_decomp)
-        println("WARNING! State has no overlap with the determinantal wavefunction!")
-        debug && println("D = ")
-        debug && display(D)
-        #exit(1)
-    end
 
     # solve for the Green's function
     W = transpose(lu_decomp \ transpose(M))
@@ -165,7 +166,7 @@ function update_equal_greens(local_acceptance::LocalAcceptance, W::Matrix{Comple
     W -= cᵦ * rₗ' / W[l, β]
 
     # # perform rank-1 update (bugged)
-    # BLAS.ger!(-1.0 / W[l, β], cᵦ, rₗ, W)
+    # W = BLAS.ger!(-1.0 / W[l, β], cᵦ, rₗ, W)
 
     return W
 end

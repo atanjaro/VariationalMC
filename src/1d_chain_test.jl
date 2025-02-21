@@ -34,7 +34,7 @@ include("Measurements.jl")
 
 
 # Define the size of the lattice
-Lx = 6
+Lx = 4
 Ly = 1
 
 # Define electron density
@@ -51,7 +51,7 @@ t = 1.0
 tp = 0.0
 
 # Onsite Hubbard repulsion
-U = 8.0
+U = 4.0
 
 # chemical potential (BCS)
 μ_BCS = 0.0
@@ -60,7 +60,7 @@ U = 8.0
 Δs = 0.1
 
 # antiferromagnetic order parameter
-Δa = 0.1
+Δa = 0.0001
 
 # # Parameters to be optimized and initial value(s)
 # parameters_to_optimize = ["Δs", "μ_BCS"]                              # s-wave (BCS) order parameter
@@ -105,7 +105,7 @@ simulation_info = SimulationInfo(
 initialize_datafolder(simulation_info)
 
 # random seed
-seed = 4249684800071112050 #6431290886380112751 #abs(rand(Int)) # 7778951059202733546
+seed = abs(rand(Int))#4249684800071112050 #6431290886380112751 # # 7778951059202733546
 
 # Initialize random number generator
 rng = Xoshiro(seed)
@@ -114,10 +114,10 @@ rng = Xoshiro(seed)
 N_opts = 1000
 
 # Optimization bin size
-opt_bin_size = 100 # this bin size should huge!
+opt_bin_size = 100
 
 # Number of simulation updates 
-N_updates = 1000
+N_updates = 100
 
 # Number of simulation bins
 N_bins = 100
@@ -185,14 +185,14 @@ determinantal_parameters = initialize_determinantal_parameters(parameters_to_opt
 # Construct mean-field Hamiltonian and variational operators
 (H_mf, V) = build_mean_field_hamiltonian(tight_binding_model, determinantal_parameters);
 
-# Initialize trial state and initial particle configuration
-(D, pconfig, κ,  ε, ε₀, M, U_int) = build_determinantal_state(H_mf);  
+# Initialize trial state
+(W, D, pconfig, κ,  ε, ε₀, M, U_int) = build_determinantal_state(H_mf);  
 
 # Initialize variational parameter matrices
 A = get_Ak_matrices(V, U_int, ε, model_geometry);           
 
-# Initialize equal-time Green's function (W matrix)
-W = get_equal_greens(M, D);                              
+# # Initialize equal-time Green's function (W matrix) [DEPRECATED]
+# W = get_equal_greens(M, D);                              
 
 # Construct electron density-density Jastrow factor
 jastrow = build_jastrow_factor("e-den-den", model_geometry, pconfig, pht, rng, false);
@@ -289,7 +289,7 @@ vij_2 = [v[3] for v in param_bin]
 # plot energy per site as a function of optimization steps
 scatter(1:1000, energy_bin/opt_bin_size, marker=:square, color=:red, markersize=5, markerstrokewidth=0,
         legend=false, xlabel="Optimization steps", ylabel=L"E/N", tickfontsize=14, guidefontsize=14, legendfontsize=14,
-        xlims=(0,1000), ylims=(-5,5)) #
+        xlims=(0,1000), ylims=(-5,5)) #, ylims=(-5,5)
 
 # plot energy per site as a function of optimization steps
 scatter(1:1000, dblocc_bin/opt_bin_size, marker=:square, color=:red, markersize=5, markerstrokewidth=0,

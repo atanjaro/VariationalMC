@@ -833,7 +833,7 @@ function get_tb_chem_pot(Ne, tight_binding_model, model_geometry)
     # full tight-binding Hamiltonian
     H_tb = H_t + H_tp
 
-    # solve for eignevalues
+    # solve for eigenvalues
     ε_F, Uₑ = diagonalize(H_tb)
 
     # tight-binding chemical potential

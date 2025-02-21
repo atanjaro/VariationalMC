@@ -18,8 +18,7 @@ end
 
     is_invertible( D::Matrix{AbstractFloat} ) 
     
-Runs check on the invertibility of a matrix by checking: the value of the determinant, the condition number,
-for singular values, and performs LU decomposition with partial pivoting. 
+Checks the invertibility of a matrix D. 
 
 """
 function is_invertible(D)
@@ -31,20 +30,44 @@ function is_invertible(D)
 end
 
 
-function inverse(D::AbstractMatrix)
-    try
-        D_inv = inv(D)  # Try to compute the inverse
-        # println("Matrix is invertible.")
-        return true  # Inversion successful, matrix is invertible
-    catch e
-        if isa(e, SingularException)
-            println("Singular configuration detected! Matrix inversion unsuccessful.")
-            return false  # Matrix is singular, inversion failed
-        else
-            rethrow(e)  # For any other exceptions, rethrow the error
-        end
+"""
+
+    check_overlap( D::Matrix{ComplexF64} )
+    
+Ensures that there is finite overlap with the determinantal state.
+
+"""
+function check_overlap(D::Matrix{ComplexF64})
+    # perform LU decomposition
+    lu_decomp = lu(D)
+
+    # check for finite overlap
+    if !is_invertible(lu_decomp)
+        debug && println("WARNING! State has no overlap with the determinantal wavefunction!")
+        debug && println("D = ")
+        debug && display(D)
+
+        return false
     end
+
+    return true
 end
+
+
+# function inverse(D::AbstractMatrix)
+#     try
+#         D_inv = inv(D)  # Try to compute the inverse
+#         # println("Matrix is invertible.")
+#         return true  # Inversion successful, matrix is invertible
+#     catch e
+#         if isa(e, SingularException)
+#             println("Singular configuration detected! Matrix inversion unsuccessful.")
+#             return false  # Matrix is singular, inversion failed
+#         else
+#             rethrow(e)  # For any other exceptions, rethrow the error
+#         end
+#     end
+# end
 
 
 """
