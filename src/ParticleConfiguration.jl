@@ -74,13 +74,30 @@ Returns a randomly generated initial configuration of electrons (and holes).
 
 """
 function generate_initial_fermion_configuration()
-    init_pconfig = zeros(Int, 2*model_geometry.lattice.N)                                                      
-    while sum(init_pconfig) < nup
-        init_pconfig[rand(rng, 1:model_geometry.lattice.N)] = 1
+    # number of lattice sites
+    N = model_geometry.lattice.N
+
+    # initialize pconfig (spindex) vector
+    init_pconfig = zeros(Int, 2*N)     
+    
+    # fill the vector
+    # nup
+    while sum(init_pconfig[1:N]) < nup
+        init_pconfig[rand(rng, 1:N)] = 1
     end
-    while sum(init_pconfig) < Ne
-        init_pconfig[rand(rng, model_geometry.lattice.N+1:2*model_geometry.lattice.N)] = 1
+
+    # ndn
+    while sum(init_pconfig[N+1:2N]) < ndn
+        init_pconfig[rand(rng, N+1:2N)] = 1
     end
+
+    # while sum(init_pconfig) < nup
+    #     init_pconfig[rand(rng, 1:model_geometry.lattice.N)] = 1
+    # end
+    # while sum(init_pconfig) < Ne
+    #     init_pconfig[rand(rng, model_geometry.lattice.N+1:2*model_geometry.lattice.N)] = 1
+    # end
+
     return init_pconfig
 end
 
