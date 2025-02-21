@@ -51,7 +51,7 @@ t = 1.0
 tp = 0.0
 
 # Onsite Hubbard repulsion
-U = 4.0
+U = 8.0
 
 # chemical potential (BCS)
 μ_BCS = 0.0
@@ -105,13 +105,13 @@ simulation_info = SimulationInfo(
 initialize_datafolder(simulation_info)
 
 # random seed
-seed = abs(rand(Int))#4249684800071112050 #6431290886380112751 # # 7778951059202733546
+seed = 4249684800071112050 #6431290886380112751 #abs(rand(Int))# # 7778951059202733546
 
 # Initialize random number generator
 rng = Xoshiro(seed)
        
 # Number of minimization/optimization updates
-N_opts = 1000
+N_opts = 100
 
 # Optimization bin size
 opt_bin_size = 100
@@ -141,7 +141,7 @@ n_stab = 50
 η = 1e-4   # 1e-4   
 
 # Optimization rate for Stochastic Reconfiguration
-dt = 0.01 # 0.03      
+dt = 0.03 # 0.03      
 
 # Debugging 
 debug = false
@@ -189,15 +189,12 @@ determinantal_parameters = initialize_determinantal_parameters(parameters_to_opt
 (W, D, pconfig, κ,  ε, ε₀, M, U_int) = build_determinantal_state(H_mf);  
 
 # Initialize variational parameter matrices
-A = get_Ak_matrices(V, U_int, ε, model_geometry);           
-
-# # Initialize equal-time Green's function (W matrix) [DEPRECATED]
-# W = get_equal_greens(M, D);                              
+A = get_Ak_matrices(V, U_int, ε, model_geometry);                       
 
 # Construct electron density-density Jastrow factor
 jastrow = build_jastrow_factor("e-den-den", model_geometry, pconfig, pht, rng, false);
 
-# # Initialize measurement container for VMC measurements
+# Initialize measurement container for VMC measurements
 # measurement_container = initialize_measurement_container(model_geometry::ModelGeometry, determinantal_parameters::DeterminantalParameters, 
 #                                                             jastrow::Jastrow, N_opts, opt_bin_size, N_bins, bin_size);
 
@@ -229,6 +226,7 @@ for bin in 1:N_opts
         (local_acceptance_rate, W, D, pconfig, κ) = local_fermion_update!(W, D, model_geometry, pconfig, 
                                                                             κ, rng, n_stab, mc_meas_freq)    
 
+        println("local_acceptance_rate = ", local_acceptance_rate)
         acceptance_rate += local_acceptance_rate
 
         # # make basic measurements
@@ -287,19 +285,19 @@ vij_2 = [v[3] for v in param_bin]
 # CSV.write("dblocc.csv", df)
 
 # plot energy per site as a function of optimization steps
-scatter(1:1000, energy_bin/opt_bin_size, marker=:square, color=:red, markersize=5, markerstrokewidth=0,
+scatter(1:100, energy_bin/opt_bin_size, marker=:square, color=:red, markersize=5, markerstrokewidth=0,
         legend=false, xlabel="Optimization steps", ylabel=L"E/N", tickfontsize=14, guidefontsize=14, legendfontsize=14,
-        xlims=(0,1000), ylims=(-5,5)) #, ylims=(-5,5)
+        xlims=(0,100)) #, ylims=(-5,5)
 
 # plot energy per site as a function of optimization steps
-scatter(1:1000, dblocc_bin/opt_bin_size, marker=:square, color=:red, markersize=5, markerstrokewidth=0,
+scatter(1:100, dblocc_bin/opt_bin_size, marker=:square, color=:red, markersize=5, markerstrokewidth=0,
         legend=false, xlabel="Optimization steps", ylabel=L"D", tickfontsize=14, guidefontsize=14, legendfontsize=14,
-        xlims=(0,1000), ylims=(0,0.5))
+        xlims=(0,100), ylims=(0,0.5))
 
 # plot determinantal parameter(s)
-scatter(1:1000, deltaa/opt_bin_size, marker=:circle, color=:blue, markersize=5, markerstrokewidth=0,
+scatter(1:100, deltaa/opt_bin_size, marker=:circle, color=:blue, markersize=5, markerstrokewidth=0,
         legend=false, xlabel="Optimization steps", ylabel=L"\Delta_a", tickfontsize=14, guidefontsize=14, legendfontsize=14,
-        xlims=(0,1000)) #, ylims=(0,2)
+        xlims=(0,100)) #, ylims=(0,2)
 
 scatter(1:1000, deltas/opt_bin_size, marker=:circle, color=:blue, markersize=5, markerstrokewidth=0,
     legend=false, xlabel="Optimization steps", ylabel=L"\Delta_a", tickfontsize=14, guidefontsize=14, legendfontsize=14,

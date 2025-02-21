@@ -121,14 +121,11 @@ Computes the equal-time Green's function by solving DᵀWᵀ = Mᵀ using full p
 function get_equal_greens(M::Matrix{ComplexF64}, D::Matrix{ComplexF64})
     debug && println("Getting equal-time Green's function...")
 
-    # perform LU decomposition
-    lu_decomp = lu(D)
-
     # solve for the Green's function
-    W = transpose(lu_decomp \ transpose(M))
+    Wt = D' \ M'
 
     # convert back to a regular matrix
-    W = Matrix(W)
+    W = Matrix(Wt')
 
     if debug
         println("W = ")
