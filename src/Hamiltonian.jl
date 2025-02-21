@@ -736,103 +736,115 @@ end
 
     get_tb_chem_pot(Ne, tight_binding_model, model_geometry) 
 
-For a tight-binding model that has not been particle-hole transformed, returns the .
+For a tight-binding model that has not been particle-hole transformed, returns the  
+chemical potential.
 
 """
 function get_tb_chem_pot(Ne, tight_binding_model, model_geometry)
     @assert pht == false
-    N = model_geometry.lattice.N
 
+    # number of lattice sites
+    N = model_geometry.lattice.N
+    
+    # preallocate matrices
     H_t = zeros(Complex, 2*N, 2*N);
     H_tp = zeros(Complex, 2*N, 2*N);
 
+    # hopping amplitudes
+    t0 = tight_binding_model.t[1];
+    t1 = tight_binding_model.t[2];
+
+    # nearest neighbor table
+    nbr_table = build_neighbor_table(bonds[1],
+                                        model_geometry.unit_cell,
+                                        model_geometry.lattice);
+
+
     # nearest neighbor hopping
+    # special case for Lx, Ly = 2
     if Lx == 2 && Ly == 2 
         for (i,j) in eachcol(nbr_table)
-            H_t[i,j] += -tight_binding_model.t[1];
+            H_t[i,j] += -t0;
         end
         for (i,j) in eachcol(nbr_table .+ N)    
-            H_t[i,j] += -tight_binding_model.t[1];
-        end
-    # special case for 1D  
-    elseif  Lx == 1 && Ly > Lx || Ly == 1 && Lx > Ly
-        for (i,j) in eachcol(nbr_table[:,1:N])
-            H_t[i,j] += -tight_binding_model.t[1];
-            if model_geometry.lattice.N > 2
-                H_t[j,i] += -tight_binding_model.t[1];
-            end
-        end
-        for (i,j) in eachcol(nbr_table[:,1:model_geometry.lattice.N] .+ N)    
-            H_t[i,j] += -tight_binding_model.t[1];
-            if model_geometry.lattice.N > 2
-                H_t[j,i] += -tight_binding_model.t[1];
-            end
+            H_t[i,j] += -t0;
         end
     # special case for Lx = 2 
     elseif Lx == 2 && Ly > Lx
         for (i,j) in eachcol(nbr_table[:,1:(size(nbr_table,2) - Ly)])
-            H_t[i,j] += -tight_binding_model.t[1];
-            H_t[j,i] += -tight_binding_model.t[1];
+            H_t[i,j] += -t0;
+            H_t[j,i] += -t0;
         end
         for (i,j) in eachcol(nbr_table[:,1:(size(nbr_table,2) - Ly)] .+ N)
-            H_t[i,j] += -tight_binding_model.t[1];
-            H_t[j,i] += -tight_binding_model.t[1];
+            H_t[i,j] += -t0;
+            H_t[j,i] += -t0;
         end 
     # special case for Ly = 2 
     elseif Ly == 2 && Lx > Ly
         for (i,j) in eachcol(nbr_table[:,1:(size(nbr_table,2) - Lx)])
-            H_t[i,j] += -tight_binding_model.t[1];
-            H_t[j,i] += -tight_binding_model.t[1];
+            H_t[i,j] += -t0;
+            H_t[j,i] += -t0;
         end
         for (i,j) in eachcol(nbr_table[:,1:(size(nbr_table,2) - Lx)] .+ N)
-            H_t[i,j] += -tight_binding_model.t[1];
-            H_t[j,i] += -tight_binding_model.t[1];
+            H_t[i,j] += -t0;
+            H_t[j,i] += -t0;
         end  
     else
         for (i,j) in eachcol(nbr_table)
-            H_t[i,j] += -tight_binding_model.t[1];
+            H_t[i,j] += -t0;
             if model_geometry.lattice.N > 2
-                H_t[j,i] += -tight_binding_model.t[1];
+                H_t[j,i] += -t0;
             else
             end
         end
         for (i,j) in eachcol(nbr_table .+ N)    
-            H_t[i,j] += -tight_binding_model.t[1];
+            H_t[i,j] += -t0;
             if model_geometry.lattice.N > 2
-                H_t[j,i] += -tight_binding_model.t[1];
+                H_t[j,i] += -t0;
             else
             end
         end
     end
     # next nearest neighbor hopping
-    if tight_binding_model.t[2] != 0.0
+    if t1 != 0.0
+        # next nearest neighbor table
         nbr_table_p = build_neighbor_table(bonds[2],
                                         model_geometry.unit_cell,
                                         model_geometry.lattice);
         if Lx == 2 && Ly ==2 
             for (i,j) in eachcol(nbr_table_p)
-                H_tp[i,j] += tight_binding_model.t[2]/2;
+                H_tp[i,j] += 0.5 * t1;
             end
             for (i,j) in eachcol(nbr_table_p .+ N)    
-                H_tp[i,j] += tight_binding_model.t[2]/2;
+                H_tp[i,j] += 0.5 * t1;
             end
         else
             for (i,j) in eachcol(nbr_table_p)
-                H_tp[i,j] += tight_binding_model.t[2];
-                H_tp[j,i] += tight_binding_model.t[2];
+                H_tp[i,j] += t1;
+                H_tp[j,i] += t1;
             end
             for (i,j) in eachcol(nbr_table_p .+ N)    
-                H_tp[i,j] += tight_binding_model.t[2];
-                H_tp[j,i] += tight_binding_model.t[2];
+                H_tp[i,j] += t1;
+                H_tp[j,i] += t1;
             end
         end
     end
 
+    # full tight-binding Hamiltonian
     H_tb = H_t + H_tp
 
+    # solve for eignevalues
     ε_F, Uₑ = diagonalize(H_tb)
 
-    return 0.5 * (ε_F[Ne + 1] + ε_F[Ne])
+    # tight-binding chemical potential
+    μ = 0.5 * (ε_F[Ne + 1] + ε_F[Ne])
+
+    if debug
+        println("Tight-binding chemical potential is")
+        println("mu = ", μ)
+    end
+
+    return μ
 end
 
 
