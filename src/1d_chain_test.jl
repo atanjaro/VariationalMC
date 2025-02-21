@@ -114,7 +114,7 @@ rng = Xoshiro(seed)
 N_opts = 1000
 
 # Optimization bin size
-opt_bin_size = 100
+opt_bin_size = 100 # this bin size should huge!
 
 # Number of simulation updates 
 N_updates = 1000
@@ -141,7 +141,7 @@ n_stab = 50
 η = 1e-4   # 1e-4   
 
 # Optimization rate for Stochastic Reconfiguration
-dt = 0.1 # 0.03      
+dt = 0.01 # 0.03      
 
 # Debugging 
 debug = false
