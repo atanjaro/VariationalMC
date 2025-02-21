@@ -22,10 +22,12 @@ Runs check on the invertibility of a matrix by checking: the value of the determ
 for singular values, and performs LU decomposition with partial pivoting. 
 
 """
-function is_invertible(D::AbstractMatrix)
-    invertible = inverse(D)
+function is_invertible(D)
+    # invertible = inverse(D)
 
-    return invertible
+    # return invertible
+
+    return !isapprox(det(D), 0.0; atol=1e-12)
 end
 
 

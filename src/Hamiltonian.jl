@@ -508,7 +508,7 @@ function build_variational_terms(determinantal_parameters)
         end
     end
 
-    # uniform charge density wave order
+    # uniform charge density wave 
     if haskey(vparam_map, "Δc") == true
         if debug
             println("Adding Δc term...")
@@ -555,7 +555,7 @@ function build_variational_terms(determinantal_parameters)
         end
     end
 
-    # BCS chemical potential
+    # (BCS) chemical potential
     if haskey(vparam_map, "μ_BCS") == true
         if debug
             println("Adding μ_BCS term...")
@@ -585,7 +585,7 @@ function build_variational_terms(determinantal_parameters)
         end
     end
 
-    # charge stripe order
+    # charge stripe 
     if haskey(vparam_map, "Δcs") == true
         # ensure that particle-hole transformation is off
         @assert pht == false
@@ -625,7 +625,7 @@ function build_variational_terms(determinantal_parameters)
         end
     end
 
-    # spin stripe order
+    # spin stripe 
     if haskey(vparam_map, "Δss") == true
         # ensure that particle-hole transformation is off
         @assert pht == false
