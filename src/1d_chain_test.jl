@@ -34,7 +34,7 @@ include("Measurements.jl")
 
 
 # Define the size of the lattice
-Lx = 4
+Lx = 6
 Ly = 1
 
 # Define electron density
@@ -62,15 +62,15 @@ U = 8.0
 # antiferromagnetic order parameter
 Δa = 0.1
 
-# Parameters to be optimized and initial value(s)
-parameters_to_optimize = ["Δs", "μ_BCS"]                              # s-wave (BCS) order parameter
-parameter_values = [[Δs],[μ_BCS]]                                 
-pht = true
-
 # # Parameters to be optimized and initial value(s)
-# parameters_to_optimize = ["Δa"]                                       # antiferromagnetic (Neél) order parameter
-# parameter_values = [[Δa]]                                            
-# pht = false
+# parameters_to_optimize = ["Δs", "μ_BCS"]                              # s-wave (BCS) order parameter
+# parameter_values = [[Δs],[μ_BCS]]                                 
+# pht = true
+
+# Parameters to be optimized and initial value(s)
+parameters_to_optimize = ["Δa"]                                       # antiferromagnetic (Neél) order parameter
+parameter_values = [[Δa]]                                            
+pht = false
 
 # specify filepath
 filepath = "."
@@ -117,16 +117,16 @@ N_opts = 1000
 opt_bin_size = 100
 
 # Number of simulation updates 
-N_updates = 100
+N_updates = 1000
 
 # Number of simulation bins
-N_bins = 10
+N_bins = 100
 
 # Simulation bin size
 bin_size = div(N_updates, N_bins)
 
 # Number of MC cycles until measurement
-mc_meas_freq = 1000
+mc_meas_freq = 300
 
 # number of steps until numerical stability is performed 
 n_stab = 50
@@ -141,7 +141,7 @@ n_stab = 50
 η = 1e-4   # 1e-4   
 
 # Optimization rate for Stochastic Reconfiguration
-dt = 0.03 # 0.03      
+dt = 0.1 # 0.03      
 
 # Debugging 
 debug = false
@@ -159,11 +159,11 @@ lattice = Lattice([Lx],[true]);
 # Define nearest neighbor bonds
 bond_x = Bond(orbitals = (1,1), displacement = [1]);
 
-# Define next nearest neighbor bonds
-bond_xp = Bond(orbitals = (1,1), displacement = [2]);
+# # Define next nearest neighbor bonds
+# bond_xp = Bond(orbitals = (1,1), displacement = [2]);
 
 # Collect all bond definitions
-bonds = [[bond_x],[bond_xp]];
+bonds = [[bond_x]];     # ,[bond_xp]
 
 # Define model geometry
 model_geometry = ModelGeometry(unit_cell,lattice, bonds);
@@ -186,10 +186,10 @@ determinantal_parameters = initialize_determinantal_parameters(parameters_to_opt
 (H_mf, V) = build_mean_field_hamiltonian(tight_binding_model, determinantal_parameters);
 
 # Initialize trial state and initial particle configuration
-(D, pconfig, κ,  ε, ε₀, M, Uₑ) = build_determinantal_state(H_mf);  
+(D, pconfig, κ,  ε, ε₀, M, U_int) = build_determinantal_state(H_mf);  
 
 # Initialize variational parameter matrices
-A = get_Ak_matrices(V, Uₑ, ε, model_geometry);           
+A = get_Ak_matrices(V, U_int, ε, model_geometry);           
 
 # Initialize equal-time Green's function (W matrix)
 W = get_equal_greens(M, D);                              
@@ -197,13 +197,13 @@ W = get_equal_greens(M, D);
 # Construct electron density-density Jastrow factor
 jastrow = build_jastrow_factor("e-den-den", model_geometry, pconfig, pht, rng, false);
 
-# Initialize measurement container for VMC measurements
-measurement_container = initialize_measurement_container(model_geometry::ModelGeometry, determinantal_parameters::DeterminantalParameters, 
-                                                            jastrow::Jastrow, N_opts, opt_bin_size, N_bins, bin_size);
-
 # # Initialize measurement container for VMC measurements
 # measurement_container = initialize_measurement_container(model_geometry::ModelGeometry, determinantal_parameters::DeterminantalParameters, 
-#                                                             N_opts, opt_bin_size, N_bins, bin_size);
+#                                                             jastrow::Jastrow, N_opts, opt_bin_size, N_bins, bin_size);
+
+# Initialize measurement container for VMC measurements
+measurement_container = initialize_measurement_container(model_geometry::ModelGeometry, determinantal_parameters::DeterminantalParameters, 
+                                                            N_opts, opt_bin_size, N_bins, bin_size);
 
 # Initialize the sub-directories to which the various measurements will be written
 initialize_measurement_directories(simulation_info, measurement_container);
@@ -221,30 +221,30 @@ acceptance_rate = 0.0
 
 for bin in 1:N_opts
     for n in 1:opt_bin_size
-        # perform local fermion update for a certain number of equilibration steps
-        (local_acceptance_rate, W, D, pconfig, κ) = local_fermion_update!(W, D, model_geometry, jastrow, pconfig, 
-                                                                            κ, rng, n_stab, mc_meas_freq)    
-
         # # perform local fermion update for a certain number of equilibration steps
-        # (local_acceptance_rate, W, D, pconfig, κ) = local_fermion_update!(W, D, model_geometry, pconfig, 
+        # (local_acceptance_rate, W, D, pconfig, κ) = local_fermion_update!(W, D, model_geometry, jastrow, pconfig, 
         #                                                                     κ, rng, n_stab, mc_meas_freq)    
+
+        # perform local fermion update for a certain number of equilibration steps
+        (local_acceptance_rate, W, D, pconfig, κ) = local_fermion_update!(W, D, model_geometry, pconfig, 
+                                                                            κ, rng, n_stab, mc_meas_freq)    
 
         acceptance_rate += local_acceptance_rate
 
-        # make basic measurements
-        make_measurements!(measurement_container,determinantal_parameters, jastrow, model_geometry, 
-                            tight_binding_model, pconfig, κ, Np, W, A)
-
         # # make basic measurements
-        # make_measurements!(measurement_container,determinantal_parameters, model_geometry, 
+        # make_measurements!(measurement_container,determinantal_parameters, jastrow, model_geometry, 
         #                     tight_binding_model, pconfig, κ, Np, W, A)
+
+        # make basic measurements
+        make_measurements!(measurement_container,determinantal_parameters, model_geometry, 
+                            tight_binding_model, pconfig, κ, Np, W, A)
     end
 
-    # perform Stochastic Reconfiguration
-    sr_update!(measurement_container, determinantal_parameters, jastrow, η, dt, opt_bin_size)
-
     # # perform Stochastic Reconfiguration
-    # sr_update!(measurement_container, determinantal_parameters, η, dt, opt_bin_size)
+    # sr_update!(measurement_container, determinantal_parameters, jastrow, η, dt, opt_bin_size)
+
+    # perform Stochastic Reconfiguration
+    sr_update!(measurement_container, determinantal_parameters, η, dt, opt_bin_size)
 
     # write all measurements to file
     write_measurements!(measurement_container, simulation_info, energy_bin, dblocc_bin, param_bin, debug)                                                                                                             
@@ -252,8 +252,8 @@ end
 
 
 deltaa = [v[1] for v in param_bin]
-vij_1 = [v[2] for v in param_bin]
-vij_2 = [v[3] for v in param_bin]
+# vij_1 = [v[2] for v in param_bin]
+# vij_2 = [v[3] for v in param_bin]
 
 deltas = [v[1] for v in param_bin]
 mus = [v[2] for v in param_bin]
