@@ -7,7 +7,7 @@ reduced matrix M, and initial particle energies ε₀ from a random initial conf
 Ensures that generated initial configuration is not singular. 
 
 """
-function build_determinantal_state(H_mf::Matrix{ComplexF64})
+function build_determinantal_state(H_mf::Matrix{ComplexF64}, Ne, nup, ndn, model_geometry, rng)
     # diagonalize Hamiltonian
     ε, U_int = diagonalize(H_mf);
 
@@ -33,17 +33,17 @@ function build_determinantal_state(H_mf::Matrix{ComplexF64})
     build_time1 = time();
     while true
         # generate random starting configuration
-        pconfig = generate_initial_fermion_configuration();
+        pconfig = generate_initial_fermion_configuration(nup, ndn, model_geometry, rng);
 
         # store Slater matrix
-        config_indices = findall(x -> x == 1, pconfig);
+        config_indices = findall(x -> 1 ≤ x ≤ Ne, pconfig);
         D = M[config_indices, :];
 
         # check that starting configuration is not singular
         if check_overlap(D)
             build_time2 = time();
-            # store particle positions
-            κ = get_particle_positions(pconfig, model_geometry, Ne);
+            # # store particle positions
+            # κ = get_particle_positions(pconfig, model_geometry, Ne);
 
             # calculate equal-time Green's function
             W = get_equal_greens(M, D);
@@ -55,7 +55,7 @@ function build_determinantal_state(H_mf::Matrix{ComplexF64})
 
             println("Time until valid config: ", build_time2 - build_time1)
 
-            return W, D, pconfig, κ, ε, ε₀, M, U_int;
+            return W, D, pconfig, ε, ε₀, M, U_int;
         end
     end    
 end
@@ -178,7 +178,7 @@ recalculated Green's function Wᵣ replaces the updated Green's function Wᵤ as
 for the current configuration.
 
 """
-function recalc_equal_greens(W::Matrix{ComplexF64}, δW::Float64, D::Matrix{ComplexF64}, pconfig::Vector{Int64})
+function recalc_equal_greens(W::Matrix{ComplexF64}, δW::Float64, D::Matrix{ComplexF64}, pconfig::Vector{Int64}, Ne)
 
     if debug
         println("Checking Green's function...")
@@ -188,7 +188,7 @@ function recalc_equal_greens(W::Matrix{ComplexF64}, δW::Float64, D::Matrix{Comp
     if debug
         println("Recalculating Slater matrix...")
     end
-    Dᵣ = M[findall(x -> x == 1, pconfig), :];
+    Dᵣ = M[findall(x -> 1 ≤ x ≤ Ne, pconfig), :];
     
     # Recalculate Green's function from scratch
     Wᵣ = get_equal_greens(M, Dᵣ);

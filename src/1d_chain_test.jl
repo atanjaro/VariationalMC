@@ -186,7 +186,7 @@ determinantal_parameters = initialize_determinantal_parameters(parameters_to_opt
 (H_mf, V) = build_mean_field_hamiltonian(tight_binding_model, determinantal_parameters);
 
 # Initialize trial state
-(W, D, pconfig, κ,  ε, ε₀, M, U_int) = build_determinantal_state(H_mf);  
+(W, D, pconfig,  ε, ε₀, M, U_int) = build_determinantal_state(H_mf, Ne, nup, ndn, model_geometry, rng);  
 
 # Initialize variational parameter matrices
 A = get_Ak_matrices(V, U_int, ε, model_geometry);                       
@@ -215,15 +215,15 @@ acceptance_rate = 0.0
 for bin in 1:N_opts
     for n in 1:opt_bin_size
         # perform local fermion update for a certain number of equilibration steps
-        (local_acceptance_rate, W, D, pconfig, κ) = local_fermion_update!(W, D, model_geometry, jastrow, pconfig, 
-                                                                            κ, rng, n_stab, mc_meas_freq)     
+        (local_acceptance_rate, W, D, pconfig) = local_fermion_update!(W, D, model_geometry, jastrow, pconfig, 
+                                                                         rng, n_stab, mc_meas_freq, Ne)     
 
         # println("local_acceptance_rate = ", local_acceptance_rate)
         acceptance_rate += local_acceptance_rate
 
         # make basic measurements
         make_measurements!(measurement_container,determinantal_parameters, jastrow, model_geometry, 
-                            tight_binding_model, pconfig, κ, Np, W, A)
+                            tight_binding_model, pconfig, Np, W, A)
     end
 
     # perform Stochastic Reconfiguration
@@ -272,17 +272,17 @@ vij_2 = [v[3] for v in param_bin]
 # plot energy per site as a function of optimization steps
 scatter(1:100, energy_bin/opt_bin_size, marker=:square, color=:red, markersize=5, markerstrokewidth=0,
         legend=false, xlabel="Optimization steps", ylabel=L"E/N", tickfontsize=14, guidefontsize=14, legendfontsize=14,
-        xlims=(0,100), ylims=(-5,5)) #, ylims=(-5,5)
+        xlims=(0,100)) #, ylims=(-5,5)
 
 # plot energy per site as a function of optimization steps
 scatter(1:100, dblocc_bin/opt_bin_size, marker=:square, color=:red, markersize=5, markerstrokewidth=0,
         legend=false, xlabel="Optimization steps", ylabel=L"D", tickfontsize=14, guidefontsize=14, legendfontsize=14,
-        xlims=(0,100), ylims=(0,0.5))
+        xlims=(0,100))
 
 # plot determinantal parameter(s)
-scatter(1:60, deltaa/opt_bin_size, marker=:circle, color=:blue, markersize=5, markerstrokewidth=0,
+scatter(1:100, deltaa/opt_bin_size, marker=:circle, color=:blue, markersize=5, markerstrokewidth=0,
         legend=false, xlabel="Optimization steps", ylabel=L"\Delta_a", tickfontsize=14, guidefontsize=14, legendfontsize=14,
-        xlims=(0,60), ylims=(-10,0)) #, ylims=(0,2)
+        xlims=(0,100)) #, ylims=(0,2)
 
 # scatter(1:1000, deltas/opt_bin_size, marker=:circle, color=:blue, markersize=5, markerstrokewidth=0,
 #     legend=false, xlabel="Optimization steps", ylabel=L"\Delta_a", tickfontsize=14, guidefontsize=14, legendfontsize=14,
@@ -295,7 +295,7 @@ scatter(1:60, deltaa/opt_bin_size, marker=:circle, color=:blue, markersize=5, ma
 # plot Jastrow parameters
 scatter(1:100, vij_1/opt_bin_size, marker=:circle, color=:blue, markersize=5, markerstrokewidth=0,
         label=L"v_{ij}^1", xlabel="Optimization steps", ylabel=L"v_{ij}", tickfontsize=14, guidefontsize=14, legendfontsize=14,
-        xlims=(0,100), ylims=(0,2)) #, ylims=(-1,2)
+        xlims=(0,100)) #, ylims=(-1,2)
 scatter!(1:100, vij_2/opt_bin_size, marker=:square, color=:red, markersize=5, markerstrokewidth=0,
         label=L"v_{ij}^2", xlabel="Optimization steps", ylabel=L"v_{ij}", tickfontsize=14, guidefontsize=14, legendfontsize=14,
         xlims=(0,100))#, ylims=(-1,2)
@@ -305,42 +305,42 @@ energy_data = energy_bin/opt_bin_size
 energy_mean = sum(energy_bin[200:1000]/opt_bin_size)/800
 subset_data = energy_bin[200:1000]/opt_bin_size
 
-using Jackknife
-using Statistics
+# using Jackknife
+# using Statistics
 
 
-function jackknife_error(data)
-    N = length(data)
-    mean_full = mean(data)
+# function jackknife_error(data)
+#     N = length(data)
+#     mean_full = mean(data)
 
-    # Compute jackknife estimates by leaving one element out at a time
-    means_leave_one_out = [mean(vcat(data[1:i-1], data[i+1:end])) for i in 1:N]
+#     # Compute jackknife estimates by leaving one element out at a time
+#     means_leave_one_out = [mean(vcat(data[1:i-1], data[i+1:end])) for i in 1:N]
 
-    # Compute jackknife variance
-    variance_jk = (N - 1) / N * sum((means_leave_one_out .- mean_full) .^ 2)
+#     # Compute jackknife variance
+#     variance_jk = (N - 1) / N * sum((means_leave_one_out .- mean_full) .^ 2)
 
-    return sqrt(variance_jk)  # Jackknife standard error
-end
+#     return sqrt(variance_jk)  # Jackknife standard error
+# end
 
-jackknife_err = jackknife_error(subset_data)
-
-
+# jackknife_err = jackknife_error(subset_data)
 
 
-# simulation updates
-for bin in 1:N_updates
-    for n in 1:N_bins
-        # perform local fermion update for a certain number of equilibration steps
-        (pconfig, κ, jastrow_den, W, D) = local_fermion_update!(W, D, model_geometry, jastrow_den, pconfig, κ, rng, n, n_stab, mc_meas_freq)
 
-         # make basic measurements
-        make_measurements!(measurement_container,determinantal_parameters, jastrow_den, model_geometry, 
-                            tight_binding_model, pconfig, κ, Np, W, A)
-    end
 
-    # write all measurements to file
-    write_measurements!(measurement_container, simulation_info, energy_bin, dblocc_bin, param_bin, debug)                                                                                                             
-end
+# # simulation updates
+# for bin in 1:N_updates
+#     for n in 1:N_bins
+#         # perform local fermion update for a certain number of equilibration steps
+#         (pconfig, κ, jastrow_den, W, D) = local_fermion_update!(W, D, model_geometry, jastrow_den, pconfig, κ, rng, n, n_stab, mc_meas_freq)
+
+#          # make basic measurements
+#         make_measurements!(measurement_container,determinantal_parameters, jastrow_den, model_geometry, 
+#                             tight_binding_model, pconfig, κ, Np, W, A)
+#     end
+
+#     # write all measurements to file
+#     write_measurements!(measurement_container, simulation_info, energy_bin, dblocc_bin, param_bin, debug)                                                                                                             
+# end
 
 
 

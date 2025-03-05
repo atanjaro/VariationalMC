@@ -8,7 +8,7 @@ in the determinantal part of the wavefunction. Returns a vector of derivatives.
 
 """
 function get_local_detpar_derivative(determinantal_parameters::DeterminantalParameters, model_geometry::ModelGeometry, 
-                                        κ::Vector{Int64}, Ne::Int64, W::Matrix{ComplexF64}, A::Vector{Any})  
+                                        pconfig::Vector{Int64}, Ne::Int64, W::Matrix{ComplexF64}, A::Vector{Any})  
 
     # number of lattice sites
     N = model_geometry.unit_cell.n * model_geometry.lattice.N
@@ -24,7 +24,7 @@ function get_local_detpar_derivative(determinantal_parameters::DeterminantalPara
     G = zeros(Complex, 2*N, 2*N)
     for β in 1:Ne
         # spindex occupation number of particle β
-        β_spindex = findfirst(x -> x == β, κ)
+        β_spindex = findfirst(x -> x == β, pconfig)
 
         # # real position 'k' of particle 'β' 
         # k = get_index_from_spindex(β_spindex, model_geometry) 
