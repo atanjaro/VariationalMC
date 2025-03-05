@@ -23,7 +23,7 @@ include("ParticleConfiguration.jl")
 include("Markov.jl")
 include("Utilities.jl")
 include("Greens.jl")
-include("Hessian.jl")
+include("Optimizer.jl")
 include("SimulationInfo.jl")
 include("Measurements.jl")
 
@@ -60,7 +60,7 @@ U = 8.0
 Δs = 0.1
 
 # antiferromagnetic order parameter
-Δa = 0.0001
+Δa = 0.1
 
 # # Parameters to be optimized and initial value(s)
 # parameters_to_optimize = ["Δs", "μ_BCS"]                              # s-wave (BCS) order parameter
@@ -141,7 +141,7 @@ n_stab = 50
 η = 1e-4   # 1e-4   
 
 # Optimization rate for Stochastic Reconfiguration
-dt = 0.03 # 0.03      
+dt = 0.01 # 0.03      
 
 # Debugging 
 debug = false
@@ -195,12 +195,8 @@ A = get_Ak_matrices(V, U_int, ε, model_geometry);
 jastrow = build_jastrow_factor("e-den-den", model_geometry, pconfig, pht, rng, false);
 
 # Initialize measurement container for VMC measurements
-# measurement_container = initialize_measurement_container(model_geometry::ModelGeometry, determinantal_parameters::DeterminantalParameters, 
-#                                                             jastrow::Jastrow, N_opts, opt_bin_size, N_bins, bin_size);
-
-# Initialize measurement container for VMC measurements
 measurement_container = initialize_measurement_container(model_geometry::ModelGeometry, determinantal_parameters::DeterminantalParameters, 
-                                                            N_opts, opt_bin_size, N_bins, bin_size);
+                                                            jastrow::Jastrow, N_opts, opt_bin_size, N_bins, bin_size);
 
 # Initialize the sub-directories to which the various measurements will be written
 initialize_measurement_directories(simulation_info, measurement_container);
@@ -218,31 +214,20 @@ acceptance_rate = 0.0
 
 for bin in 1:N_opts
     for n in 1:opt_bin_size
-        # # perform local fermion update for a certain number of equilibration steps
-        # (local_acceptance_rate, W, D, pconfig, κ) = local_fermion_update!(W, D, model_geometry, jastrow, pconfig, 
-        #                                                                     κ, rng, n_stab, mc_meas_freq)    
-
         # perform local fermion update for a certain number of equilibration steps
-        (local_acceptance_rate, W, D, pconfig, κ) = local_fermion_update!(W, D, model_geometry, pconfig, 
-                                                                            κ, rng, n_stab, mc_meas_freq)    
+        (local_acceptance_rate, W, D, pconfig, κ) = local_fermion_update!(W, D, model_geometry, jastrow, pconfig, 
+                                                                            κ, rng, n_stab, mc_meas_freq)     
 
-        println("local_acceptance_rate = ", local_acceptance_rate)
+        # println("local_acceptance_rate = ", local_acceptance_rate)
         acceptance_rate += local_acceptance_rate
 
-        # # make basic measurements
-        # make_measurements!(measurement_container,determinantal_parameters, jastrow, model_geometry, 
-        #                     tight_binding_model, pconfig, κ, Np, W, A)
-
         # make basic measurements
-        make_measurements!(measurement_container,determinantal_parameters, model_geometry, 
+        make_measurements!(measurement_container,determinantal_parameters, jastrow, model_geometry, 
                             tight_binding_model, pconfig, κ, Np, W, A)
     end
 
-    # # perform Stochastic Reconfiguration
-    # sr_update!(measurement_container, determinantal_parameters, jastrow, η, dt, opt_bin_size)
-
     # perform Stochastic Reconfiguration
-    sr_update!(measurement_container, determinantal_parameters, η, dt, opt_bin_size)
+    sr_update!(measurement_container, determinantal_parameters, jastrow, η, dt, opt_bin_size)
 
     # write all measurements to file
     write_measurements!(measurement_container, simulation_info, energy_bin, dblocc_bin, param_bin, debug)                                                                                                             
@@ -250,13 +235,13 @@ end
 
 
 deltaa = [v[1] for v in param_bin]
-# vij_1 = [v[2] for v in param_bin]
-# vij_2 = [v[3] for v in param_bin]
-
-deltas = [v[1] for v in param_bin]
-mus = [v[2] for v in param_bin]
 vij_1 = [v[2] for v in param_bin]
 vij_2 = [v[3] for v in param_bin]
+
+# deltas = [v[1] for v in param_bin]
+# mus = [v[2] for v in param_bin]
+# vij_1 = [v[2] for v in param_bin]
+# vij_2 = [v[3] for v in param_bin]
 
 
 # # write the "bins" to file
@@ -287,7 +272,7 @@ vij_2 = [v[3] for v in param_bin]
 # plot energy per site as a function of optimization steps
 scatter(1:100, energy_bin/opt_bin_size, marker=:square, color=:red, markersize=5, markerstrokewidth=0,
         legend=false, xlabel="Optimization steps", ylabel=L"E/N", tickfontsize=14, guidefontsize=14, legendfontsize=14,
-        xlims=(0,100)) #, ylims=(-5,5)
+        xlims=(0,100), ylims=(-5,5)) #, ylims=(-5,5)
 
 # plot energy per site as a function of optimization steps
 scatter(1:100, dblocc_bin/opt_bin_size, marker=:square, color=:red, markersize=5, markerstrokewidth=0,
@@ -295,25 +280,25 @@ scatter(1:100, dblocc_bin/opt_bin_size, marker=:square, color=:red, markersize=5
         xlims=(0,100), ylims=(0,0.5))
 
 # plot determinantal parameter(s)
-scatter(1:100, deltaa/opt_bin_size, marker=:circle, color=:blue, markersize=5, markerstrokewidth=0,
+scatter(1:60, deltaa/opt_bin_size, marker=:circle, color=:blue, markersize=5, markerstrokewidth=0,
         legend=false, xlabel="Optimization steps", ylabel=L"\Delta_a", tickfontsize=14, guidefontsize=14, legendfontsize=14,
-        xlims=(0,100)) #, ylims=(0,2)
+        xlims=(0,60), ylims=(-10,0)) #, ylims=(0,2)
 
-scatter(1:1000, deltas/opt_bin_size, marker=:circle, color=:blue, markersize=5, markerstrokewidth=0,
-    legend=false, xlabel="Optimization steps", ylabel=L"\Delta_a", tickfontsize=14, guidefontsize=14, legendfontsize=14,
-    xlims=(0,1000)) #
+# scatter(1:1000, deltas/opt_bin_size, marker=:circle, color=:blue, markersize=5, markerstrokewidth=0,
+#     legend=false, xlabel="Optimization steps", ylabel=L"\Delta_a", tickfontsize=14, guidefontsize=14, legendfontsize=14,
+#     xlims=(0,1000)) #
 
-scatter(1:1000, mus/opt_bin_size, marker=:circle, color=:blue, markersize=5, markerstrokewidth=0,
-    legend=false, xlabel="Optimization steps", ylabel=L"\Delta_a", tickfontsize=14, guidefontsize=14, legendfontsize=14,
-    xlims=(0,1000)) #
+# scatter(1:1000, mus/opt_bin_size, marker=:circle, color=:blue, markersize=5, markerstrokewidth=0,
+#     legend=false, xlabel="Optimization steps", ylabel=L"\Delta_a", tickfontsize=14, guidefontsize=14, legendfontsize=14,
+#     xlims=(0,1000)) #
 
 # plot Jastrow parameters
-scatter(1:1000, vij_1/opt_bin_size, marker=:circle, color=:blue, markersize=5, markerstrokewidth=0,
+scatter(1:100, vij_1/opt_bin_size, marker=:circle, color=:blue, markersize=5, markerstrokewidth=0,
         label=L"v_{ij}^1", xlabel="Optimization steps", ylabel=L"v_{ij}", tickfontsize=14, guidefontsize=14, legendfontsize=14,
-        xlims=(0,1000)) #, ylims=(-1,2)
-scatter!(1:1000, vij_2/opt_bin_size, marker=:square, color=:red, markersize=5, markerstrokewidth=0,
+        xlims=(0,100), ylims=(0,2)) #, ylims=(-1,2)
+scatter!(1:100, vij_2/opt_bin_size, marker=:square, color=:red, markersize=5, markerstrokewidth=0,
         label=L"v_{ij}^2", xlabel="Optimization steps", ylabel=L"v_{ij}", tickfontsize=14, guidefontsize=14, legendfontsize=14,
-        xlims=(0,1000))#, ylims=(-1,2)
+        xlims=(0,100))#, ylims=(-1,2)
 
 
 energy_data = energy_bin/opt_bin_size

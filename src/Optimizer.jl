@@ -26,10 +26,10 @@ function get_local_detpar_derivative(determinantal_parameters::DeterminantalPara
         # spindex occupation number of particle β
         β_spindex = findfirst(x -> x == β, κ)
 
-        # real position 'k' of particle 'β' 
-        k = get_index_from_spindex(β_spindex, model_geometry) 
+        # # real position 'k' of particle 'β' 
+        # k = get_index_from_spindex(β_spindex, model_geometry) 
 
-        G[k,:] .= W[:,β]
+        G[β_spindex,:] .= W[:,β]
     end
 
     # loop over the number of determinantal parameters
