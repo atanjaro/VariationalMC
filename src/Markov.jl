@@ -33,17 +33,15 @@ function local_acceptance()
 end
 
 
-
 """
-
-    metropolis( W::Matrix{ComplexF64}, κ::Vector{Int64}, rng::Xoshiro )
+    metropolis( W::Matrix{ComplexF64}, jastrow::Jastrow, pconfig, rng::Xoshiro )
 
 Perform accept/reject step of proposed hop using the Metropolis algorithm. If move is
 accepted, returns acceptance, particle β and it's spindex, initial position, and final
 position.
 
 """
-function metropolis(W::Matrix{ComplexF64}, κ::Vector{Int64}, rng::Xoshiro)    
+function metropolis(W::Matrix{ComplexF64}, jastrow::Jastrow, pconfig::Vector{Int64}, rng::Xoshiro)    
     # create neighbor table
     nbr_table = build_neighbor_table(bonds[1],
                                     model_geometry.unit_cell,
@@ -56,80 +54,7 @@ function metropolis(W::Matrix{ComplexF64}, κ::Vector{Int64}, rng::Xoshiro)
     β = rand(rng, 1:trunc(Int,Ne))                   
 
     # spindex occupation number of particle β
-    β_spindex = findfirst(x -> x == β, κ)
-
-    # real position 'k' of particle 'β' 
-    k = get_index_from_spindex(β_spindex, model_geometry)  
-    
-    # randomly selected neighboring site 'l'
-    k_nbrs = nbrs[k][2]
-    nbr_rand = rand(rng, 1:length(k_nbrs))
-    l = k_nbrs[nbr_rand]          
-
-    # spin of particle particle 'β' 
-    β_spin = get_spindex_type(β_spindex, model_geometry)
-    
-    # checks occupation against spin species of particle 'β'
-    # if site is unoccupied by same spin species, hop is possible
-    if get_onsite_fermion_occupation(l,pconfig)[β_spin] == 1
-        if debug == true
-            println("Hop impossible! Rejected!")  
-        end
-        return LocalAcceptance(0, β, β_spin, k, l)
-    else
-        # begin Metropolis algorithm   
-
-        # get wavefunction ratio (correpsonding element of Green's function)
-        Rₛ = real(W[l, β])  
-                          
-        acceptance_prob = Rₛ^2    
-
-        if debug == true
-            println("Hop possible! =>")
-            println("Rₛ = $Rₛ")
-            println("accept prob. = $acceptance_prob")
-        end
-
-        #if rand(rng) < acceptance_prob
-        if acceptance_prob >= 1.0 || rand(rng) < acceptance_prob
-            if debug 
-                println("Hop accepted!")
-            end
-            
-            return LocalAcceptance(1, β, β_spin, k, l)  # acceptance, particle number, particle spin, initial site, final site
-        else
-            if debug 
-               println("Hop rejected!")
-            end
-
-            return LocalAcceptance(0, β, β_spin, k, l)
-        end
-    end
-end
-
-
-"""
-    metropolis( W::Matrix{ComplexF64}, jastrow::Jastrow, κ::Vector{Int64}, rng::Xoshiro )
-
-Perform accept/reject step of proposed hop using the Metropolis algorithm. If move is
-accepted, returns acceptance, particle β and it's spindex, initial position, and final
-position.
-
-"""
-function metropolis(W::Matrix{ComplexF64}, jastrow::Jastrow, κ::Vector{Int64}, rng::Xoshiro)    
-    # create neighbor table
-    nbr_table = build_neighbor_table(bonds[1],
-                                    model_geometry.unit_cell,
-                                    model_geometry.lattice)
-
-    # maps neighbor table to dictionary of bonds and neighbors                                
-    nbrs = map_neighbor_table(nbr_table)
-
-    # randomly select some particle in the lattice
-    β = rand(rng, 1:trunc(Int,Ne))                   
-
-    # spindex occupation number of particle β
-    β_spindex = findfirst(x -> x == β, κ)
+    β_spindex = findfirst(x -> x == β, pconfig)
 
     # real position 'k' of particle 'β' 
     k = get_index_from_spindex(β_spindex, model_geometry)  
@@ -153,7 +78,7 @@ function metropolis(W::Matrix{ComplexF64}, jastrow::Jastrow, κ::Vector{Int64}, 
         # begin Metropolis algorithm
 
         # get Jastrow ratio (element of T vector)
-        Rⱼ = get_jastrow_ratio(k, l, jastrow, pht, β_spin, model_geometry)[1]    
+        Rⱼ = get_fermionic_jastrow_ratio(k,l, jastrow, pht, β_spin, model_geometry)   
 
         # get wavefunction ratio (correpsonding element of Green's function)
         Rₛ = real(W[l, β])  
@@ -168,7 +93,7 @@ function metropolis(W::Matrix{ComplexF64}, jastrow::Jastrow, κ::Vector{Int64}, 
         end
 
         # if rand(rng) < acceptance_prob
-        if acceptance_prob >= 1.0 || rand(rng) < acceptance_prob
+        if acceptance_prob > rand(rng)
             if debug 
                 println("Hop accepted!")
             end
@@ -401,82 +326,22 @@ end
 
 
 """
-
-    local_fermion_update!( W::Matrix{ComplexF64}, D::Matrix{ComplexF64}, model_geometry::ModelGeometry, 
-                            pconfig::Vector{Int64}, κ::Vector{Int64}, rng::Xoshiro, n_stab::Int64, mc_meas_freq::Int64 )
-
-Performs a local MC update. Proposes moves and accept/rejects via Metropolis algorithm,
-if accepted, updates particle positions, and Green's function (W matrix).
-
-"""
-function local_fermion_update!(W::Matrix{ComplexF64}, D::Matrix{ComplexF64}, model_geometry::ModelGeometry, 
-                                pconfig::Vector{Int64}, κ::Vector{Int64}, rng::Xoshiro, n_stab::Int64, mc_meas_freq::Int64)
-    if debug
-        println("Starting new Monte Carlo cycle...")
-    end
-
-    # counts number of proposed hops
-    proposed_hops = 0
-    # counts number of accepted hops
-    accepted_hops = 0
-
-    # perform thermalization updates
-    for s in 1:mc_meas_freq
-        if debug
-            println("Metropolis step = $s")
-        end
-    
-        # increment number of proposed hops
-        proposed_hops += 1
-    
-        # Metropolis step
-        markov_move = metropolis(W, κ, rng)    
-    
-        # whether hop was accepted
-        acceptance = markov_move.acceptance
-
-        # if hop is accepted 
-        if acceptance == 1
-            accepted_hops += 1
-
-            # perform hop   
-            do_particle_hop!(markov_move, pconfig, κ, model_geometry)              
-    
-            # update Green's function
-            W =  update_equal_greens(markov_move, W)  
-        end
-
-        # check for numerical stability after a certain number of iterations
-        if proposed_hops % n_stab == 0 
-            (W, D) = recalc_equal_greens(W, δW, D, pconfig)
-        end
-    end
-
-    # compute local acceptance rate
-    local_acceptance_rate = accepted_hops / proposed_hops     
-
-    return local_acceptance_rate, W, D, pconfig, κ 
-end
-
-
-"""
     local_fermion_update!( W::Matrix{ComplexF64}, D::Matrix{ComplexF64}, model_geometry::ModelGeometry, jastrow::Jastrow,
-                                pconfig::Vector{Int64}, κ::Vector{Int64}, rng::Xoshiro, n_stab::Int64, mc_meas_freq::Int64 )
+                                pconfig::Vector{Int64}, rng::Xoshiro, n_stab::Int64, mc_meas_freq::Int64 )
 
 Performs a local MC update. Proposes moves and accept/rejects via Metropolis algorithm,
 if accepted, updates particle positions, T vector, and Green's function (W matrix).
 
 """
 function local_fermion_update!(W::Matrix{ComplexF64}, D::Matrix{ComplexF64}, model_geometry::ModelGeometry, jastrow::Jastrow,
-                                pconfig::Vector{Int64}, κ::Vector{Int64}, rng::Xoshiro, n_stab::Int64, mc_meas_freq::Int64)
+                                pconfig::Vector{Int64}, rng::Xoshiro, n_stab::Int64, mc_meas_freq::Int64, Ne)
     if debug
         println("Starting new Monte Carlo cycle...")
     end
 
-    # counts number of proposed hops
-    proposed_hops = 0
-    # counts number of accepted hops
-    accepted_hops = 0
+    # track acceptance and rejections
+    acceptances = 0.0
+    rejections = 0.0
 
     # perform thermalization updates
     for s in 1:mc_meas_freq
@@ -484,43 +349,44 @@ function local_fermion_update!(W::Matrix{ComplexF64}, D::Matrix{ComplexF64}, mod
             println("Metropolis step = $s")
         end
     
-        # increment number of proposed hops
-        proposed_hops += 1
-    
         # Metropolis step
-        markov_move = metropolis(W, jastrow, κ, rng)    
+        markov_move = metropolis(W, jastrow, pconfig, rng)    
     
         # whether hop was accepted
         acceptance = markov_move.acceptance
 
         # if hop is accepted 
         if acceptance == 1
-            accepted_hops += 1
+            acceptances += 1.0
 
             # perform hop   
-            do_particle_hop!(markov_move, pconfig, κ, model_geometry)              
+            do_particle_hop!(markov_move, pconfig, model_geometry)              
     
             # update Green's function
-            W =  update_equal_greens(markov_move, W)  
+            W = update_equal_greens(markov_move, W)  
 
             # update T vector
-            update_Tvec!(markov_move, jastrow, model_geometry, pht)  
+            update_fermionic_Tvec!(markov_move.isite, markov_move.fsite, markov_move.spin, jastrow, model_geometry)
+        end
+
+        if acceptance == 0
+            rejections += 1.0
         end
 
         # check for numerical stability after a certain number of iterations
-        if proposed_hops % n_stab == 0
+        if s % n_stab == 0
             # check stability of Green's function 
-            (W, D) = recalc_equal_greens(W, δW, D, pconfig)
+            (W, D) = recalc_equal_greens(W, δW, D, pconfig, Ne)
             
             # check stability of the T vector
-            recalc_Tvec_f!(jastrow, δT)
+            recalc_fermionic_Tvec!(jastrow, δT)
         end
     end
 
     # compute local acceptance rate
-    local_acceptance_rate = accepted_hops / proposed_hops     
+    local_acceptance_rate = acceptances / (acceptances + rejections)    
 
-    return local_acceptance_rate, W, D, pconfig, κ, jastrow
+    return local_acceptance_rate, W, D, pconfig, jastrow
 end
 
 

@@ -67,39 +67,69 @@ function get_particle_density(nup::Int, ndn::Int)
 end
 
 
+# """
+#     generate_initial_fermion_configuration()::Vector{Int64}
+
+# Returns a randomly generated initial configuration of electrons (and holes).
+
+# """
+# function generate_initial_fermion_configuration()
+#     # number of lattice sites
+#     N = model_geometry.lattice.N
+
+#     # initialize pconfig (spindex) vector
+#     init_pconfig = zeros(Int, 2*N)     
+    
+#     # fill the vector
+#     # nup
+#     while sum(init_pconfig[1:N]) < nup
+#         init_pconfig[rand(rng, 1:N)] = 1
+#     end
+
+#     # ndn
+#     while sum(init_pconfig[N+1:2N]) < ndn
+#         init_pconfig[rand(rng, N+1:2N)] = 1
+#     end
+
+#     # while sum(init_pconfig) < nup
+#     #     init_pconfig[rand(rng, 1:model_geometry.lattice.N)] = 1
+#     # end
+#     # while sum(init_pconfig) < Ne
+#     #     init_pconfig[rand(rng, model_geometry.lattice.N+1:2*model_geometry.lattice.N)] = 1
+#     # end
+
+#     return init_pconfig
+# end
+
+
 """
-    generate_initial_fermion_configuration()::Vector{Int64}
+    generate_initial_fermion_configuration( nup, ndn, model_geometry, rng )
 
 Returns a randomly generated initial configuration of electrons (and holes).
 
 """
-function generate_initial_fermion_configuration()
-    # number of lattice sites
+function generate_initial_fermion_configuration(nup, ndn, model_geometry, rng)
+    # lattice sites
     N = model_geometry.lattice.N
 
-    # initialize pconfig (spindex) vector
-    init_pconfig = zeros(Int, 2*N)     
-    
-    # fill the vector
-    # nup
-    while sum(init_pconfig[1:N]) < nup
-        init_pconfig[rand(rng, 1:N)] = 1
+    # initialize configuration
+    pconfig = fill(0, 2 * N)
+
+    # Ensure unique random assignments for up-spin electrons
+    up_indices = shuffle(rng, 1:N)[1:nup]
+    for (i, idx) in enumerate(up_indices)
+        pconfig[idx] = i
     end
 
-    # ndn
-    while sum(init_pconfig[N+1:2N]) < ndn
-        init_pconfig[rand(rng, N+1:2N)] = 1
+    # Ensure unique random assignments for down-spin electrons
+    down_indices = shuffle(rng, 1:N)[1:ndn]
+    for (i, idx) in enumerate(down_indices)
+        pconfig[idx + N] = i + nup
     end
 
-    # while sum(init_pconfig) < nup
-    #     init_pconfig[rand(rng, 1:model_geometry.lattice.N)] = 1
-    # end
-    # while sum(init_pconfig) < Ne
-    #     init_pconfig[rand(rng, model_geometry.lattice.N+1:2*model_geometry.lattice.N)] = 1
-    # end
-
-    return init_pconfig
+    return pconfig
 end
+
 
 
 """
@@ -214,7 +244,6 @@ function get_linked_spindex(i, N)
     return i + (1 - 2 * (i ÷ N)) * N
 end
 
-
 """
     get_onsite_fermion_occupation( site::Int, pconfig::Vector{Int} )
 
@@ -222,11 +251,24 @@ Returns the number of spin-up and spin-down electrons occupying a real lattice s
 
 """
 function get_onsite_fermion_occupation(site::Int, pconfig::Vector{Int})
-    nup = pconfig[site]
-    ndn = pconfig[site+model_geometry.lattice.N]
-    Ne = pconfig[site] + pconfig[site+model_geometry.lattice.N]
-    return nup, ndn, Ne
+    num_up = pconfig[site] > 0 ? 1 : 0
+    num_dn = pconfig[site + model_geometry.lattice.N] > 0 ? 1 : 0
+    num_e = num_up + num_dn
+    return num_up, num_dn, num_e
 end
+
+# """
+#     get_onsite_fermion_occupation( site::Int, pconfig::Vector{Int} )
+
+# Returns the number of spin-up and spin-down electrons occupying a real lattice site i.  
+
+# """
+# function get_onsite_fermion_occupation(site::Int, pconfig::Vector{Int})
+#     nup = pconfig[site]
+#     ndn = pconfig[site+model_geometry.lattice.N]
+#     Ne = pconfig[site] + pconfig[site+model_geometry.lattice.N]
+#     return nup, ndn, Ne
+# end
 
 
 """
@@ -275,7 +317,7 @@ If proposed particle hop is accepted, perform the particle hop, and update the p
 configuration and positions.
 
 """
-function do_particle_hop!(markov_move, pconfig::Vector{Int}, κ::Vector{Int64}, model_geometry::ModelGeometry)
+function do_particle_hop!(markov_move, pconfig::Vector{Int}, model_geometry::ModelGeometry)
     # particle number
     β = markov_move.particle
 
@@ -298,20 +340,26 @@ function do_particle_hop!(markov_move, pconfig::Vector{Int}, κ::Vector{Int64}, 
         end
 
         # update pconfig
+        pconfig[l_dn] = pconfig[k_dn]
         pconfig[k_dn] = 0
-        pconfig[l_dn] = 1
+
+        # pconfig[k_dn] = 0
+        # pconfig[l_dn] = 1
 
         # update κ
-        κ[k_dn] = 0 
-        κ[l_dn] = β
+        # κ[k_dn] = 0 
+        # κ[l_dn] = β
     else
         # update pconfig
+        pconfig[l] = pconfig[k]
         pconfig[k] = 0
-        pconfig[l] = 1 
 
-        # update κ
-        κ[k] = 0 
-        κ[l] = β
+        # pconfig[k_dn] = 0
+        # pconfig[l_dn] = 1
+
+        # # update κ
+        # κ[k] = 0 
+        # κ[l] = β
     end
     
     return nothing
@@ -343,31 +391,31 @@ function change_particle_number!(met_step, phconfig, model_geometry)
 end
 
 
-"""
+# """
 
-    get_particle_positions( pconfig::Vector{Int}, model_geometry::ModelGeometry, Ne::Int )
+#     get_particle_positions( pconfig::Vector{Int}, model_geometry::ModelGeometry, Ne::Int )
 
-Given vector of spindex occupations, returns a vector κ of particle positions according to particle number.
-This vector is gives the order of creation operator which create the configuration. Initial configurations
-are automatically normal ordered.
+# Given vector of spindex occupations, returns a vector κ of particle positions according to particle number.
+# This vector is gives the order of creation operator which create the configuration. Initial configurations
+# are automatically normal ordered.
 
-"""
-function get_particle_positions(pconfig::Vector{Int}, model_geometry::ModelGeometry, Ne::Int)
-    N = model_geometry.lattice.N
+# """
+# function get_particle_positions(pconfig::Vector{Int}, model_geometry::ModelGeometry, Ne::Int)
+#     N = model_geometry.lattice.N
 
-    # get current spindex occupations
-    config_indices = findall(x -> x == 1, pconfig)
+#     # get current spindex occupations
+#     config_indices = findall(x -> x == 1, pconfig)
 
-    κ = zeros(Int, 2 * N)
+#     κ = zeros(Int, 2 * N)
 
-    # fill κ according to position of particles
-    for i in 1:Ne
-        idx = config_indices[i]
-        κ[idx] = i 
-    end
+#     # fill κ according to position of particles
+#     for i in 1:Ne
+#         idx = config_indices[i]
+#         κ[idx] = i 
+#     end
 
-    return κ
-end
+#     return κ
+# end
 
 
 

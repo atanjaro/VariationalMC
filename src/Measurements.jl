@@ -175,68 +175,17 @@ end
 # end
 
 
-"""
-
-    make_measurements!( measurement_container,determinantal_parameters, model_geometry,
-                        tight_binding_model, pconfig, particle_positions,  Np, W, A, n, bin )
-
-Measure the local energy and logarithmic derivatives for a particular bin.
-
-"""
-function make_measurements!(measurement_container,determinantal_parameters, model_geometry, 
-                            tight_binding_model, pconfig, κ, Np, W, A)
-
-    # record current variational parameters
-    parameters_current = reduce(vcat, determinantal_parameters.vals)
-
-    # get current values from the container
-    parameters_container = measurement_container.optimization_measurements["parameters"]
-
-    # update value for the current bin
-    current_parameters_bin = parameters_container[2]
-    current_parameters_bin = parameters_current
-
-    # update accumuator for this bin
-    thisbin_parameters_sum = parameters_container[1]
-    thisbin_parameters_sum += parameters_current
-
-    # combine the updated values 
-    updated_values = (thisbin_parameters_sum, current_parameters_bin)
-
-    # write the new values to the container
-    measurement_container.optimization_measurements["parameters"] = updated_values
-    
-    # measure the energy
-    measure_local_energy!(measurement_container, model_geometry, tight_binding_model, pconfig, κ)
-
-    # measure the lograithmic derivatives
-    measure_Δk!(measurement_container, determinantal_parameters, model_geometry, κ, Np, W, A)
-    measure_ΔkΔkp!(measurement_container, determinantal_parameters, model_geometry, κ, Np, W, A)
-    measure_ΔkE!(measurement_container, determinantal_parameters, model_geometry, tight_binding_model, pconfig, κ, Np, W, A)
-
-    # measure double occupancy
-    measure_double_occ!(measurement_container, pconfig, model_geometry)
-
-    # measure average density
-    measure_n!(measurement_container, pconfig, model_geometry)
-
-    # record the current configuration
-    measurement_container.simulation_measurements["pconfig"] = pconfig
-
-    return nothing
-end
-
 
 """
 
     make_measurements!( measurement_container,determinantal_parameters, jastrow, model_geometry,
-                        tight_binding_model, pconfig, particle_positions,  Np, W, A, n, bin )
+                        tight_binding_model, pconfig,  Np, W, A, n, bin )
 
 Measure the local energy and logarithmic derivatives for a particular bin.
 
 """
 function make_measurements!(measurement_container,determinantal_parameters, jastrow, model_geometry, 
-                            tight_binding_model, pconfig, κ, Np, W, A)
+                            tight_binding_model, pconfig, Np, W, A)
 
     # record current variational parameters
     parameters_current = all_vpars(determinantal_parameters, jastrow)
@@ -259,12 +208,12 @@ function make_measurements!(measurement_container,determinantal_parameters, jast
     measurement_container.optimization_measurements["parameters"] = updated_values
     
     # measure the energy
-    measure_local_energy!(measurement_container, model_geometry, tight_binding_model, jastrow, pconfig, κ)
+    measure_local_energy!(measurement_container, model_geometry, tight_binding_model, jastrow, pconfig)
 
     # measure the lograithmic derivatives
-    measure_Δk!(measurement_container, determinantal_parameters, jastrow, model_geometry,pconfig, κ, Np, W, A)
-    measure_ΔkΔkp!(measurement_container, determinantal_parameters,jastrow, model_geometry, pconfig, κ, Np,W,A)
-    measure_ΔkE!(measurement_container,determinantal_parameters,jastrow,model_geometry,tight_binding_model,pconfig, κ,Np,W,A)
+    measure_Δk!(measurement_container, determinantal_parameters, jastrow, model_geometry,pconfig, Np, W, A)
+    measure_ΔkΔkp!(measurement_container, determinantal_parameters,jastrow, model_geometry, pconfig, Np, W, A)
+    measure_ΔkE!(measurement_container,determinantal_parameters,jastrow,model_geometry,tight_binding_model, pconfig, Np, W, A)
 
     # measure double occupancy
     measure_double_occ!(measurement_container, pconfig, model_geometry)
@@ -380,44 +329,6 @@ end
 
 """
 
-    measure_Δk!(measurement_container, determinantal_parameters, model_geometry, pconfig, Np, W, A)
-
-Measures logarithmic derivatives for all variational parameters. The first 'p' are derivatives of 
-determinantal parameters and the rest are derivatives of Jastrow parameters. Measurments are then written
-to the measurement container.
-
-"""
-function measure_Δk!(measurement_container, determinantal_parameters, model_geometry, κ, Np, W, A)
-    # perform parameter derivatives
-    Δk_current = get_local_detpar_derivative(determinantal_parameters, model_geometry, κ, Np, W, A)
-
-    # get current values from the container
-    Δk_container = measurement_container.optimization_measurements["Δk"]
-
-    # update value for the current bin
-    current_Δk_bin = Δk_container[2]
-    current_Δk_bin = Δk_current
-
-    # add to bin history
-    bin_Δk_history = Δk_container[3]
-    push!(bin_Δk_history, current_Δk_bin)
-
-    # update accumuator for this bin
-    thisbin_Δk_sum = Δk_container[1]
-    thisbin_Δk_sum += Δk_current
-
-    # combine the updated values 
-    updated_values = (thisbin_Δk_sum, current_Δk_bin, bin_Δk_history)
-
-    # write the new values to the container
-    measurement_container.optimization_measurements["Δk"] = updated_values
-
-    return nothing
-end
-
-
-"""
-
     measure_Δk!( measurement_container, determinantal_parameters, jastrow, model_geometry, pconfig, Np, W, A )
 
 Measures logarithmic derivatives for all variational parameters. The first 'p' are derivatives of 
@@ -425,9 +336,9 @@ determinantal parameters and the rest are derivatives of Jastrow parameters. Mea
 to the measurement container.
 
 """
-function measure_Δk!(measurement_container, determinantal_parameters, jastrow, model_geometry, pconfig, κ, Np, W, A)
+function measure_Δk!(measurement_container, determinantal_parameters, jastrow, model_geometry, pconfig, Np, W, A)
     # perform parameter derivatives
-    detpar_derivatives = get_local_detpar_derivative(determinantal_parameters, model_geometry, κ, Np, W, A)
+    detpar_derivatives = get_local_detpar_derivative(determinantal_parameters, model_geometry, pconfig, Np, W, A)
     jpar_derivatives = get_local_jpar_derivative(jastrow, pconfig, pht)
     Δk_current = vcat(detpar_derivatives,jpar_derivatives)
 
@@ -457,62 +368,20 @@ end
 
 
 """
-    measure_ΔkE!( determinantal_parameters, model_geometry, tight_binding_model, pconfig, Np, W, A )
-
-Measures the product of variational derivatives with the local energy. Measurments are then written
-to the measurement container.
-
-"""
-function measure_ΔkE!(measurement_container, determinantal_parameters, model_geometry, tight_binding_model, pconfig, κ,  Np, W, A)
-    # perform derivatives
-    Δk = get_local_detpar_derivative(determinantal_parameters, model_geometry, κ, Np, W, A)
-
-    # compute local energy
-    E_loc = get_local_energy(model_geometry, tight_binding_model, pconfig, κ) 
-
-    # compute product of local derivatives with the local energy
-    ΔkE_current = Δk * E_loc
-
-    # get current values from the container
-    ΔkE_container = measurement_container.optimization_measurements["ΔkE"]
-
-    # update value for the current bin
-    current_ΔkE_bin = ΔkE_container[2]
-    current_ΔkE_bin = ΔkE_current
-
-    # add to bin history
-    bin_ΔkE_history = ΔkE_container[3]
-    push!(bin_ΔkE_history, current_ΔkE_bin)
-
-    # update accumuator for this bin
-    thisbin_ΔkE_sum = ΔkE_container[1]
-    thisbin_ΔkE_sum += ΔkE_current
-
-    # combine the updated values 
-    updated_values = (thisbin_ΔkE_sum, current_ΔkE_bin, bin_ΔkE_history)
-
-    # write the new values to the container
-    measurement_container.optimization_measurements["ΔkE"] = updated_values
-
-    return nothing
-end
-
-
-"""
     measure_ΔkE!( determinantal_parameters, jastrow, model_geometry, tight_binding_model, pconfig, Np, W, A )
 
 Measures the product of variational derivatives with the local energy. Measurments are then written
 to the measurement container.
 
 """
-function measure_ΔkE!(measurement_container, determinantal_parameters, jastrow, model_geometry, tight_binding_model, pconfig, κ,  Np, W, A)
+function measure_ΔkE!(measurement_container, determinantal_parameters, jastrow, model_geometry, tight_binding_model, pconfig, Np, W, A)
     # perform derivatives
-    detpar_derivatives = get_local_detpar_derivative(determinantal_parameters, model_geometry, κ, Np, W, A)
+    detpar_derivatives = get_local_detpar_derivative(determinantal_parameters, model_geometry, pconfig, Np, W, A)
     jpar_derivatives = get_local_jpar_derivative(jastrow, pconfig, pht)
     Δk = vcat(detpar_derivatives, jpar_derivatives)
 
     # compute local energy
-    E_loc = get_local_energy(model_geometry, tight_binding_model, jastrow, pconfig, κ) 
+    E_loc = get_local_energy(model_geometry, tight_binding_model, jastrow, pconfig) 
 
     # compute product of local derivatives with the local energy
     ΔkE_current = Δk * E_loc
@@ -543,55 +412,16 @@ end
 
 
 """
-    measure_ΔkΔkp( measurement_container, determinantal_parameters, model_geometry, pconfig, κ, Np, W, A )
+    measure_ΔkΔkp( measurement_container, determinantal_parameters, jastrow, model_geometry, pconfig, Np, W, A )
 
 Measures the product of variational derivatives with other variational derivatives. Measurments are then written
 to the measurement container.
 
 """
-function measure_ΔkΔkp!(measurement_container, determinantal_parameters, model_geometry, κ, Np, W, A)
+function measure_ΔkΔkp!(measurement_container, determinantal_parameters, jastrow, model_geometry, pconfig, Np, W, A)
     # perform derivatives
-    Δk = get_local_detpar_derivative(determinantal_parameters, model_geometry, κ, Np, W, A)
-
-    # inner product of Δk and Δk′
-    ΔkΔkp_current = Δk .* Δk'
-
-    # get current values from the container
-    ΔkΔkp_container = measurement_container.optimization_measurements["ΔkΔkp"]
-
-    # update value for the current bin
-    current_ΔkΔkp_bin = ΔkΔkp_container[2]
-    current_ΔkΔkp_bin = ΔkΔkp_current
-
-    # add to bin history
-    bin_ΔkΔkp_history = ΔkΔkp_container[3]
-    push!(bin_ΔkΔkp_history, current_ΔkΔkp_bin)
-
-    # update accumuator for this bin
-    thisbin_ΔkΔkp_sum = ΔkΔkp_container[1]
-    thisbin_ΔkΔkp_sum += ΔkΔkp_current
-
-    # combine the updated values 
-    updated_values = (thisbin_ΔkΔkp_sum, current_ΔkΔkp_bin, bin_ΔkΔkp_history)
-
-    # write the new values to the container
-    measurement_container.optimization_measurements["ΔkΔkp"] = updated_values
-
-    return nothing
-end 
-
-
-"""
-    measure_ΔkΔkp( measurement_container, determinantal_parameters, jastrow, model_geometry, pconfig, κ, Np, W, A )
-
-Measures the product of variational derivatives with other variational derivatives. Measurments are then written
-to the measurement container.
-
-"""
-function measure_ΔkΔkp!(measurement_container, determinantal_parameters, jastrow, model_geometry, pconfig, κ, Np, W, A)
-    # perform derivatives
-    detpar_derivatives = get_local_detpar_derivative(determinantal_parameters, model_geometry, κ, Np, W, A)
-    jpar_derivatives = get_local_jpar_derivative(jastrow,pconfig, pht)
+    detpar_derivatives = get_local_detpar_derivative(determinantal_parameters, model_geometry, pconfig, Np, W, A)
+    jpar_derivatives = get_local_jpar_derivative(jastrow, pconfig, pht)
     Δk = vcat(detpar_derivatives,jpar_derivatives)
 
     # inner product of Δk and Δk′
@@ -623,15 +453,15 @@ end
 
 
 """
-    measure_local_energy!( measurement_container, model_geometry, tight_binding_model, pconfig, κ )
+    measure_local_energy!( measurement_container, model_geometry, tight_binding_model, pconfig)
 
 Measures the total local energy and writes to the measurement container.
 
 """
-function measure_local_energy!(measurement_container, model_geometry, tight_binding_model, pconfig, κ)
+function measure_local_energy!(measurement_container, model_geometry, tight_binding_model, pconfig)
 
    # calculate the current local energy
-    E_loc_current = get_local_energy(model_geometry, tight_binding_model, pconfig, κ)
+    E_loc_current = get_local_energy(model_geometry, tight_binding_model, pconfig)
 
     # get current values from the container
     energy_container = measurement_container.simulation_measurements["energy"]
@@ -655,15 +485,15 @@ end
 
 
 """
-    measure_local_energy!( measurement_container, model_geometry, tight_binding_model, jastrow, pconfig, κ )
+    measure_local_energy!( measurement_container, model_geometry, tight_binding_model, jastrow, pconfig )
 
 Measures the total local energy and writes to the measurement container.
 
 """
-function measure_local_energy!(measurement_container, model_geometry, tight_binding_model, jastrow, pconfig, κ)
+function measure_local_energy!(measurement_container, model_geometry, tight_binding_model, jastrow, pconfig)
 
    # calculate the current local energy
-    E_loc_current = get_local_energy(model_geometry, tight_binding_model, jastrow, pconfig, κ)
+    E_loc_current = get_local_energy(model_geometry, tight_binding_model, jastrow, pconfig)
 
     # get current values from the container
     energy_container = measurement_container.simulation_measurements["energy"]
@@ -695,7 +525,17 @@ Measure the average double occupancy ⟨D⟩ = N⁻¹ ∑ᵢ ⟨nᵢ↑nᵢ↓�
 function measure_double_occ!(measurement_container, pconfig, model_geometry)
     N = model_geometry.lattice.N
 
-    dblocc_dens = sum(pconfig[1:N] .* (1 .- pconfig[end-N+1:end])) / N
+    spin_up = pconfig[1:N]    
+    spin_down = pconfig[N+1:end]  
+
+    double_occupancy = 0.0
+    for i in 1:N
+        if spin_up[i] != 0 && spin_down[i] != 0
+            double_occupancy += 1.0
+        end
+    end
+
+    dblocc_dens = double_occupancy / N
 
     # calculate the current double occupancy
     dblocc_current = dblocc_dens
@@ -760,18 +600,19 @@ function measure_n!(measurement_container, pconfig, model_geometry)
 end
 
 
+
 """
-    get_local_energy( model_geometry, tight_binding_model, pconfig, κ )
+    get_local_energy( model_geometry, tight_binding_model, jastrow, pconfig )
 
 Calculates the local variational energy per site.
 
 """
-function get_local_energy(model_geometry, tight_binding_model, pconfig, κ)
+function get_local_energy(model_geometry, tight_binding_model, jastrow, pconfig)
     # number of lattice sites
     N = model_geometry.lattice.N
 
     # calculate kinetic energy
-    E_k = get_local_kinetic_energy(model_geometry, tight_binding_model, pconfig, κ)
+    E_k = get_local_kinetic_energy(model_geometry, tight_binding_model, jastrow, pconfig)
 
     # calculate Hubbard energy
     E_hubb = get_local_hubbard_energy(U, model_geometry, pconfig)
@@ -784,35 +625,12 @@ end
 
 
 """
-    get_local_energy( model_geometry, tight_binding_model, jastrow, pconfig, κ )
-
-Calculates the local variational energy per site.
-
-"""
-function get_local_energy(model_geometry, tight_binding_model, jastrow, pconfig, κ)
-    # number of lattice sites
-    N = model_geometry.lattice.N
-
-    # calculate kinetic energy
-    E_k = get_local_kinetic_energy(model_geometry, tight_binding_model, jastrow, pconfig, κ)
-
-    # calculate Hubbard energy
-    E_hubb = get_local_hubbard_energy(U, model_geometry, pconfig)
-    
-    # calculate total local energy
-    E_loc = E_k + E_hubb
-
-    return E_loc/N
-end
-
-
-"""
-    get_local_kinetic_energy( model_geometry, tight_binding_model, pconfig, κ )
+    get_local_kinetic_energy( model_geometry, tight_binding_model, jastrow, pconfig)
 
 Calculates the electron local kinetic energy. 
 
 """
-function get_local_kinetic_energy(model_geometry, tight_binding_model, pconfig, κ)
+function get_local_kinetic_energy(model_geometry, tight_binding_model, jastrow, pconfig)
     # number of sites
     N = model_geometry.lattice.N
 
@@ -830,7 +648,7 @@ function get_local_kinetic_energy(model_geometry, tight_binding_model, pconfig, 
     # calculate electron kinetic energy
     for β in 1:Ne
         # spindex occupation number of particle β
-        β_spindex = findfirst(x -> x == β, κ)
+        β_spindex = findfirst(x -> x == β, pconfig)
 
         # real position 'k' of particle 'β' 
         k = get_index_from_spindex(β_spindex, model_geometry) 
@@ -843,64 +661,7 @@ function get_local_kinetic_energy(model_geometry, tight_binding_model, pconfig, 
         for l in nbr_map[k][2]
             # check that neighboring sites are unoccupied
             if get_onsite_fermion_occupation(l, pconfig)[β_spin] == 0
-                sum_nn += W[l, β]
-            end
-        end
-
-        # calculate kinetic energy
-        if pht 
-            if β_spin == 1
-                E_loc_kinetic += -tight_binding_model.t[1] * sum_nn        
-            else
-                E_loc_kinetic += tight_binding_model.t[1] * sum_nn 
-            end
-        else
-            E_loc_kinetic += -tight_binding_model.t[1] * sum_nn
-        end
-    end
-
-    return real(E_loc_kinetic)
-end
-
-
-"""
-    get_local_kinetic_energy( model_geometry, tight_binding_model, jastrow, pconfig, κ )
-
-Calculates the electron local kinetic energy. 
-
-"""
-function get_local_kinetic_energy(model_geometry, tight_binding_model, jastrow, pconfig, κ)
-    # number of sites
-    N = model_geometry.lattice.N
-
-    # generate neighbor table
-    nbr_table = build_neighbor_table(bonds[1],
-                                    model_geometry.unit_cell,
-                                    model_geometry.lattice)
-
-    # generate neighbor map
-    nbr_map = map_neighbor_table(nbr_table)
-
-    # track kinetic energy
-    E_loc_kinetic = 0.0
-
-    # calculate electron kinetic energy
-    for β in 1:Ne
-        # spindex occupation number of particle β
-        β_spindex = findfirst(x -> x == β, κ)
-
-        # real position 'k' of particle 'β' 
-        k = get_index_from_spindex(β_spindex, model_geometry) 
-
-        # spin of particle particle 'β' 
-        β_spin = get_spindex_type(β_spindex, model_geometry)
-      
-        # loop over nearest neighbors. TODO: add next-nearest neighbors
-        sum_nn = 0.0
-        for l in nbr_map[k][2]
-            # check that neighboring sites are unoccupied
-            if get_onsite_fermion_occupation(l, pconfig)[β_spin] == 0
-                Rⱼ = get_jastrow_ratio(k, l, jastrow, pht, β_spin, model_geometry)[1]
+                Rⱼ = get_fermionic_jastrow_ratio(k, l, jastrow, pht, β_spin, model_geometry)
                 sum_nn += Rⱼ * W[l, β]
             end
         end
@@ -930,16 +691,20 @@ Calculates the energy due to onsite Hubbard repulsion.
 function get_local_hubbard_energy(U, model_geometry, pconfig)
     # number of sites
     N = model_geometry.lattice.N
-
-    # get spindex occupations
-    occ_up = pconfig[1:N]
-    occ_dn = pconfig[end-N+1:end]
-
-    if pht
-        E_loc_hubbard = U * sum(occ_up .* (1 .- occ_dn))
-    else
-        E_loc_hubbard = U * sum(occ_up .* occ_dn)
+        
+    hubbard_sum = 0.0
+    for i in 1:N
+        occ_up, occ_dn, occ_e = get_onsite_fermion_occupation(i,pconfig)
+        if occ_e == 2
+            if pht
+                hubbard_sum += occ_up .* (1 .- occ_dn)
+            else
+                hubbard_sum+= occ_up .* occ_dn
+            end
+        end
     end
+
+    E_loc_hubbard = U * hubbard_sum
 
     return E_loc_hubbard
 end
