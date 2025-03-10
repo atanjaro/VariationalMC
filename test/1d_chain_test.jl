@@ -159,11 +159,11 @@ lattice = Lattice([Lx],[true]);
 # Define nearest neighbor bonds
 bond_x = Bond(orbitals = (1,1), displacement = [1]);
 
-# # Define next nearest neighbor bonds
-# bond_xp = Bond(orbitals = (1,1), displacement = [2]);
+# Define next nearest neighbor bonds
+bond_xp = Bond(orbitals = (1,1), displacement = [2]);
 
 # Collect all bond definitions
-bonds = [[bond_x]];     # ,[bond_xp]
+bonds = [[bond_x],[bond_xp]];     # bonds are organized into [[nearest],[next-nearest]]
 
 # Define model geometry
 model_geometry = ModelGeometry(unit_cell,lattice, bonds);
@@ -176,7 +176,7 @@ determinantal_parameters = initialize_determinantal_parameters(parameters_to_opt
 
 # # Get particle density 
 # # Use this if initial particle number if specified
-# (density, Np, Ne) = get_particle_density(nup, ndn)
+# (density, Np, Ne) = get_particle_density(nup, ndn);
 
 # Get particle numbers 
 # Use this if an initial density is sepcified

@@ -1,15 +1,57 @@
 """
 
-    get_local_detpar_derivative( determinantal_parameters::DeterminantalParameters, model_geometry::ModelGeometry
-                                     pconfig::Vector{Int}, W::Matrix{AbstractFloat}, A::Matrix{AbstractFloat}  )
+    stochastic_reconfiguration!( measurement_container::NamedTuple, determinantal_parameters::DeterminantalParameters, 
+                                    jastrow::Jastrow, η::Float64, dt::Float64, bin_size::Int64 )::Nothing
+
+Updates variational parameters through stochastic optimization.
+
+"""
+function stochastic_reconfiguration!(measurement_container::NamedTuple, determinantal_parameters::DeterminantalParameters, 
+                                    jastrow::Jastrow, η::Float64, dt::Float64, bin_size::Int64)::Nothing
+    debug && println("Optimizer::stochastic_reconfiguration!() : ")
+    debug && println("Start of optimization")
+
+    # get S matrix
+    S = get_covariance_matrix(measurement_container, bin_size)
+
+    # get f vector
+    f = get_force_vector(measurement_container, bin_size)
+
+    # solve for variation in the parameters
+    δvpars = variations(S, f, η)     
+
+    # new varitaional parameters
+    vpars = all_vpars(determinantal_parameters, jastrow)
+    vpars += dt * δvpars
+
+    debug && println("Optimizer::stochastic_reconfiguration!() : ")
+    debug && println("Parameters have been updated")
+    debug && println("new parameters = ", vpars)
+
+    # push back Jastrow parameters
+    update_jastrow!(jastrow, vpars)
+
+    # push back determinantal_parameters
+    update_detpars!(determinantal_parameters, vpars)
+
+    debug && println("Optimizer::stochastic_reconfiguration!() : ")
+    debug && println("End of optimization")
+
+    return nothing
+end
+
+
+"""
+
+    get_detpar_derivatives( detwf::DeterminantalWavefunction, determinantal_parameters::DeterminantalParameters, 
+                            model_geometry::ModelGeometry, Ne::Int64 )::Vector{Float64}
 
 Calculates the local logarithmic derivative Δₖ(x) = ∂lnΨ(x)/∂αₖ, with respect to the kth variational parameter αₖ,
 in the determinantal part of the wavefunction. Returns a vector of derivatives.
 
 """
-function get_local_detpar_derivative(determinantal_parameters::DeterminantalParameters, model_geometry::ModelGeometry, 
-                                        pconfig::Vector{Int64}, Ne::Int64, W::Matrix{ComplexF64}, A::Vector{Any})  
-
+function get_detpar_derivatives(detwf::DeterminantalWavefunction, determinantal_parameters::DeterminantalParameters, 
+                                model_geometry::ModelGeometry, Ne::Int64)::Vector{Float64}
     # number of lattice sites
     N = model_geometry.unit_cell.n * model_geometry.lattice.N
 
@@ -17,39 +59,34 @@ function get_local_detpar_derivative(determinantal_parameters::DeterminantalPara
     num_detpars = determinantal_parameters.num_detpars
 
     # vector to store derivatives
-    derivatives = zeros(AbstractFloat, num_detpars)
+    det_par_derivatives = zeros(Float64, num_detpars)
     
-
-    # loop over Nₚ particles 
+    # loop over Nₑ particles 
     G = zeros(Complex, 2*N, 2*N)
     for β in 1:Ne
-        # spindex occupation number of particle β
-        β_spindex = findfirst(x -> x == β, pconfig)
+        k = findfirst(x -> x == β, detwf.pconfig)
 
-        # # real position 'k' of particle 'β' 
-        # k = get_index_from_spindex(β_spindex, model_geometry) 
-
-        G[β_spindex,:] .= W[:,β]
+        G[k, :] .= detwf.W[:, β]
     end
 
     # loop over the number of determinantal parameters
     for num in 1:num_detpars
-        derivatives[num] += sum(A[num] .* G)
+        det_par_derivatives[num] += sum(detwf.A[num] .* G)
     end
 
-    return derivatives
+    return det_par_derivatives
 end
 
 
 """
 
-    get_local_jpar_derivative( jastrow::Jastrow, pconfig::Vector{Int}, pht::Bool )
+    get_jpar_derivatives( detwf::DeterminantalWavefunction, jastrow::Jastrow, pht::Bool )::Vector{Float64}
 
-Calculates the local logarithmic derivative Δₖ(x) = ∂lnΨ(x)/∂vₗₘ, with respect to the kth Jastrow parameter vₗₘ. Returns 
-a vector of derivatives.
+Calculates the local logarithmic derivative Δₖ(x) = ∂lnΨ(x)/∂vₗₘ, with respect to the kth 
+Jastrow parameter vₗₘ. Returns a vector of derivatives.
 
 """
-function get_local_jpar_derivative(jastrow::Jastrow, pconfig::Vector{Int64}, pht::Bool)
+function get_jpar_derivatives(detwf::DeterminantalWavefunction, jastrow::Jastrow, pht::Bool)::Vector{Float64}
     # jastrow type
     jastrow_type = jastrow.jastrow_type;
 
@@ -60,7 +97,7 @@ function get_local_jpar_derivative(jastrow::Jastrow, pconfig::Vector{Int64}, pht
     jpar_map = jastrow.jpar_map;
 
     # vector to store derivatives
-    derivatives = zeros(AbstractFloat, num_jpars)
+    jpar_derivatives = zeros(Float64, num_jpars)
 
     # get irreducible indices
     irr_indices = collect(keys(jpar_map))
@@ -74,23 +111,21 @@ function get_local_jpar_derivative(jastrow::Jastrow, pconfig::Vector{Int64}, pht
                 i = idx[1]
                 j = idx[2]
 
-                # check for double counting
+                # double counting
                 dblcount_correction = (j==i) ? 0.5 : 1.0
 
                 # get occupations
-                nup_i = get_onsite_fermion_occupation(i+1, pconfig)[1]
-                ndn_i = get_onsite_fermion_occupation(i+1, pconfig)[2]
-                nup_j = get_onsite_fermion_occupation(j+1, pconfig)[1]
-                ndn_j = get_onsite_fermion_occupation(j+1, pconfig)[2]
+                nup_i = get_onsite_fermion_occupation(i+1, detwf.pconfig)[1]
+                ndn_i = get_onsite_fermion_occupation(i+1, detwf.pconfig)[2]
+                nup_j = get_onsite_fermion_occupation(j+1, detwf.pconfig)[1]
+                ndn_j = get_onsite_fermion_occupation(j+1, detwf.pconfig)[2]
                 if pht
-                    derivatives[num] += -dblcount_correction * (nup_i - ndn_i) * (nup_j - ndn_j)
+                    jpar_derivatives[num] += -dblcount_correction * (nup_i - ndn_i) * (nup_j - ndn_j)
                 else
-                    derivatives[num] += -dblcount_correction * (nup_i + ndn_i) * (nup_j + ndn_j)
+                    jpar_derivatives[num] += -dblcount_correction * (nup_i + ndn_i) * (nup_j + ndn_j)
                 end
             end
         end
-
-        return derivatives
     elseif jastrow_type == "e-spn-spn"
         for num in 1:num_jpars
             # Extract the current (indices, jpars) tuple
@@ -100,37 +135,35 @@ function get_local_jpar_derivative(jastrow::Jastrow, pconfig::Vector{Int64}, pht
                 i = idx[1]
                 j = idx[2]
 
-                # check for double counting
+                # double counting
                 dblcount_correction = (j==i) ? 0.5 : 1.0
 
                 # get occupations
-                nup_i = get_onsite_fermion_occupation(i+1, pconfig)[1]
-                ndn_i = get_onsite_fermion_occupation(i+1, pconfig)[2]
-                nup_j = get_onsite_fermion_occupation(j+1, pconfig)[1]
-                ndn_j = get_onsite_fermion_occupation(j+1, pconfig)[2]
+                nup_i = get_onsite_fermion_occupation(i+1, detwf.pconfig)[1]
+                ndn_i = get_onsite_fermion_occupation(i+1, detwf.pconfig)[2]
+                nup_j = get_onsite_fermion_occupation(j+1, detwf.pconfig)[1]
+                ndn_j = get_onsite_fermion_occupation(j+1, detwf.pconfig)[2]
                 if pht
-                    derivatives[num] += -0.5 * (nup_i - ndn_i) * (nup_j - ndn_j)
+                    jpar_derivatives[num] += -0.5 * dblcount_correction * (nup_i - ndn_i) * (nup_j - ndn_j)
                 else
-                    derivatives[num] += -0.5 * (nup_i + ndn_i) * (nup_j + ndn_j)
+                    jpar_derivatives[num] += -0.5 * dblcount_correction * (nup_i + ndn_i) * (nup_j + ndn_j)
                 end
             end
         end
-
-        return derivatives
     end
+    return jpar_derivatives
 end
 
 
 """
 
-    get_hessian_matrix( measurement_container, bin )
+    get_covariance_matrix( measurement_container::NamedTuple, opt_bin_size::Int64 )
 
-Generates the covariance (Hessian) matrix S, for Stochastic Reconfiguration
-
-The matrix S has elements S_kk' = <Δ_kΔk'> - <Δ_k><Δ_k'>
+Calculates the covariance matrix S, for Stochastic Reconfiguration, with elements
+S_kk' = <Δ_kΔk'> - <Δ_k><Δ_k'>.
 
 """
-function get_hessian_matrix(measurement_container, opt_bin_size)
+function get_covariance_matrix(measurement_container::NamedTuple, opt_bin_size::Int64)
 
     # measure local parameters derivatives ⟨Δₖ⟩ for the current bin
     Δk = measurement_container.optimization_measurements["Δk"][1]/opt_bin_size
@@ -141,7 +174,7 @@ function get_hessian_matrix(measurement_container, opt_bin_size)
     # calculate the product of local derivatives ⟨Δₖ⟩⟨Δₖ'⟩
     ΔkΔk = Δk * Δk'  
 
-    # generate covariance matrix
+    # get S
     S = ΔkΔkp - ΔkΔk
     
     return S
@@ -150,17 +183,16 @@ end
 
 """
 
-    get_force_vector( measurement_container, bin )
+    get_force_vector( measurement_container::NamedTuple, opt_bin_size::Int64 )
 
-Generates the force vector f, for Stochastic Reconfiguration.
-
-The vector f has elements f_k = <Δ_k><H> - <Δ_kH>
+Generates the force vector f, for Stochastic Reconfiguration with elements 
+f_k = <Δ_k><H> - <Δ_kH>.
 
 """
-function get_force_vector(measurement_container, opt_bin_size)
+function get_force_vector(measurement_container::NamedTuple, opt_bin_size::Int64)
     
     # initialize force vector
-    f = [] 
+    f = [] # TODO: change this initialize a vector with Float64 elements
 
     # measure local parameters derivatives ⟨Δₖ⟩ for the current bin
     Δk = measurement_container.optimization_measurements["Δk"][1]/opt_bin_size
@@ -179,123 +211,27 @@ function get_force_vector(measurement_container, opt_bin_size)
         push!(f, fk)
     end
 
-    return f  # the length of f == number of vpars where the first p are the determinantal parameters and the rest are Jastrow parameters
+    return f 
 end
 
 
 """
 
-    parameter_gradient( S::Matrix{AbstractFloat}, η::Float64 )
+    variations( S::Matrix, f::Vector, η::Float64 )
 
-Perform gradient descent on variational parameters for Stochastic 
-Reconfiguration.
+Solves for the variation in parameters for Stochastic Reconfiguration.
 
 """
-function parameter_gradient(S, f, η)
+function variations(S, f, η::Float64)
     # Convert f to a vector of Float64
     f = convert(Vector{Float64}, f)
 
-    # add small variation to diagonal of S for numerical stabilization
-    S̃ = S + (η * I)
-
-    # solve for δα 
-    δvpars = S̃ \ f
+    # solve for variation in the parameters
+    δvpars = (S + (η * I)) \ f
 
     return δvpars
 end
 
 
-"""
 
-    sr_update!(measurement_container, determinantal_parameters, 
-                model_geometry, tight_binding_model, 
-                pconfig, Np, W, A, η, dt)
-
-Update variational parameters through stochastic optimization.
-
-"""
-function sr_update!(measurement_container, determinantal_parameters, η, dt, opt_bin_size)
-    if debug
-        println("Begin optimization...")
-    end
-
-    # get covariance (Hessian) matrix
-    S = get_hessian_matrix(measurement_container, opt_bin_size)
-
-    # get force vector
-    f = get_force_vector(measurement_container, opt_bin_size)
-
-    # perform gradient descent
-    δvpars = parameter_gradient(S,f,η)     
-
-    if debug
-        println("Parameters updated!")
-    end
-
-    # new varitaional parameters
-    vpars = reduce(vcat, determinantal_parameters.vals)
-    vpars += dt * δvpars
-
-    if debug
-        println("New parameters: ", vpars)
-    end
-
-    # push back determinantal_parameters
-    update_detpars!(determinantal_parameters, vpars)
-
-    if debug
-        println("End of optimization...")
-    end
-
-    return nothing
-end
-
-
-"""
-
-    sr_update!(measurement_container, determinantal_parameters, 
-                jastrow, model_geometry, tight_binding_model, 
-                pconfig, Np, W, A, η, dt)
-
-Update variational parameters through stochastic optimization.
-
-"""
-function sr_update!(measurement_container, determinantal_parameters, jastrow, η, dt, bin_size)
-    if debug
-        println("Begin optimization...")
-    end
-
-    # get covariance (Hessian) matrix
-    S = get_hessian_matrix(measurement_container, bin_size)
-
-    # get force vector
-    f = get_force_vector(measurement_container, bin_size)
-
-    # perform gradient descent
-    δvpars = parameter_gradient(S,f,η)     
-
-    if debug
-        println("Parameters updated!")
-    end
-
-    # new varitaional parameters
-    vpars = all_vpars(determinantal_parameters, jastrow)
-    vpars += dt * δvpars
-
-    if debug
-        println("New parameters: ", vpars)
-    end
-
-    # push back Jastrow parameters
-    update_jastrow!(jastrow, vpars)
-
-    # push back determinantal_parameters
-    update_detpars!(determinantal_parameters, vpars)
-
-    if debug
-        println("End of optimization...")
-    end
-
-    return nothing
-end
 
