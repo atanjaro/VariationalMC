@@ -1,0 +1,24 @@
+VariationalMC.jl
+
+VMC TEST 03/10/2025
+
+seed = 4249684800071112050
+DEBUG == true
+OPTIMIZATION TIME: 4280.7 sec (71.345 min, 1.1891 hrs)
+
+PARAMETERS:
+L = 4
+t = 1.0
+U = 8.0
+Δa = 0.1
+n̄ = 1.0
+nup = 2
+ndn = 2
+
+PHT == false
+
+N_opts = 100
+opt_bin_size = 100
+mc_meas_freq = 300
+η = 1e-4
+dt = 0.01

@@ -1,6 +1,6 @@
 """
 
-    ModelGeometry( unit_cell::UnitCell, lattice::Lattice )
+    ModelGeometry( unit_cell::UnitCell, lattice::Lattice, bond::Vector{Vector{Any}} )
 
 A type defining model geometry.
 
@@ -20,10 +20,9 @@ end
 
 """
 
-    TightBindingModel( t::Vector{AbstractFloat}, μ::AbstractFloat, 
-                    model_geometry::ModelGeometry, nbr_table::Matrix{Int64} )
+    TightBindingModel( t::Vector{AbstractFloat}, μ::AbstractFloat )
 
-A type defining a non-interacting tight binding model
+A type defining a non-interacting tight binding model.
 
 """
 struct TightBindingModel    
@@ -38,9 +37,9 @@ end
 """
 
     DeterminantalParameters( pars::Vector{AbstractString}, 
-                        vals::Vector{AbstractFloat}, num_detpars::Int )
+                            vals::Vector{AbstractFloat}, num_detpars::Int )
 
-A type defining a set of variational parameters obtained from the fermionic determinant.
+A type defining a set of variational parameters for the determinantal wavefunction.
 
 """
 struct DeterminantalParameters
@@ -57,12 +56,13 @@ end
 
 """
 
-    initialize_determinantal_parameters(pars:;Vector{AbstractString}, vals::Vector{AbstractFloat} ) 
+    initialize_determinantal_parameters( pars:;Vector{AbstractString}, 
+                                        vals::Vector{AbstractFloat} )::DeterminantalParameters
 
-Constructor for the variational parameters type.
+Creates an instances of the DeterminantalParameters type.
 
 """
-function initialize_determinantal_parameters(pars, vals)
+function initialize_determinantal_parameters(pars, vals)::DeterminantalParameters
     @assert length(pars) == length(vals) "Input vectors must have the same length"
     
     # Calculate num_detpars as the total number of elements in all inner vectors of vals
@@ -74,12 +74,28 @@ end
 
 """
 
-    update_detpars!( determinantal_parameters::DeterminantalParameters, new_vpars::Vector{AbstractFloat} )
+    build_mean_field_hamiltonian( tight_binding_model::TightBindingModel, 
+                                    determinantal_parameters::DeterminantalParameters ) 
+
+Constructs a matrix by combining the non-interacting Hamiltonian with
+matrix of variational terms.
+
+"""
+function build_mean_field_hamiltonian(tight_binding_model::TightBindingModel, 
+                                        determinantal_parameters::DeterminantalParameters)
+    return build_tight_binding_model(tight_binding_model) + build_variational_terms(determinantal_parameters)[1], 
+            build_variational_terms(determinantal_parameters)[2];
+end
+
+
+"""
+
+    update_detpars!( determinantal_parameters::DeterminantalParameters, Vector{Float64} )
 
 Updates determinantal_parameters.
 
 """
-function update_detpars!(determinantal_parameters, new_vpars)
+function update_detpars!(determinantal_parameters::DeterminantalParameters, new_vpars::Vector{Float64})
     num_detpars = determinantal_parameters.num_detpars
     current_vals = determinantal_parameters.vals
 
@@ -93,34 +109,15 @@ function update_detpars!(determinantal_parameters, new_vpars)
 end
 
 
-
-"""
-    map_determinantal_parameters( determinantal_parameters::DeterminantalParameters ) 
-
-For a given set of variational parameters, returns a dictionary of 
-that reports the value and optimization flag for a given parameter.
-
-"""
-function map_determinantal_parameters(determinantal_parameters)
-    vparam_map = Dict()
-    for i in 1:length(determinantal_parameters.vals)
-       vparam_map[determinantal_parameters.pars[i]] = determinantal_parameters.vals[i]
-    end
-    return vparam_map
-end
-
-
 """
 
     build_tight_binding_model( tight_binding_model::TightBindingModel ) 
 
-Constructs a 2 × n × N by 2 × n × N Hamiltonian matrix, where n is the
-number of orbitals per unit cell and N is the number of lattice sites,
-given tight binding parameters t, t', and μ. TODO: change tight binding
-parameters to tx,ty,t' for future SSH model functionality.
+Constructs a 2 × n × N by 2 × n × N Hamiltonian matrix, where n is the number of orbitals 
+per unit cell and N is the number of lattice sites, given tight binding parameters t, t', and μ. 
 
 """
-function build_tight_binding_model(tight_binding_model)
+function build_tight_binding_model(tight_binding_model::TightBindingModel)
     # number of sites
     N = model_geometry.unit_cell.n*model_geometry.lattice.N 
 
@@ -141,12 +138,12 @@ function build_tight_binding_model(tight_binding_model)
     # initial chemical potential
     μ = tight_binding_model.μ
 
-    if debug
-        println("Building tight binding model...")
-        println("Hopping parameters:")
-        println("t0 = ", t0)
-        println("t1 = ", t1)
-    end
+    debug && println("Hamiltonian::build_tight_binding_model() : ")
+    debug && println("building tight binding model")
+    debug && println("hopping : t0 = ", t0)
+    debug && println("hopping : t1 = ", t1)
+    debug && println("particle-hole transformation : ", pht)
+    debug && println("optimize μ_BCS : ", "μ_BCS" in parameters_to_optimize)
 
     if pht == true
         # particle-hole transformed chemical potential
@@ -306,10 +303,6 @@ function build_tight_binding_model(tight_binding_model)
     end
 
     if !("μ_BCS" in parameters_to_optimize)
-        if debug
-            println("Adding starting chemical potential...")
-        end
-
         return H_t + H_tp + LinearAlgebra.Diagonal(μ_vec);
     else
         return H_t + H_tp;
@@ -330,7 +323,7 @@ function build_variational_terms(determinantal_parameters)
     # lattice sites
     N = model_geometry.unit_cell.n*model_geometry.lattice.N
 
-    # exent of the lattice
+    # one side of the lattice
     L = model_geometry.lattice.L
 
     # map of available variational parameters
@@ -354,11 +347,10 @@ function build_variational_terms(determinantal_parameters)
 
         Vs = copy(Hs)
 
-        if debug
-            println("Adding Δs term...")
-            println("Initial Δs = ", vparam_map["Δs"][1])
-        end
-
+        debug && println("Hamiltonian::build_variational_terms() : ")
+        debug && println("adding s-wave term")
+        debug && println("initial Δs = ", vparam_map["Δs"][1])
+        
         # populate variational operator
         for i in 0:(2 * N - 1)
             Vs[i + 1, get_linked_spindex(i, N) + 1] = 1.0  
@@ -375,10 +367,9 @@ function build_variational_terms(determinantal_parameters)
         # ensure that particle-hole transformation is on
         @assert pht == true
 
-        if debug
-            println("Adding Δd term...")
-            println("Initial Δd = ", vparam_map["Δd"][1])
-        end
+        debug && println("Hamiltonian::build_variational_terms() : ")
+        debug && println("adding d-wave term")
+        debug && println("initial Δd = ", vparam_map["Δd"][1])
 
         # create neighbor table
         nbr_table = build_neighbor_table(bonds[1],
@@ -429,10 +420,10 @@ function build_variational_terms(determinantal_parameters)
 
     # antiferromagnetic (Neél) order
     if haskey(vparam_map, "Δa") == true
-        if debug
-            println("Adding Δa term...")
-            println("Initial Δa = ", vparam_map["Δa"][1])
-        end
+        debug && println("Hamiltonian::build_variational_terms() : ")
+        debug && println("adding spin-z term")
+        debug && println("initial Δa = ", vparam_map["Δa"][1])
+
         # diagonal vector
         afm_vec = fill(1,2*N)
 
@@ -510,10 +501,10 @@ function build_variational_terms(determinantal_parameters)
 
     # uniform charge density wave 
     if haskey(vparam_map, "Δc") == true
-        if debug
-            println("Adding Δc term...")
-            println("Initial Δc = ", vparam_map["Δc"][1])
-        end
+        debug && println("Hamiltonian::build_variational_terms() : ")
+        debug && println("adding charge term")
+        debug && println("initial Δc = ", vparam_map["Δc"][1])
+      
         # diagonal vector
         cdw_vec = fill(1,2*N)
 
@@ -557,10 +548,10 @@ function build_variational_terms(determinantal_parameters)
 
     # (BCS) chemical potential
     if haskey(vparam_map, "μ_BCS") == true
-        if debug
-            println("Adding μ_BCS term...")
-            println("Initial μ_BCS = ", vparam_map["μ_BCS"][1])
-        end
+        debug && println("Hamiltonian::build_variational_terms() : ")
+        debug && println("adding chemical potential term")
+        debug && println("initial μ_BCS = ", vparam_map["μ_BCS"][1])
+     
         # diagonal vector
         μ_vec = fill(-1,2*N);
 
@@ -590,9 +581,9 @@ function build_variational_terms(determinantal_parameters)
         # ensure that particle-hole transformation is off
         @assert pht == false
 
-        if debug
-            println("Adding Δcs term...")
-        end
+        debug && println("Hamiltonian::build_variational_terms() : ")
+        debug && println("adding stripe term")
+        debug && println("initial Δcs = ", vparam_map["Δcs"][1])
 
         # store diagonal vectors
         cs_vectors = []
@@ -630,10 +621,9 @@ function build_variational_terms(determinantal_parameters)
         # ensure that particle-hole transformation is off
         @assert pht == false
 
-        if debug
-            println("Adding Δss term...")
-        end
-
+        debug && println("Hamiltonian::build_variational_terms() : ")
+        debug && println("adding stripe term")
+        debug && println("initial Δss = ", vparam_map["Δss"][1])
 
         # store diagonal vectors
         ss_vectors = []
@@ -683,17 +673,16 @@ end
 
 """
 
-    get_Ak_matrices( V::Vector{Matrix{AbstractFloat}}, U::Matrix{AbstractFloat}, ε::Vector{AbstractFloat}, model_geometry::ModelGeometry ) 
+    get_variational_matrices( V::Vector{Any}, U_int::Matrix{ComplexF64}, 
+                            ε::Vector{Float64}, model_geometry::ModelGeometry )::Vector{Any} 
     
-Returns variational parameter matrices Aₖ from the corresponding Vₖ. Computes Qₖ = (U⁺VₖU)_(ην) / (ε_η - ε_ν), for η > Nₚ and ν ≤ Nₚ and is 0 otherwise
-(η and ν run from 1 to 2L)
+Returns variational parameter matrices Aₖ from the corresponding Vₖ. Computes Qₖ = (U⁺VₖU)_(ην) / (ε_η - ε_ν), 
+for η > Nₚ and ν ≤ Nₚ and is 0 otherwise (η and ν run from 1 to 2L).
 
 """
-function get_Ak_matrices(V, Uₑ, ε, model_geometry)
-    if debug
-        println("Building A matrices...")
-    end
-
+function get_variational_matrices(V::Vector{Any}, U_int::Matrix{ComplexF64}, 
+                                    ε::Vector{Float64}, model_geometry::ModelGeometry)::Vector{Any}
+    # number of lattice sites
     N = model_geometry.unit_cell.n * model_geometry.lattice.N;
 
     # define perturbation mask
@@ -709,7 +698,7 @@ function get_Ak_matrices(V, Uₑ, ε, model_geometry)
 
     int_A = [];
     for v in V
-        push!(int_A, Uₑ * ((Uₑ' * v * Uₑ) .* ptmask) * Uₑ')
+        push!(int_A, U_int * ((U_int' * v * U_int) .* ptmask) * U_int')
     end
 
     return int_A;
@@ -717,30 +706,32 @@ end
 
 
 """
+    map_determinantal_parameters( determinantal_parameters::DeterminantalParameters ) 
 
-    build_mean_field_hamiltonian( tight_binding_model::TightBindingModel, determinantal_parameters::DeterminantalParameters ) 
-
-Constructs a matrix by combining the non-interacting Hamiltonian with
-matrix of variational terms.
+For a given set of variational parameters, returns a dictionary of that reports the value 
+and optimization flag for a given parameter.
 
 """
-function build_mean_field_hamiltonian(tight_binding_model::TightBindingModel, determinantal_parameters::DeterminantalParameters)
-    if debug
-        println("Building mean-field Hamiltonian...")
+function map_determinantal_parameters(determinantal_parameters::DeterminantalParameters)
+    vparam_map = Dict()
+
+    for i in 1:length(determinantal_parameters.vals)
+       vparam_map[determinantal_parameters.pars[i]] = determinantal_parameters.vals[i]
     end
-    return build_tight_binding_model(tight_binding_model) + build_variational_terms(determinantal_parameters)[1], build_variational_terms(determinantal_parameters)[2];
+
+    return vparam_map
 end
 
 
 """
 
-    get_tb_chem_pot(Ne, tight_binding_model, model_geometry) 
+    get_tb_chem_pot( Ne::Int64, tight_binding_model::TightBindingModel, model_geometry::ModelGeometry )::Float64
 
 For a tight-binding model that has not been particle-hole transformed, returns the  
 chemical potential.
 
 """
-function get_tb_chem_pot(Ne, tight_binding_model, model_geometry)
+function get_tb_chem_pot(Ne::Int64, tight_binding_model::TightBindingModel, model_geometry::ModelGeometry)::Float64
     @assert pht == false
 
     # number of lattice sites
@@ -839,10 +830,9 @@ function get_tb_chem_pot(Ne, tight_binding_model, model_geometry)
     # tight-binding chemical potential
     μ = 0.5 * (ε_F[Ne + 1] + ε_F[Ne])
 
-    if debug
-        println("Tight-binding chemical potential is")
-        println("mu = ", μ)
-    end
+    debug && println("Hamiltonian::get_tb_chem_pot() : ")
+    debug && println("tight-binding chemical potential")
+    debug && println("μ = ", μ)
 
     return μ
 end
