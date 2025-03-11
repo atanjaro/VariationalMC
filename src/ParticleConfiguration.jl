@@ -22,14 +22,14 @@ end
 
 """
 
-    propose_random_hop( Ne::Int64, pconfig::Vector{Int64}, 
+    propose_random_move( Ne::Int64, pconfig::Vector{Int64}, 
                         model_geometry::ModelGeometry, rng::Xoshiro )::MarkovMove
 
-Proposes randomly hopping a particle from some intial site 'k' to a neighboring site 'l' and returns an instance of 
-the MarkovMove type. 
+Proposes randomly hopping or exchanging a particle from some intial site 'k' to a neighboring site 'l' 
+and returns an instance of the MarkovMove type. 
 
-""" # TODO: add loop over different nieghbor orders (i.e. next-nearest neighbors)
-function propose_random_hop(Ne::Int64, pconfig::Vector{Int64}, 
+""" # TODO: add loop over different neighbor orders (i.e. next-nearest neighbors)
+function propose_random_move(Ne::Int64, pconfig::Vector{Int64}, 
                             model_geometry::ModelGeometry, rng::Xoshiro)::MarkovMove
     # create nearest neighbor table
     nbr_table = build_neighbor_table(model_geometry.bond[1],
@@ -71,10 +71,10 @@ function propose_random_hop(Ne::Int64, pconfig::Vector{Int64},
 
     @assert(get_spindex_type(k, model_geometry) == get_spindex_type(l, model_geometry))
 
-    debug && println("ParticleConfiguration::propose_random_hop() : proposing random hop")
-    debug && println("particle ", β, " from ", k, " to ", l)
+    debug && println("ParticleConfiguration::propose_random_move() : proposing random move")
+    debug && println("particle: ", β, ", isite: ", k, ", jsite: ", l)
 
-    # whether hop is possible
+    # whether move is possible
     if pconfig[l] == 0
         possible = true
     else
@@ -88,7 +88,7 @@ end
 """
     hop!( met_step, pconfig::Vector{Int}, model_geometry::ModelGeometry )::Nothing
 
-If proposed particle hop is accepted, updates the particle positions.
+If proposed hopping move is accepted, updates the particle positions.
 
 """
 function hop!(markov_move, pconfig::Vector{Int})::Nothing
@@ -121,10 +121,51 @@ end
 
 
 """
+    exchange!( met_step, pconfig::Vector{Int}, model_geometry::ModelGeometry )::Nothing
+
+If proposed exchange move is accepted, updates the particle positions.
+
+"""
+# TODO: need to debug
+function exchange!(markov_move, pconfig::Vector{Int})::Nothing
+    @assert(markov_move.possible)
+
+    # particle number
+    β = markov_move.particle
+
+    # initial site
+    k = markov_move.k
+
+    # final site
+    l = markov_move.l
+
+    # get real site indices
+    ksite = get_index_from_spindex(k, model_geometry)
+    lsite = get_index_from_spindex(l, model_geometry)
+
+    debug && println("ParticleConfiguration::exchange!() : preparing to exchange")
+    debug && println("particle: ", β, ", isite: ", k, ", jsite ", l)
+
+    # update particle positions
+    pconfig[lsite] = pconfig[ksite]
+    pconfig[lsite + N] = pconfig[ksite + N]
+    pconfig[ksite] = 0
+    pconfig[ksite + N] = 0
+
+    debug && println("ParticleConfiguration::exchange!() : particle positions are")
+    debug && println(pconfig)
+
+    return nothing
+end
+
+
+"""
     generate_initial_fermion_configuration( nup::Int64, ndn::Int64, 
                                             model_geometry::ModelGeometry, rng::Xoshiro )::Vector{Int64}
 
-Generates a random initial configuration of electrons.
+Generates a random initial configuration of spin-up and spin-down fermions. The first N elements correspond 
+to spin-up and the last N correspond to spin-down. Occupation is denoted by a positive integer corresponding 
+to that particle's creation operator label. 
 
 """
 function generate_initial_fermion_configuration(nup::Int64, ndn::Int64, 

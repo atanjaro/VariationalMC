@@ -1,12 +1,13 @@
 VariationalMC.jl
 
-VMC TEST 03/10/2025
+VMC TEST 1 03/10/2025
 
 seed = 4249684800071112050
 DEBUG == true
 OPTIMIZATION TIME: 4280.7 sec (71.345 min, 1.1891 hrs)
+global_acceptance_rate = 0.4597
 
-PARAMETERS:
+MODEL PARAMETERS:
 L = 4
 t = 1.0
 U = 8.0
@@ -14,11 +15,12 @@ U = 8.0
 n̄ = 1.0
 nup = 2
 ndn = 2
-
 PHT == false
 
+SIMULATION PARAMETERS
 N_opts = 100
 opt_bin_size = 100
 mc_meas_freq = 300
 η = 1e-4
 dt = 0.01
+

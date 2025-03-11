@@ -130,7 +130,7 @@ seed = 4249684800071112050; # abs(rand(Int))
 rng = Xoshiro(seed);
 
 # number of minimization/optimization updates
-N_opts = 100;
+N_opts = 1000;
 
 # optimization bin size
 opt_bin_size = 100;
@@ -160,10 +160,10 @@ n_stab = 1;
 η = 1e-4;    
 
 # optimization rate for Stochastic Reconfiguration
-dt = 0.01;   # 0.03      
+dt = 0.1;   # 0.03      
 
 # whether debug statements are printed 
-debug = true;
+debug = false;
 
 
 ##############################################
@@ -238,19 +238,19 @@ vij_1 = [v[2] for v in param_bin]
 vij_2 = [v[3] for v in param_bin]
 
 # plot energy per site
-scatter(1:100, energy_bin/opt_bin_size, marker=:square, color=:red, markersize=5, markerstrokewidth=0,
+scatter(1:200, energy_bin/opt_bin_size, marker=:square, color=:red, markersize=5, markerstrokewidth=0,
         legend=false, xlabel="Optimization steps", ylabel=L"E/N", tickfontsize=14, guidefontsize=14, legendfontsize=14,
-        xlims=(0,100), ylims=(-3.5,2))
+        xlims=(0,200),ylims=(-10,2))
 
 # plot double occupancy
-scatter(1:100, dblocc_bin/opt_bin_size, marker=:square, color=:red, markersize=5, markerstrokewidth=0,
+scatter(1:200, dblocc_bin/opt_bin_size, marker=:square, color=:red, markersize=5, markerstrokewidth=0,
         legend=false, xlabel="Optimization steps", ylabel=L"D", tickfontsize=14, guidefontsize=14, legendfontsize=14,
-        xlims=(0,100), ylims=(0,0.5))
+        xlims=(0,200), ylims=(0,0.5))
 
 # plot AFM parameter
-scatter(1:100, deltaa/opt_bin_size, marker=:circle, color=:blue, markersize=5, markerstrokewidth=0,
+scatter(1:200, deltaa/opt_bin_size, marker=:circle, color=:blue, markersize=5, markerstrokewidth=0,
         legend=false, xlabel="Optimization steps", ylabel=L"\Delta_a", tickfontsize=14, guidefontsize=14, legendfontsize=14,
-        xlims=(0,100), ylims=(0,2))
+        xlims=(0,200))
 
 # plot Jastrow parameters
 scatter(1:100, vij_1/opt_bin_size, marker=:circle, color=:blue, markersize=5, markerstrokewidth=0,
