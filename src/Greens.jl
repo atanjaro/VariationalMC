@@ -172,6 +172,7 @@ recalculated Green's function Wᵣ replaces the updated Green's function Wᵤ as
 for the current configuration.
 
 """
+# TODO: this may not be working properly. Will investigate...
 function check_deviation!(detwf::DeterminantalWavefunction, δW::Float64, Ne::Int64, model_geometry::ModelGeometry)::Nothing
     # number of lattice sites
     N = model_geometry.lattice.N

@@ -25,7 +25,7 @@ function local_fermion_update!(mc_meas_freq::Int64, detwf::DeterminantalWavefunc
             rejections += 1.0
         end
 
-        # # check for numerical stability 
+        # check for numerical stability 
         # if mc % n_stab == 0
         #     # check stability of the equal-time Green's function 
         #     check_deviation!(detwf, δW, Ne, model_geometry)
@@ -53,7 +53,7 @@ Proposes a Markov move and then accepts or rejects using the Metropolis algorith
 function metropolis_step(detwf::DeterminantalWavefunction, jastrow::Jastrow, Ne::Int, 
                         model_geometry::ModelGeometry, pht::Bool, rng::Xoshiro)::String
     # propose a Markov move
-    markov_move = propose_random_hop(Ne, detwf.pconfig, model_geometry, rng)
+    markov_move = propose_random_move(Ne, detwf.pconfig, model_geometry, rng)
 
     if markov_move.possible == false
         debug && println("Markov::metropolis_step() : hop impossible!")

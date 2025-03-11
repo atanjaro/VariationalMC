@@ -36,6 +36,25 @@ end
 
 """
 
+    SpinModel
+
+A type defining a spin model.
+
+"""
+struct SpinModel
+    # nearest neighbor spin exchange coupling 
+    J₁::Float64
+
+    # next nearest neighbor spin exchange coupling
+    J₂::Float64
+
+    # next next nearest neighbor spin exchange coupling
+    J₃::Float64
+end
+
+
+"""
+
     DeterminantalParameters( pars::Vector{AbstractString}, 
                             vals::Vector{AbstractFloat}, num_detpars::Int )
 
