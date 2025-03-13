@@ -26,13 +26,13 @@ function local_fermion_update!(mc_meas_freq::Int64, detwf::DeterminantalWavefunc
         end
 
         # check for numerical stability 
-        # if mc % n_stab == 0
-        #     # check stability of the equal-time Green's function 
-        #     check_deviation!(detwf, δW, Ne, model_geometry)
+        if mc % n_stab == 0
+            # check stability of the equal-time Green's function 
+            check_deviation!(detwf, δW, Ne, model_geometry)
             
-        #     # check stability of the Jastrow T vector
-        #     check_deviation!(jastrow, δT)
-        # end
+            # check stability of the Jastrow T vector
+            check_deviation!(jastrow, δT)
+        end
     end
 
     # calculate local acceptance rate

@@ -503,7 +503,6 @@ function measure_n!(measurement_container::NamedTuple,
 end
 
 
-
 """
     get_local_energy( detwf::DeterminantalWavefunction, tight_binding_model::TightBindingModel, 
                         jastrow::Jastrow, model_geometry::ModelGeometry )
@@ -521,10 +520,10 @@ function get_local_energy(detwf::DeterminantalWavefunction, tight_binding_model:
 
     # calculate Hubbard energy
     E_hubb = get_local_hubbard_energy(U, detwf, model_geometry, pht)
-    
+
     # calculate total local energy
     E_loc = E_k + E_hubb
-
+    
     return E_loc/N
 end
 
