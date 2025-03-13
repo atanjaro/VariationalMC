@@ -26,7 +26,7 @@ include("Measurements.jl");
 ##          LATTICE PARAMETERS           ##
 ###########################################
 # define the size of the lattice
-Lx = 4;
+Lx = 8;
 Ly = 1;
 
 # chain unit cell
@@ -65,7 +65,7 @@ tp = 0.0;
 U = 8.0;
 
 # antiferromagnetic (Neél) order parameter
-Δa = 0.1;
+Δa = 0.001;
 
 # Parameters to be optimized and initial value(s)
 parameters_to_optimize = ["Δa"];   
@@ -124,13 +124,13 @@ initialize_datafolder(simulation_info);
 ##############################################
 
 # random seed
-seed = 4249684800071112050; # abs(rand(Int))
+seed = 8947935343182193186 # abs(rand(Int))
 
 # initialize random number generator
 rng = Xoshiro(seed);
 
 # number of minimization/optimization updates
-N_opts = 1000;
+N_opts = 100;
 
 # optimization bin size
 opt_bin_size = 100;
@@ -160,7 +160,7 @@ n_stab = 1;
 η = 1e-4;    
 
 # optimization rate for Stochastic Reconfiguration
-dt = 0.1;   # 0.03      
+dt = 0.03;   # 0.03      
 
 # whether debug statements are printed 
 debug = false;
@@ -222,7 +222,7 @@ for bin in 1:N_opts
 end
 end_time = time()
 
-# time for optimization
+# time for optimization 
 opt_time = end_time - start_time
 
 
@@ -238,27 +238,27 @@ vij_1 = [v[2] for v in param_bin]
 vij_2 = [v[3] for v in param_bin]
 
 # plot energy per site
-scatter(1:200, energy_bin/opt_bin_size, marker=:square, color=:red, markersize=5, markerstrokewidth=0,
+scatter(1:100, energy_bin/opt_bin_size, marker=:square, color=:red, markersize=5, markerstrokewidth=0,
         legend=false, xlabel="Optimization steps", ylabel=L"E/N", tickfontsize=14, guidefontsize=14, legendfontsize=14,
-        xlims=(0,200),ylims=(-10,2))
+        xlims=(0,100))
 
 # plot double occupancy
-scatter(1:200, dblocc_bin/opt_bin_size, marker=:square, color=:red, markersize=5, markerstrokewidth=0,
+scatter(1:100, dblocc_bin/opt_bin_size, marker=:square, color=:red, markersize=5, markerstrokewidth=0,
         legend=false, xlabel="Optimization steps", ylabel=L"D", tickfontsize=14, guidefontsize=14, legendfontsize=14,
-        xlims=(0,200), ylims=(0,0.5))
+        xlims=(0,100), ylims=(0,0.5))
 
 # plot AFM parameter
-scatter(1:200, deltaa/opt_bin_size, marker=:circle, color=:blue, markersize=5, markerstrokewidth=0,
+scatter(1:100, deltaa/opt_bin_size, marker=:circle, color=:blue, markersize=5, markerstrokewidth=0,
         legend=false, xlabel="Optimization steps", ylabel=L"\Delta_a", tickfontsize=14, guidefontsize=14, legendfontsize=14,
-        xlims=(0,200))
+        xlims=(0,100))
 
 # plot Jastrow parameters
 scatter(1:100, vij_1/opt_bin_size, marker=:circle, color=:blue, markersize=5, markerstrokewidth=0,
         label=L"v_{ij}^1", xlabel="Optimization steps", ylabel=L"v_{ij}", tickfontsize=14, guidefontsize=14, legendfontsize=14,
-        xlims=(0,100),ylims=(-0.55,0.55)) 
+        xlims=(0,100)) 
 scatter!(1:100, vij_2/opt_bin_size, marker=:square, color=:red, markersize=5, markerstrokewidth=0,
         label=L"v_{ij}^2", xlabel="Optimization steps", ylabel=L"v_{ij}", tickfontsize=14, guidefontsize=14, legendfontsize=14,
-        xlims=(0,100),ylims=(-0.55,0.55))
+        xlims=(0,100))
 
 
 ## END TESTING

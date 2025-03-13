@@ -57,7 +57,7 @@ function build_determinantal_wavefunction(tight_binding_model::TightBindingModel
     end
 
     # initialize variational parameter matrices
-    A = get_variational_matrices(V, U_int, ε, model_geometry)
+    A = get_variational_matrices(V, U_int, ε, model_geometry);
 
     # get M matrix
     M = Matrix{ComplexF64}(view(U_int, 1:size(U_int,1), 1:Ne));
@@ -72,7 +72,7 @@ function build_determinantal_wavefunction(tight_binding_model::TightBindingModel
     pconfig = generate_initial_fermion_configuration(nup, ndn, model_geometry, rng);
 
     # initialize equal-time Green's function and Slater matrix
-    overlap = initialize_equal_time_greens!(W, D, M, pconfig, N, Ne);
+    overlap = initialize_equal_time_greens!(W, D, M, pconfig, Ne);
 
     while overlap == false
         debug && println("Greens::build_determinantal_wavefunction() : ")
@@ -84,7 +84,7 @@ function build_determinantal_wavefunction(tight_binding_model::TightBindingModel
         pconfig = generate_initial_fermion_configuration(nup, ndn, model_geometry, rng);
 
         # re-initialize equal-time Green's function and Slater matrix
-        overlap = initialize_equal_time_greens!(W, D, M, pconfig, N, Ne);
+        overlap = initialize_equal_time_greens!(W, D, M, pconfig, Ne);
     end
 
     return DeterminantalWavefunction(W, D, M, U_int, A, ε, pconfig);
@@ -96,13 +96,13 @@ end
     initialize_equal_time_greens( W::Matrix{ComplexF64}, D::Matrix{ComplexF64}, 
                                         M::Matrix{ComplexF64}, pconfig::Vector{Int64}, N::Int64, Ne::Int64 )
     
-Computes the equal-time Green's function by solving DᵀWᵀ = Mᵀ using full pivot LU decomposition.
+Computes the equal-time Green's function.
 
 """
 function initialize_equal_time_greens!(W::Matrix{ComplexF64}, D::Matrix{ComplexF64}, 
-                                        M::Matrix{ComplexF64}, pconfig::Vector{Int64}, N::Int64, Ne::Int64)
+                                        M::Matrix{ComplexF64}, pconfig::Vector{Int64}, Ne::Int64)
     # get indices from the particle configuration
-    config_indices = findall(x -> 1 ≤ x ≤ Ne, pconfig);
+    config_indices = [findfirst(==(i), pconfig) for i in 1:Ne];
 
     # get Slater matrix
     D .= M[config_indices, :];
@@ -111,23 +111,64 @@ function initialize_equal_time_greens!(W::Matrix{ComplexF64}, D::Matrix{ComplexF
         debug && println("Greens::initialize_equal_time_greens() : state has no")
         debug && println("overlap with the determinantal wavefunction, ")
         debug && println("D = ")
-        debug && show(D)
+        debug && display(D)
+        debug && println("determinant of D = ", det(D))
 
         return false;
     else        
+        # LU decomposition of D'
+        lu_decomp = lu(D')
+        
         # calculate the equal-time Green's function
-        for i in 1:2*N  # nrows
-            for j in 1:Ne # ncols
-                sum = ComplexF64(0.0, 0.0);
-                for k in 1:Ne # ncols
-                    sum += M[i, k] * D[k, j];
-                end
-                W[i, j] = sum;
-            end
-        end
+        W .= transpose(lu_decomp \ transpose(M))
 
         return true;
     end            
+end
+
+# function initialize_equal_time_greens!(W::Matrix{ComplexF64}, D::Matrix{ComplexF64}, 
+#                                         M::Matrix{ComplexF64}, pconfig::Vector{Int64}, N::Int64, Ne::Int64)
+#     # get indices from the particle configuration
+#     config_indices = findall(x -> 1 ≤ x ≤ Ne, pconfig);
+
+#     # get Slater matrix
+#     D .= M[config_indices, :];
+
+#     if abs(det(D)) < 1e-12 * size(D, 1) 
+#         debug && println("Greens::initialize_equal_time_greens() : state has no")
+#         debug && println("overlap with the determinantal wavefunction, ")
+#         debug && println("D = ")
+#         debug && display(D)
+
+#         return false;
+#     else        
+#         # calculate the equal-time Green's function
+#         for i in 1:2*N  # nrows
+#             for j in 1:Ne # ncols
+#                 sum = ComplexF64(0.0, 0.0);
+#                 for k in 1:Ne # ncols
+#                     sum += M[i, k] * D[k, j];
+#                 end
+#                 W[i, j] = sum;
+#             end
+#         end
+
+#         return true;
+#     end            
+# end
+
+
+"""
+    DEBUG
+"""
+function check_order_magnitude_jump(W::AbstractMatrix{ComplexF64})
+    abs_W = abs.(W)  # Compute magnitudes of complex elements
+    max_val = maximum(abs_W)  # Get the maximum magnitude
+
+    # Ensure elements do not exceed 10^1
+    if max_val > 10
+        error("Order of magnitude jump detected in W! Max value found = $max_val, which exceeds 10.")
+    end
 end
 
 
@@ -148,19 +189,70 @@ function rank1_update!(markov_move::MarkovMove, detwf::DeterminantalWavefunction
     l = markov_move.l
 
     # get lth row of the Green's function
-    rₗ = detwf.W[l, :]
+    rₗ  = detwf.W[l, :]  # rₗ = view(detwf.W, l, :)
 
-    # subtract 1 from the βth element of 
-    rₗ[β] -=1
+    # subtract 1 from the βth element
+    rₗ[β] -= 1.0 
 
     # get the βth column of the Green's function
-    cᵦ = detwf.W[:,β]
+    cᵦ = detwf.W[:, β]  
 
-    # perform rank-1 update
-    detwf.W -= cᵦ * rₗ' / detwf.W[l, β]
+    # Perform rank-1 update
+    detwf.W -= (cᵦ / detwf.W[l, β]) * rₗ' 
+
+    check_order_magnitude_jump(detwf.W)
 
     return nothing
 end
+
+
+"""
+
+    recalculate_equal_time_greens( W::Matrix{ComplexF64}, D::Matrix{ComplexF64}, 
+                                        M::Matrix{ComplexF64}, pconfig::Vector{Int64}, N::Int64, Ne::Int64 )
+    
+Recomputes the equal-time Green's function.
+
+"""
+function recalculate_equal_time_greens!(Wᵣ::Matrix{ComplexF64}, Dᵣ::Matrix{ComplexF64}, 
+                                        M::Matrix{ComplexF64}, pconfig::Vector{Int64}, Ne::Int64)
+    # get indices from the particle configuration
+    config_indices = [findfirst(==(i), pconfig) for i in 1:Ne]; 
+
+    # get Slater matrix
+    Dᵣ .= M[config_indices, :];
+
+    # LU decomposition of D'
+    lu_decomp = lu(Dᵣ')
+
+    # calculate the equal-time Green's function
+    Wᵣ .= transpose(lu_decomp \ transpose(M))
+
+    return true;      
+end
+
+# function recalculate_equal_time_greens!(W::Matrix{ComplexF64}, D::Matrix{ComplexF64}, 
+#                                         M::Matrix{ComplexF64}, pconfig::Vector{Int64}, N::Int64, Ne::Int64)
+#     # get indices from the particle configuration
+#     config_indices = findall(x -> 1 ≤ x ≤ Ne, pconfig);
+
+#     # get Slater matrix
+#     D .= M[config_indices, :];
+
+#     # calculate the equal-time Green's function
+#     for i in 1:2*N  # nrows
+#         for j in 1:Ne # ncols
+#             sum = ComplexF64(0.0, 0.0);
+#             for k in 1:Ne # ncols
+#                 sum += M[i, k] * D[k, j];
+#             end
+#             W[i, j] = sum;
+#         end
+#     end
+
+#     return true;      
+# end
+
 
 
 """
@@ -172,7 +264,6 @@ recalculated Green's function Wᵣ replaces the updated Green's function Wᵤ as
 for the current configuration.
 
 """
-# TODO: this may not be working properly. Will investigate...
 function check_deviation!(detwf::DeterminantalWavefunction, δW::Float64, Ne::Int64, model_geometry::ModelGeometry)::Nothing
     # number of lattice sites
     N = model_geometry.lattice.N
@@ -184,7 +275,7 @@ function check_deviation!(detwf::DeterminantalWavefunction, δW::Float64, Ne::In
     Dᵣ = zeros(ComplexF64, Ne, Ne);
 
     # re-calculate the Green's function from scratch
-    initialize_equal_time_greens!(Wᵣ, Dᵣ, detwf.M, detwf.pconfig, N, Ne);
+    recalculate_equal_time_greens!(Wᵣ, Dᵣ, detwf.M, detwf.pconfig, Ne);
     
     # Difference in updated Green's function and recalculated Green's function
     difference = detwf.W .- Wᵣ;
@@ -201,11 +292,13 @@ function check_deviation!(detwf::DeterminantalWavefunction, δW::Float64, Ne::In
     if ΔW > δW
         debug && println("W not met!")
         debug && println("Greens::check_deviation!() : updated W = ")
-        debug && show(detwf.W);
+        debug && display(detwf.W);
         debug && println("Greens::check_deviation!() : exact W = ")
-        debug && show(Wᵣ);
+        debug && display(Wᵣ);
 
         detwf.W = Wᵣ;
+
+        check_order_magnitude_jump(detwf.W)
 
         return nothing;
     else
