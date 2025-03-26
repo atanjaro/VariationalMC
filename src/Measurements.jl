@@ -577,7 +577,7 @@ function get_local_kinetic_energy(detwf::DeterminantalWavefunction, tight_bindin
                 l = get_spindices_from_index(lsite, model_geometry)[2]
             end
 
-            # check that neighboring sites are unoccupied
+            # check that neighboring site is unoccupied
             if detwf.pconfig[l] == 0
                 Rⱼ = get_fermionic_jastrow_ratio(k, l, jastrow, pht, spin, model_geometry)
                 sum_nn += Rⱼ * detwf.W[l, β]
