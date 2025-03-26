@@ -26,7 +26,7 @@ include("Measurements.jl");
 ##          LATTICE PARAMETERS           ##
 ###########################################
 # define the size of the lattice
-Lx = 8;
+Lx = 4;
 Ly = 1;
 
 # chain unit cell
@@ -62,14 +62,21 @@ tp = 0.0;
 μ_BCS = 0.0;
 
 # onsite Hubbard repulsion
-U = 8.0;
+U = 0.5;
 
 # antiferromagnetic (Neél) order parameter
-Δa = 0.001;
+Δa = 0.1;
+
+# s-wave pairing (BCS)
+Δs = 0.1;
 
 # Parameters to be optimized and initial value(s)
 parameters_to_optimize = ["Δa"];   
 parameter_values = [[Δa]];     
+
+# # Parameters to be optimized and initial value(s)
+# parameters_to_optimize = ["Δs", "μ_BCS"];   
+# parameter_values = [[Δs],[μ_BCS]];  
 
 # whether model is particle-hole transformed
 pht = false;
@@ -78,8 +85,8 @@ pht = false;
 n̄ = 1.0;
 
 # # define electron numbers     
-# nup = 5
-# ndn = 5
+# nup = 2
+# ndn = 2
 
 # Get particle numbers 
 (Np, Ne, nup, ndn) = get_particle_numbers(n̄);       # Use this if an initial density is specified
@@ -133,7 +140,7 @@ rng = Xoshiro(seed);
 N_opts = 100;
 
 # optimization bin size
-opt_bin_size = 100;
+opt_bin_size = 3000;
 
 # number of simulation updates 
 N_updates = 100;
@@ -147,23 +154,42 @@ bin_size = div(N_updates, N_bins);
 # number of MC steps until measurement
 mc_meas_freq = 300;
 
-# number of steps until numerical stability is performed 
-n_stab = 1;
+# number of steps until numerical stabilization is performed 
+n_stab_W = 50;
+n_stab_T= 50;
 
 # maximum allowed error in the equal-time Green's function
 δW = 1e-3;
 
-# maximum allowed error in the Jastrow factor T vector
+# maximum allowed error in the Jastrow T vector
 δT = 1e-3;
 
 # stabilization factor for Stochastic Reconfiguration
 η = 1e-4;    
 
 # optimization rate for Stochastic Reconfiguration
-dt = 0.03;   # 0.03      
+dt = 0.01;   # 0.03      
 
 # whether debug statements are printed 
 debug = false;
+
+# # Initialize additional simulation information dictionary
+# additional_info = Dict(
+#     "δW" => δW,
+#     "δT" => δT,
+#     "total_time" => 0.0,
+#     "simulation_time" => 0.0,
+#     "optimization_time" => 0.0,
+#     "N_opts" => N_opts,
+#     "N_updates" => N_updates,
+#     "N_bins" => N_bins,
+#     "bin_size" => bin_size,
+#     "dt" => dt,
+#     "seed" => seed,
+#     "n_bar" => n̄,
+#     "global_energy" => 0.0,
+#     "μ_BCS" => 0.0
+# )
 
 
 ##############################################
@@ -213,7 +239,7 @@ for bin in 1:N_opts
         make_measurements!(measurement_container, detwf, tight_binding_model, 
                             determinantal_parameters, jastrow, model_geometry, Ne, pht)
     end
-    # peform update to variational parameters
+    # perform update to variational parameters
     stochastic_reconfiguration!(measurement_container, determinantal_parameters, 
                                 jastrow, η, dt, bin_size)
 
@@ -232,10 +258,17 @@ using LaTeXStrings
 
 # collect Δa
 deltaa = [v[1] for v in param_bin]
-
 # collect Jastrow pseudopotentials
 vij_1 = [v[2] for v in param_bin]
 vij_2 = [v[3] for v in param_bin]
+
+# collect Δs
+deltas = [v[1] for v in param_bin]
+# collect Δs
+mus = [v[2] for v in param_bin]
+# collect Jastrow pseudopotentials
+vij_1 = [v[3] for v in param_bin]
+vij_2 = [v[4] for v in param_bin]
 
 # plot energy per site
 scatter(1:100, energy_bin/opt_bin_size, marker=:square, color=:red, markersize=5, markerstrokewidth=0,
@@ -255,12 +288,10 @@ scatter(1:100, deltaa/opt_bin_size, marker=:circle, color=:blue, markersize=5, m
 # plot Jastrow parameters
 scatter(1:100, vij_1/opt_bin_size, marker=:circle, color=:blue, markersize=5, markerstrokewidth=0,
         label=L"v_{ij}^1", xlabel="Optimization steps", ylabel=L"v_{ij}", tickfontsize=14, guidefontsize=14, legendfontsize=14,
-        xlims=(0,100)) 
+        xlims=(0,100),ylims=(-5,1)) 
 scatter!(1:100, vij_2/opt_bin_size, marker=:square, color=:red, markersize=5, markerstrokewidth=0,
         label=L"v_{ij}^2", xlabel="Optimization steps", ylabel=L"v_{ij}", tickfontsize=14, guidefontsize=14, legendfontsize=14,
-        xlims=(0,100))
-
-
+        xlims=(0,100),ylims=(-5,1))
 ## END TESTING
 
 ###########################################

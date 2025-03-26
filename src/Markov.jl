@@ -10,6 +10,7 @@ Performs a local update to the electron sector, with a certain number of equilib
 function local_fermion_update!(mc_meas_freq::Int64, detwf::DeterminantalWavefunction, jastrow::Jastrow, 
                                 Ne::Int, model_geometry::ModelGeometry, 
                                 pht::Bool, δW::Float64, δT::Float64, rng::Xoshiro)
+    # track acceptances and rejections
     acceptances = 0.0
     rejections = 0.0
 
@@ -17,21 +18,13 @@ function local_fermion_update!(mc_meas_freq::Int64, detwf::DeterminantalWavefunc
         debug && println("Markov:local_fermion_update!() : Starting new Monte Carlo step")
         debug && println("Markov:local_fermion_update!() : Metropolis step = ", mc)
 
-        acceptance = metropolis_step(detwf, jastrow, Ne, model_geometry, pht, rng)
+        acceptance = metropolis_step(detwf, jastrow, Ne, n_stab_W, n_stab_T, 
+                                                        δW, δT, model_geometry, pht, rng)
 
         if acceptance == "accepted"
             acceptances += 1.0
         elseif acceptance == "rejected"
             rejections += 1.0
-        end
-
-        # check for numerical stability 
-        if mc % n_stab == 0
-            # check stability of the equal-time Green's function 
-            check_deviation!(detwf, δW, Ne, model_geometry)
-            
-            # check stability of the Jastrow T vector
-            check_deviation!(jastrow, δT)
         end
     end
 
@@ -44,13 +37,14 @@ end
 
 """
 
-metropolis_step( detwf::DeterminantalWavefunction, jastrow::Jastrow, Ne::Int, 
+    metropolis_step( detwf::DeterminantalWavefunction, jastrow::Jastrow, Ne::Int, 
                         model_geometry::ModelGeometry, bonds::Vector{Vector{Bond{1}}}, pht::Bool, rng::Xoshiro )::String
 
 Proposes a Markov move and then accepts or rejects using the Metropolis algorithm. 
 
 """
 function metropolis_step(detwf::DeterminantalWavefunction, jastrow::Jastrow, Ne::Int, 
+                        n_stab_W::Int64, n_stab_T::Int64, δW::Float64, δT::Float64, 
                         model_geometry::ModelGeometry, pht::Bool, rng::Xoshiro)::String
     # propose a Markov move
     markov_move = propose_random_move(Ne, detwf.pconfig, model_geometry, rng)
@@ -83,11 +77,11 @@ function metropolis_step(detwf::DeterminantalWavefunction, jastrow::Jastrow, Ne:
             # hop the particle
             hop!(markov_move, detwf.pconfig)
 
-            # perform rank-1 update
-            rank1_update!(markov_move, detwf) 
+            # perform rank-1 update to W matrix
+            update_equal_time_greens!(markov_move, detwf, model_geometry, Ne, n_stab_W, δW) 
 
             # update T vector
-            update_fermionic_Tvec!(markov_move, spin, jastrow, model_geometry)
+            update_fermionic_Tvec!(markov_move, spin, jastrow, model_geometry, n_stab_T, δT, pht)
 
             return "accepted"
         else

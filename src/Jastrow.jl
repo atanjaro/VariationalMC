@@ -190,16 +190,17 @@ end
 
 """
 
-    update_fermionic_Tvec!( markov_move::MarkovMove, spin::Int64, 
-                            jastrow::Jastrow, model_geometry::ModelGeometry )::Nothing
+    update_fermionic_Tvec!( markov_move::MarkovMove, spin::Int64, jastrow::Jastrow, model_geometry::ModelGeometry, 
+                            n_stab_T::Int64, δT::Float64, pht::Bool )::Nothing
 
 Updates elements Tᵢ of the T vector after an accepted Metropolis step.
 
 """
-function update_fermionic_Tvec!(markov_move::MarkovMove, spin::Int64, 
-                                jastrow::Jastrow, model_geometry::ModelGeometry)::Nothing
+function update_fermionic_Tvec!(markov_move::MarkovMove, spin::Int64, jastrow::Jastrow, model_geometry::ModelGeometry, 
+                                n_stab_T::Int64, δT::Float64, pht::Bool)::Nothing
     @assert jastrow.jastrow_type == "e-den-den" || jastrow.jastrow_type == "e-spn-spn"
 
+    # perform quick update to T vector
     # number of lattice sites
     N = model_geometry.lattice.N;
 
@@ -251,7 +252,52 @@ function update_fermionic_Tvec!(markov_move::MarkovMove, spin::Int64,
         jastrow.Tvec_f = Tvec_f + Tvec_f_diff;
     end
 
-    return nothing
+    if detwf.nq_updates >= n_stab_T
+        debug && println("Jastrow::update_fermionic_Tvec!() : recalculating T!")
+
+        # reset counter 
+        detwf.nq_updates = 0
+
+        # recalculate T vector from scratch
+        # Jastrow type
+        jastrow_type = jastrow.jastrow_type
+
+        # map of Jastrow parameters
+        jpar_map = jastrow.jpar_map
+
+        # re-calculate the fermionic T vector 
+        Tvec_f_r = get_fermionic_Tvec(jastrow_type, jpar_map, detwf, pht, model_geometry)    
+
+        # compute deviation of the original T vector and the recomputed T vector
+        dev = check_deviation(jastrow.Tvec_f, Tvec_f_r)
+
+        debug && println("Jastrow::update_fermionic_Tvec!() : recalculated T with deviation = ", dev)
+
+        debug && println("Jastrow::update_fermionic_Tvec!() : deviation goal for vector")
+
+        if dev > δT
+            debug && println("T (fermionic) not met!")
+            debug && println("Jastrow::update_fermionic_Tvec!() : updated T = ")
+            debug && display(jastrow.Tvec_f);
+            debug && println("Jastrow::update_fermionic_Tvec!() : exact T = ")
+            debug && display(Tvec_f_r);
+
+            # replace original T vector with new one
+            jastrow.Tvec_f = Tvec_f_r;
+
+        else
+            debug && println("T met! Jastrow T vector is stable")
+            @assert dev < δT
+        end
+
+        return nothing
+    else
+        debug && println("Jastrow::update_fermionic_Tvec!() : performing quick update of T!")
+
+        detwf.nq_updates += 1
+
+        return nothing
+    end
 end
 
 
@@ -521,99 +567,23 @@ end
 
 
 """
-    check_deviation!( jastrow::Jastrow, δT::Float64 )::Nothing
+    check_deviation!( jastrow_Tvec::Vector{Float64}, Tvec_r::Vector{Float64} )::Float64
 
-Checks floating point error accumulation in the fermionic T vector and if ΔT < δT, 
-then the recalculated T vector Tᵣ replaces the updated T vector Tᵤ.
+Checks floating point error accumulation in the fermionic T vector.
 
 """
-function check_deviation!(jastrow::Jastrow, δT::Float64)::Nothing
-    # Jastrow type
-    jastrow_type = jastrow.jastrow_type
-
-    # map of Jastrow parameters
-    jpar_map = jastrow.jpar_map
-
-    if jastrow_type == "e-den-den" || jastrow_type == "e-spn-spn"
-        # re-calculate the fermionic T vector 
-        Tᵣ_f = get_fermionic_Tvec(jastrow_type, jpar_map, detwf, pht, model_geometry)
-
-        # null bosonic T vector
-        Tᵣ_b = zeros(Float64, length(Tᵣ_f));
-    elseif jastrow_type == "eph-den-den" || jastrow_type == "ph-den-den"
-        # # re-calculate the phononic T vectors
-        # Tᵣ_f, Tᵣ_b = get_phononic_Tvec(jastrow_type, jpar_map, pconfig, model_geometry);
-    end
-
+function check_deviation(jastrow_Tvec::Vector{Float64}, Tvec_r::Vector{Float64})::Float64
     # difference in updated T vector and recalculated T vector
-    diff_f = jastrow.Tvec_f .- Tᵣ_f
-    diff_b = jastrow.Tvec_b .- Tᵣ_b
+    diff = jastrow_Tvec .- Tvec_r;
 
     # sum the absolute differences and the recalculated T vector elements
-    diff_sum_f = sum(abs.(diff_f))
-    diff_sum_b = sum(abs.(diff_b))
+    diff_sum = sum(abs.(diff));
+    T_sum = sum(abs.(Tvec_r));
 
-    T_sum_f = sum(abs.(Tᵣ_f))
-    T_sum_b = sum(abs.(Tᵣ_b))
+    # rms difference
+    ΔT = sqrt(diff_sum / T_sum);
 
-    # rms differences
-    ΔT_f = sqrt(diff_sum_f  / T_sum_f)
-    ΔT_b = sqrt(diff_sum_b  / T_sum_b)
-
-    debug && println("Jastrow::check_deviation!() : deviation goal for vector")
-
-    if ΔT_f > δT && ΔT_b > δT
-        debug && println("T (fermionic) not met!")
-        debug && println("Jastrow::check_deviation!() : updated T = ")
-        debug && show(jastrow.Tvec_f);
-        debug && println("Jastrow::check_deviation!() : exact T = ")
-        debug && show(Tᵣ_f);
-
-        debug && println("Jastrow::check_deviation!() : deviation goal for vector")
-        debug && println("T (bosonic) not met!")
-        debug && println("Jastrow::check_deviation!() : updated T = ")
-        debug && show(jastrow.Tvec_b);
-        debug && println("Jastrow::check_deviation!() : exact T = ")
-        debug && show(Tᵣ_b);
-
-        jastrow.Tvec_f = Tᵣ_f;
-        jastrow.Tvec_b = Tᵣ_b;
-
-        return nothing;
-    elseif ΔT_f > δT && ΔT_b < δT
-        debug && println("T (fermionic) not met!")
-        debug && println("Jastrow::check_deviation!() : updated T = ")
-        debug && show(jastrow.Tvec_f);
-        debug && println("Jastrow::check_deviation!() : exact T = ")
-        debug && show(Tᵣ_f);
-        
-        debug && println("Jastrow::check_deviation!() : deviation goal for vector")
-        debug && println("T (bosonic) met! T vector is stable")
-
-        jastrow.Tvec_f = Tᵣ_f;
-
-        return nothing;
-    elseif ΔT_f < δT && ΔT_b > δT
-        debug && println("T (fermionic) met! T vector is stable")
-
-        debug && println("Jastrow::check_deviation!() : deviation goal for vector")
-        debug && println("T (bosonic) not met!")
-        debug && println("Jastrow::check_deviation!() : updated T = ")
-        debug && show(jastrow.Tvec_b);
-        debug && println("Jastrow::check_deviation!() : exact T = ")
-        debug && show(Tᵣ_b);
-
-        jastrow.Tvec_b = Tᵣ_b;
-
-        return nothing;
-    else 
-        debug && println("T (fermionic) met! T vector is stable")
-        
-        debug && println("Jastrow::check_deviation!() : deviation goal for vector")
-        debug && println("T (bosonic) met! T vector is stable")
-
-        return nothing;
-    end  
+    return ΔT;
 end
 
 
