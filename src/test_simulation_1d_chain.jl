@@ -13,7 +13,7 @@ using Revise
 # files to include
 include("Hamiltonian.jl");
 include("ParticleConfiguration.jl");
-include("Greens.jl");
+include("Wavefunction.jl");
 include("Jastrow.jl");
 include("Markov.jl");
 include("Utilities.jl");
