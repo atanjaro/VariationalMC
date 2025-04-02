@@ -20,6 +20,7 @@ include("Utilities.jl");
 include("Optimizer.jl");
 include("SimulationInfo.jl");
 include("Measurements.jl");
+# include("ElectronPhonon.jl");
 
 
 ###########################################
@@ -62,7 +63,7 @@ tp = 0.0;
 μ_BCS = 0.0;
 
 # onsite Hubbard repulsion
-U = 0.5;
+U = 1.0;
 
 # antiferromagnetic (Neél) order parameter
 Δa = 0.1;
@@ -131,13 +132,16 @@ initialize_datafolder(simulation_info);
 ##############################################
 
 # random seed
-seed = 8947935343182193186 # abs(rand(Int))
+seed = abs(rand(Int)) #8947935343182193186 # 
 
 # initialize random number generator
 rng = Xoshiro(seed);
 
+# number of equilibration/thermalization steps (formerly, mc_meas_freq)
+N_equil = 1000;
+
 # number of minimization/optimization updates
-N_opts = 100;
+N_opts = 500;
 
 # optimization bin size
 opt_bin_size = 3000;
@@ -150,9 +154,6 @@ N_bins = 100;
 
 # simulation bin size
 bin_size = div(N_updates, N_bins);
-
-# number of MC steps until measurement
-mc_meas_freq = 300;
 
 # number of steps until numerical stabilization is performed 
 n_stab_W = 50;
@@ -168,7 +169,7 @@ n_stab_T= 50;
 η = 1e-4;    
 
 # optimization rate for Stochastic Reconfiguration
-dt = 0.01;   # 0.03      
+dt = 0.03;   # 0.03      
 
 # whether debug statements are printed 
 debug = false;
@@ -227,11 +228,22 @@ global_acceptance_rate = 0.0;
 #############################################
 start_time = time()
 for bin in 1:N_opts
-    for n in 1:opt_bin_size
-        # perform local update to electronic degrees of freedom
-        (acceptance_rate, detwf, jastrow) = local_fermion_update!(mc_meas_freq, detwf, jastrow, Ne, 
+    # equilibrate/thermalize the system   
+    for step in 1:N_equil 
+         # perform local update to electronic degrees of freedom
+        (acceptance_rate, detwf, jastrow) = local_fermion_update!(detwf, jastrow, Ne, 
                                                                     model_geometry, pht, δW, δT, rng)
 
+        # record acceptance rate                                                        
+        global_acceptance_rate += acceptance_rate
+    end
+
+    # perform measurements for optimization
+    for n in 1:opt_bin_size
+        # perform local update to electronic degrees of freedom
+        (acceptance_rate, detwf, jastrow) = local_fermion_update!(detwf, jastrow, Ne, 
+                                                                    model_geometry, pht, δW, δT, rng) # the mc_meas_freq variable will have
+                                                                                                      # to be removed from this function
         # record acceptance rate                                                        
         global_acceptance_rate += acceptance_rate
         
@@ -245,11 +257,12 @@ for bin in 1:N_opts
 
     # write measurements (to file)
     write_measurements!(measurement_container, energy_bin, dblocc_bin, param_bin)
-end
+end     
 end_time = time()
 
 # time for optimization 
 opt_time = end_time - start_time
+
 
 
 ## BEGIN TESTING
@@ -271,27 +284,27 @@ vij_1 = [v[3] for v in param_bin]
 vij_2 = [v[4] for v in param_bin]
 
 # plot energy per site
-scatter(1:100, energy_bin/opt_bin_size, marker=:square, color=:red, markersize=5, markerstrokewidth=0,
+scatter(1:500, energy_bin/opt_bin_size, marker=:square, color=:red, markersize=5, markerstrokewidth=0,
         legend=false, xlabel="Optimization steps", ylabel=L"E/N", tickfontsize=14, guidefontsize=14, legendfontsize=14,
-        xlims=(0,100))
+        xlims=(0,500))
 
 # plot double occupancy
-scatter(1:100, dblocc_bin/opt_bin_size, marker=:square, color=:red, markersize=5, markerstrokewidth=0,
+scatter(1:500, dblocc_bin/opt_bin_size, marker=:square, color=:red, markersize=5, markerstrokewidth=0,
         legend=false, xlabel="Optimization steps", ylabel=L"D", tickfontsize=14, guidefontsize=14, legendfontsize=14,
-        xlims=(0,100), ylims=(0,0.5))
+        xlims=(0,500), ylims=(0,0.5))
 
 # plot AFM parameter
-scatter(1:100, deltaa/opt_bin_size, marker=:circle, color=:blue, markersize=5, markerstrokewidth=0,
+scatter(1:500, deltaa/opt_bin_size, marker=:circle, color=:blue, markersize=5, markerstrokewidth=0,
         legend=false, xlabel="Optimization steps", ylabel=L"\Delta_a", tickfontsize=14, guidefontsize=14, legendfontsize=14,
-        xlims=(0,100))
+        xlims=(0,500))
 
 # plot Jastrow parameters
-scatter(1:100, vij_1/opt_bin_size, marker=:circle, color=:blue, markersize=5, markerstrokewidth=0,
+scatter(1:500, vij_1/opt_bin_size, marker=:circle, color=:blue, markersize=5, markerstrokewidth=0,
         label=L"v_{ij}^1", xlabel="Optimization steps", ylabel=L"v_{ij}", tickfontsize=14, guidefontsize=14, legendfontsize=14,
-        xlims=(0,100),ylims=(-5,1)) 
-scatter!(1:100, vij_2/opt_bin_size, marker=:square, color=:red, markersize=5, markerstrokewidth=0,
+        xlims=(0,500)) 
+scatter!(1:500, vij_2/opt_bin_size, marker=:square, color=:red, markersize=5, markerstrokewidth=0,
         label=L"v_{ij}^2", xlabel="Optimization steps", ylabel=L"v_{ij}", tickfontsize=14, guidefontsize=14, legendfontsize=14,
-        xlims=(0,100),ylims=(-5,1))
+        xlims=(0,500))
 ## END TESTING
 
 ###########################################
@@ -299,8 +312,15 @@ scatter!(1:100, vij_2/opt_bin_size, marker=:square, color=:red, markersize=5, ma
 ###########################################
 start_time = time()
 for bin in 1:N_updates
+    # equilibrate/thermalize the system   
+    for step in 1:N_equil 
+        (acceptance_rate, detwf, jastrow) = local_fermion_update!(detwf, jastrow, Ne, 
+                                                                    model_geometry, pht, δW, δT, rng)
+        # record acceptance rate                                                        
+        global_acceptance_rate += acceptance_rate
+    end
     for n in 1:bin_size
-        acceptance_rate, detwf, jastrow = local_fermion_update!(mc_meas_freq, detwf, jastrow, Ne, 
+        acceptance_rate, detwf, jastrow = local_fermion_update!(detwf, jastrow, Ne, 
                                                                 model_geometry, pht, δW, δT, rng)
         
         # record acceptance rate                                                        
