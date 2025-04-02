@@ -1,31 +1,42 @@
 """
 
-    local_fermion_update!( mc_meas_freq::Int64, detwf::DeterminantalWavefunction, jastrow::Jastrow, 
+    local_fermion_update!( detwf::DeterminantalWavefunction, jastrow::Jastrow, 
                                 Ne::Int, model_geometry::ModelGeometry, 
                                 pht::Bool, δW::Float64, δT::Float64, rng::Xoshiro )
 
 Performs a local update to the electron sector, with a certain number of equilibration steps.
 
 """
-function local_fermion_update!(mc_meas_freq::Int64, detwf::DeterminantalWavefunction, jastrow::Jastrow, 
+function local_fermion_update!(detwf::DeterminantalWavefunction, jastrow::Jastrow, 
                                 Ne::Int, model_geometry::ModelGeometry, 
                                 pht::Bool, δW::Float64, δT::Float64, rng::Xoshiro)
     # track acceptances and rejections
     acceptances = 0.0
     rejections = 0.0
 
-    for mc in 1:mc_meas_freq
-        debug && println("Markov:local_fermion_update!() : Starting new Monte Carlo step")
-        debug && println("Markov:local_fermion_update!() : Metropolis step = ", mc)
+    debug && println("Markov:local_fermion_update!() : Starting new Monte Carlo step")
+    debug && println("Markov:local_fermion_update!() : Metropolis step = ", mc)
 
-        acceptance = metropolis_step(detwf, jastrow, Ne, n_stab_W, n_stab_T, 
-                                                        δW, δT, model_geometry, pht, rng)
+    # TODO: perform number of Metropolis steps equal to number of electrons?
+    #       This would give each electron a chance to move.
+    # for s in 1:Ne
+    #     acceptance = metropolis_step(detwf, jastrow, Ne, n_stab_W, n_stab_T, 
+    #                                     δW, δT, model_geometry, pht, rng)
 
-        if acceptance == "accepted"
-            acceptances += 1.0
-        elseif acceptance == "rejected"
-            rejections += 1.0
-        end
+    #     if acceptance == "accepted"
+    #         acceptances += 1.0
+    #     elseif acceptance == "rejected"
+    #         rejections += 1.0
+    #     end
+    # end
+
+    acceptance = metropolis_step(detwf, jastrow, Ne, n_stab_W, n_stab_T, 
+                                        δW, δT, model_geometry, pht, rng)
+
+    if acceptance == "accepted"
+        acceptances += 1.0
+    elseif acceptance == "rejected"
+        rejections += 1.0
     end
 
     # calculate local acceptance rate
