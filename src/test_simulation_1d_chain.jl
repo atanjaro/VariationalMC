@@ -22,6 +22,11 @@ include("SimulationInfo.jl");
 include("Measurements.jl");
 # include("ElectronPhonon.jl");
 
+# Open the file for writing
+io = open("simulation_output_chain_L4_U4_deltaafm_Nopts100_optbinsize1000_dt0p03.txt", "w")
+
+# Redirect stdout to the file
+redirect_stdout(io)
 
 ###########################################
 ##          LATTICE PARAMETERS           ##
@@ -63,7 +68,7 @@ tp = 0.0;
 μ_BCS = 0.0;
 
 # onsite Hubbard repulsion
-U = 1.0;
+U = 4.0;
 
 # antiferromagnetic (Neél) order parameter
 Δa = 0.1;
@@ -133,18 +138,19 @@ initialize_datafolder(simulation_info);
 
 # random seed
 seed = abs(rand(Int)) #8947935343182193186 # 
+println("seed = ", seed)
 
 # initialize random number generator
 rng = Xoshiro(seed);
 
 # number of equilibration/thermalization steps (formerly, mc_meas_freq)
-N_equil = 1000;
+N_equil = 3000;
 
 # number of minimization/optimization updates
-N_opts = 500;
+N_opts = 100;
 
 # optimization bin size
-opt_bin_size = 3000;
+opt_bin_size = 1000;
 
 # number of simulation updates 
 N_updates = 100;
@@ -156,8 +162,8 @@ N_bins = 100;
 bin_size = div(N_updates, N_bins);
 
 # number of steps until numerical stabilization is performed 
-n_stab_W = 50;
-n_stab_T= 50;
+n_stab_W = 1;
+n_stab_T= 1;
 
 # maximum allowed error in the equal-time Green's function
 δW = 1e-3;
@@ -172,7 +178,7 @@ n_stab_T= 50;
 dt = 0.03;   # 0.03      
 
 # whether debug statements are printed 
-debug = false;
+debug = true;
 
 # # Initialize additional simulation information dictionary
 # additional_info = Dict(
@@ -222,12 +228,17 @@ dblocc_bin = Float64[];
 param_bin = [];
 global_acceptance_rate = 0.0;
 
+# Run your simulation as usual (no scope issues)
+println("Starting simulation...")
 
 #############################################
 ##          OPTIMIZATION UPDATES           ##
 #############################################
-start_time = time()
+opt_start_time = time();
 for bin in 1:N_opts
+    println("Currently in bin: ", bin)
+
+    println("Thermalizing system...")
     # equilibrate/thermalize the system   
     for step in 1:N_equil 
          # perform local update to electronic degrees of freedom
@@ -237,9 +248,12 @@ for bin in 1:N_opts
         # record acceptance rate                                                        
         global_acceptance_rate += acceptance_rate
     end
+    println("System thermalized!")
 
     # perform measurements for optimization
     for n in 1:opt_bin_size
+        println("Starting Monte Carlo step = ", n)
+
         # perform local update to electronic degrees of freedom
         (acceptance_rate, detwf, jastrow) = local_fermion_update!(detwf, jastrow, Ne, 
                                                                     model_geometry, pht, δW, δT, rng) # the mc_meas_freq variable will have
@@ -258,12 +272,14 @@ for bin in 1:N_opts
     # write measurements (to file)
     write_measurements!(measurement_container, energy_bin, dblocc_bin, param_bin)
 end     
-end_time = time()
+opt_end_time = time();
 
 # time for optimization 
-opt_time = end_time - start_time
+opt_time = opt_end_time - opt_start_time;
+println("Optimization completed in $(opt_time) seconds.")
 
-
+# Close the file and restore stdout
+close(io)
 
 ## BEGIN TESTING
 using Plots
@@ -283,58 +299,62 @@ mus = [v[2] for v in param_bin]
 vij_1 = [v[3] for v in param_bin]
 vij_2 = [v[4] for v in param_bin]
 
+# df = DataFrame(A = collect(1:400), B = vij_1/opt_bin_size, C = vij_2/opt_bin_size)
+
+# CSV.write("vij_bins.csv", df)
+
 # plot energy per site
-scatter(1:500, energy_bin/opt_bin_size, marker=:square, color=:red, markersize=5, markerstrokewidth=0,
+scatter(1:N_opts, energy_bin/opt_bin_size, marker=:square, color=:red, markersize=5, markerstrokewidth=0,
         legend=false, xlabel="Optimization steps", ylabel=L"E/N", tickfontsize=14, guidefontsize=14, legendfontsize=14,
-        xlims=(0,500))
+        xlims=(0,N_opts))
 
 # plot double occupancy
-scatter(1:500, dblocc_bin/opt_bin_size, marker=:square, color=:red, markersize=5, markerstrokewidth=0,
+scatter(1:N_opts, dblocc_bin/opt_bin_size, marker=:square, color=:red, markersize=5, markerstrokewidth=0,
         legend=false, xlabel="Optimization steps", ylabel=L"D", tickfontsize=14, guidefontsize=14, legendfontsize=14,
-        xlims=(0,500), ylims=(0,0.5))
+        xlims=(0,N_opts), ylims=(0,0.5))
 
 # plot AFM parameter
-scatter(1:500, deltaa/opt_bin_size, marker=:circle, color=:blue, markersize=5, markerstrokewidth=0,
+scatter(1:N_opts, deltaa/opt_bin_size, marker=:circle, color=:blue, markersize=5, markerstrokewidth=0,
         legend=false, xlabel="Optimization steps", ylabel=L"\Delta_a", tickfontsize=14, guidefontsize=14, legendfontsize=14,
-        xlims=(0,500))
+        xlims=(0,N_opts))
 
 # plot Jastrow parameters
-scatter(1:500, vij_1/opt_bin_size, marker=:circle, color=:blue, markersize=5, markerstrokewidth=0,
+scatter(1:N_opts, vij_1/opt_bin_size, marker=:circle, color=:blue, markersize=5, markerstrokewidth=0,
         label=L"v_{ij}^1", xlabel="Optimization steps", ylabel=L"v_{ij}", tickfontsize=14, guidefontsize=14, legendfontsize=14,
-        xlims=(0,500)) 
-scatter!(1:500, vij_2/opt_bin_size, marker=:square, color=:red, markersize=5, markerstrokewidth=0,
+        xlims=(0,N_opts)) 
+scatter!(1:N_opts, vij_2/opt_bin_size, marker=:square, color=:red, markersize=5, markerstrokewidth=0,
         label=L"v_{ij}^2", xlabel="Optimization steps", ylabel=L"v_{ij}", tickfontsize=14, guidefontsize=14, legendfontsize=14,
-        xlims=(0,500))
+        xlims=(0,N_opts))
 ## END TESTING
 
-###########################################
-##          SIMULATION UPDATES           ##
-###########################################
-start_time = time()
-for bin in 1:N_updates
-    # equilibrate/thermalize the system   
-    for step in 1:N_equil 
-        (acceptance_rate, detwf, jastrow) = local_fermion_update!(detwf, jastrow, Ne, 
-                                                                    model_geometry, pht, δW, δT, rng)
-        # record acceptance rate                                                        
-        global_acceptance_rate += acceptance_rate
-    end
-    for n in 1:bin_size
-        acceptance_rate, detwf, jastrow = local_fermion_update!(detwf, jastrow, Ne, 
-                                                                model_geometry, pht, δW, δT, rng)
+# ###########################################
+# ##          SIMULATION UPDATES           ##
+# ###########################################
+# start_time = time()
+# for bin in 1:N_updates
+#     # equilibrate/thermalize the system   
+#     for step in 1:N_equil 
+#         (acceptance_rate, detwf, jastrow) = local_fermion_update!(detwf, jastrow, Ne, 
+#                                                                     model_geometry, pht, δW, δT, rng)
+#         # record acceptance rate                                                        
+#         global_acceptance_rate += acceptance_rate
+#     end
+#     for n in 1:bin_size
+#         acceptance_rate, detwf, jastrow = local_fermion_update!(detwf, jastrow, Ne, 
+#                                                                 model_geometry, pht, δW, δT, rng)
         
-        # record acceptance rate                                                        
-        global_acceptance_rate += acceptance_rate
+#         # record acceptance rate                                                        
+#         global_acceptance_rate += acceptance_rate
 
-        # make basic measurements
-        make_measurements!(measurement_container, detwf, tight_binding_model, 
-                            determinantal_parameters, jastrow, model_geometry, Ne, pht)
-    end
-    # write measurements (to file)
-    write_measurements!(measurement_container, simulation_info, 
-                        energy_bin, dblocc_bin, param_bin)
-end
-end_time = time()
+#         # make basic measurements
+#         make_measurements!(measurement_container, detwf, tight_binding_model, 
+#                             determinantal_parameters, jastrow, model_geometry, Ne, pht)
+#     end
+#     # write measurements (to file)
+#     write_measurements!(measurement_container, simulation_info, 
+#                         energy_bin, dblocc_bin, param_bin)
+# end
+# end_time = time()
 
 # time for simulation
 sim_time = end_time - start_time

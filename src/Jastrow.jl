@@ -252,11 +252,11 @@ function update_fermionic_Tvec!(markov_move::MarkovMove, spin::Int64, jastrow::J
         jastrow.Tvec_f = Tvec_f + Tvec_f_diff;
     end
 
-    if detwf.nq_updates >= n_stab_T
+    if detwf.nq_updates_T >= n_stab_T
         debug && println("Jastrow::update_fermionic_Tvec!() : recalculating T!")
 
         # reset counter 
-        detwf.nq_updates = 0
+        detwf.nq_updates_T = 0
 
         # recalculate T vector from scratch
         # Jastrow type
@@ -286,7 +286,7 @@ function update_fermionic_Tvec!(markov_move::MarkovMove, spin::Int64, jastrow::J
             jastrow.Tvec_f = Tvec_f_r;
 
         else
-            debug && println("T met! Jastrow T vector is stable")
+            debug && println("T met! Jastrow T vector is stable") 
             @assert dev < δT
         end
 
@@ -294,7 +294,7 @@ function update_fermionic_Tvec!(markov_move::MarkovMove, spin::Int64, jastrow::J
     else
         debug && println("Jastrow::update_fermionic_Tvec!() : performing quick update of T!")
 
-        detwf.nq_updates += 1
+        detwf.nq_updates_T += 1
 
         return nothing
     end

@@ -15,7 +15,6 @@ function local_fermion_update!(detwf::DeterminantalWavefunction, jastrow::Jastro
     rejections = 0.0
 
     debug && println("Markov:local_fermion_update!() : Starting new Monte Carlo step")
-    debug && println("Markov:local_fermion_update!() : Metropolis step = ", mc)
 
     # TODO: perform number of Metropolis steps equal to number of electrons?
     #       This would give each electron a chance to move.
@@ -51,13 +50,13 @@ end
     metropolis_step( detwf::DeterminantalWavefunction, jastrow::Jastrow, Ne::Int, 
                         model_geometry::ModelGeometry, bonds::Vector{Vector{Bond{1}}}, pht::Bool, rng::Xoshiro )::String
 
-Proposes a Markov move and then accepts or rejects using the Metropolis algorithm. 
+Proposes a particle to hop to a random neighboring site, and then accepts or rejects using the Metropolis algorithm. 
 
 """
 function metropolis_step(detwf::DeterminantalWavefunction, jastrow::Jastrow, Ne::Int, 
                         n_stab_W::Int64, n_stab_T::Int64, δW::Float64, δT::Float64, 
                         model_geometry::ModelGeometry, pht::Bool, rng::Xoshiro)::String
-    # propose a Markov move
+    # propose a random move
     markov_move = propose_random_move(Ne, detwf.pconfig, model_geometry, rng)
 
     if markov_move.possible == false
@@ -89,7 +88,13 @@ function metropolis_step(detwf::DeterminantalWavefunction, jastrow::Jastrow, Ne:
             hop!(markov_move, detwf.pconfig)
 
             # perform rank-1 update to W matrix
-            update_equal_time_greens!(markov_move, detwf, model_geometry, Ne, n_stab_W, δW) 
+            update_equal_time_greens!(markov_move, detwf, model_geometry, Ne, n_stab_W, δW) # TODO: There is a bug where the stabilization does not work as intended.
+                                                                                            #       When stabilizing every step, the Green's function is never stabilized
+                                                                                            #       while the T vector is always stabilized. 
+                                                                                            #       This might be because as the quick update for the Green's function 
+                                                                                            #       increments nq_updates by 1, this triggers stabilization for the T vector 
+                                                                                            #       which then resets nq_updated to 0; hence, the W matrix is never
+                                                                                            #       stabilized.
 
             # update T vector
             update_fermionic_Tvec!(markov_move, spin, jastrow, model_geometry, n_stab_T, δT, pht)
@@ -102,6 +107,53 @@ function metropolis_step(detwf::DeterminantalWavefunction, jastrow::Jastrow, Ne:
         end
     end
 end
+
+
+# """
+
+#     metropolis_step( detwf::DeterminantalWavefunction, Ne::Int, n_stab_W::Int64, δW::Float64, 
+#                         model_geometry::ModelGeometry, pht::Bool, rng::Xoshiro )::String
+
+# Proposes a random particle exchange with a neighboring site, and then accepts or rejects using the Metropolis algorithm. 
+
+# """
+# function metropolis_step(detwf::DeterminantalWavefunction, Ne::Int, n_stab_W::Int64, δW::Float64, 
+#                         model_geometry::ModelGeometry, pht::Bool, rng::Xoshiro)::String
+#     # propose a random move
+#     markov_move = propose_random_move(Ne, detwf.pconfig, model_geometry, rng)
+
+#     if markov_move.possible == false
+#         debug && println("Markov::metropolis_step() : exchange impossible!")
+
+#         return "impossible"
+#     else
+#         # get wavefunction ratio (element of the equal-time Green's function)
+#         Rₛ = real(detwf.W[markov_move.l, markov_move.particle])
+
+#         # acceptance probability
+#         acceptance_prob = Rₛ^2       # TODO: include phase
+
+#         debug && println("Markov::metropolis_step() : exchange possible =>")
+#         debug && println("R_s = ", Rₛ)
+#         debug && println("acceptance_prob = ", acceptance_prob)
+
+#         if acceptance_prob > rand(rng)
+#             debug && println("Markov::metropolis_step() : exchange accepted!")
+
+#             # exchnage the particles
+#             exchange!(markov_move, detwf.pconfig)
+
+#             # perform rank-2 update to W matrix
+#             update_equal_time_greens!(markov_move, detwf, model_geometry, Ne, n_stab_W, δW) # TODO: requires an additional rank-2 updater
+
+#             return "accepted"
+#         else
+#             debug && println("Markov::metropolis_step() : exchange rejected!")
+
+#             return "rejected"
+#         end
+#     end
+# end
 
 
 ##################################################### DEPRECATED FUNCTIONS #####################################################

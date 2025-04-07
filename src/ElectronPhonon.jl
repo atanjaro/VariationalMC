@@ -9,9 +9,65 @@ struct PhononMode
     Ω::Float64
 end
 
-mutable struct HolsteinCoupling{D}
+struct PhononParameters
+    # number of types of phonon modes
+    nphonon::Int
+
+    # number of phonon modes
+    Nphonon::Int
+
+    # phonon masses
+    M::Vector{Float64}
+
+    # phonon frequencies
+    Ω::Vector{Float64}
+
+    # phonon density configuration
+    N_phconfig::Vector{Int}
+
+    # phonon displacement configuration
+    X_phconfig::Matrix{Float}
+end
+
+function PhononParameters(model_geometry::ModelGeometry, electron_phonon_model::ElectronPhononModel, rng)
+    lattice = model_geometry.lattice
+    unit_cell = model_geometry.unit_cell
+
+    # total number of sites
+    N = lattice.N
+
+    # get phonon mode definitions
+    phonon_modes = electron_phonon_model.phonon_modes
+
+    # get the number of phonon mode definitions
+    nphonon = length(phonon_modes)
+
+    # get the total number of phonon modes in the lattice
+    Nphonon = nphonon * N
+
+    # allocate array of masses for each phonon mode
+    M = zeros(Nphonon)
+
+    # allocate array of phonon frequncies for each phonon mode
+    Ω = zeros(Nphonon)
+
+    # allocate phonon density configuration
+    N_phconfig = zeros(N)
+
+    # allocated phonon displacement configuration
+    X_phconfig = zeros(Nphonon, N)
+    
+    # add initial random displacements
+    ΔX = sqrt(0.5)
+    for i in eachindex(X_phconfig)
+        x₀ = rand(rng) * ΔX
+        X_phconfig[i] += x₀
+    end
+end
+
+struct HolsteinCoupling{D}
     # phonon mode of coupling
-    phonon_mode::Int
+    phonon_mode::PhononMode
 
     # displacement vector to density phonon mode is coupled to
     bond::Bond{D}
@@ -24,13 +80,10 @@ mutable struct HolsteinCoupling{D}
 
     # phonon fugacity
     μₚₕ::Float64
-
-    # phonon density configuration
-    phconfig::Vector{Int}
 end
 
 
-mutable struct SSHCoupling{D}
+struct SSHCoupling{D}
     # phonon modes getting coupled
     phonon_modes::NTuple{2,Int}
 
@@ -44,13 +97,10 @@ mutable struct SSHCoupling{D}
     α2::Float64
 
     # phonon fugacities
-    z::Vector{AbstractFloat}
-
-    # phonon displacement configuration 
-    phconfig::Matrix{AbstractFloat}
+    z::Vector{Float64}
 end
 
-mutable struct ElectronPhononModel
+struct ElectronPhononModel
     # phonon modes
     phonon_modes::Vector{PhononMode}
 
@@ -61,6 +111,18 @@ mutable struct ElectronPhononModel
     ssh_couplings::Vector{SSHCoupling}
 end
 
+mutable struct ElectronPhononParameters
+    # holstein parameters
+    holstein_parameters::HolsteinParameters
+
+    # ssh parameters
+    ssh_parameters::SSHParameters
+end
+
+function ElectronPhononModelParameters
+
+end
+
 # initialize a null electron-phonon model
 function ElectronPhononModel(tight_binding_model)
     if isnothing(tight_binding_model)
@@ -68,8 +130,8 @@ function ElectronPhononModel(tight_binding_model)
     end
 
     phonon_modes = PhononMode[]
-    holstein_couplings = HolsteinCoupling{Int}[]
-    ssh_couplings = SSHCoupling{Int}[]
+    holstein_couplings = HolsteinCoupling[]
+    ssh_couplings = SSHCoupling[]
 
     return ElectronPhononModel(phonon_modes, holstein_couplings, ssh_couplings)
 end
@@ -125,124 +187,104 @@ function add_ssh_coupling!(electron_phonon_model::ElectronPhononModel, tight_bin
     return length(ssh_couplings)
 end
 
+#######         BEGIN TESTING           ######
+# phonon mass
+M = 1.0
+
+# phonon frequency
+Ω = 1.0
+
+# microscopic coupling constant
+α = 0.5
+
+# initial phonon fugacity
+μₚₕ = 0.0
+
+#  initialize null electron-phonon model
+electron_phonon_model = ElectronPhononModel(tight_binding_model)
+
+# define dispersionless phonon mode to live on each site
+phonon = PhononMode(1, M, Ω)
+add_phonon_mode!(electron_phonon_model, phonon)
+
+# define onsite Holstein coupling between electrons and local dispersionless phonon
+holstein_coupling = HolsteinCoupling(phonon, bond_x, α, 0.0, μₚₕ)
+
+
+
 # """
 
-#     HolsteinModel
+#     initialize_electron_phonon_model(Ω::AbstractFloat,  phonon_parameters::PhononParameters, μₚₕ::AbstractFloat )
 
-# A type defining quantities related to a Holstein model of electon-phonon coupling.
+# Given generic phonon parameters and initial fugacity, returns an instance of the HolsteinModel type.
 
 # """
-# mutable struct HolsteinModel
-#     # phonon parameters
-#     phonon_parameters::PhononParameters
+# function initialize_electron_phonon_model(Ω::AbstractFloat, M::AbstractFloat, α::AbstractFloat, μₚₕ::AbstractFloat, phonon_parameters::PhononParameters, model_geometry::ModelGeometry)
+#      # intialize initial phonon configuration
+#      phconfig = generate_initial_phonon_density_configuration(model_geometry)
 
-#     # fugacity
-#     μₚₕ::AbstractFloat
+#      # initial number of phonons
+#      Nₚₕ = 0
 
-#     # phonon number
-#     Nₚₕ::Int
-
-#     # phonon density configuration
-#     phconfig::Vector{Int}
+#      return HolsteinModel(phonon_parameters, μₚₕ, Nₚₕ, phconfig)
 # end
 
 
 # """
 
-#     SSHModel
+#     initialize_electron_phonon_model( phonon_parameters::PhononParameters, loc::AbstractString )
 
-# A type defining quantities related to an SSH model of electon-phonon coupling.
+# Given generic phonon parameters and phonon location, returns an instance of the SSHModel type.
 
 # """
-# mutable struct SSHModel
-#     # phonon parameters
-#     phonon_parameters::PhononParameters
+# function initialize_electron_phonon_model(Ω::AbstractFloat, M::AbstractFloat, α::AbstractFloat, loc::AbstractString, z_x::AbstractFloat, z_y::AbstractFloat, phonon_parameters::PhononParameters, model_geometry::ModelGeometry)
+#     # lattice dimensions
+#     dims = size(model_geometry.lattice.L)[1]
 
-#     # phonon location
-#     loc::AbstractString
+#     # intialize initial phonon configuration
+#     phconfig = generate_initial_phonon_displacement_configuration(loc, model_geometry)
 
-#     # fugacities
-#     z::Vector{AbstractFloat}
+#     # standard deviation of the equilibrium distribution of a quantum harmonic oscillator
+#     ΔX = sqrt(0.5)
 
-#     # phonon displacement configuration 
-#     phconfig::Matrix{AbstractFloat}
+#     # add initial random displacements
+#     for i in eachindex(phconfig)
+#         x₀ = rand(rng) * ΔX
+#         phconfig[i] += x₀
+#     end
+
+#     # initialize fugacity
+#     z = AbstractFloat[]
+#     push!(z, z_x)
+#     push!(z, z_y)
+
+#     return SSHModel(phonon_parameters, loc, z, phconfig)
 # end
 
+# """
 
+#     update_electron_phonon_model(  )
 
-"""
+# After a Metropolis update, updates phonon configurations and parameters.
 
-    initialize_electron_phonon_model(Ω::AbstractFloat,  phonon_parameters::PhononParameters, μₚₕ::AbstractFloat )
+# """
+# function update_electron_phonon_model!(holstein_model::HolsteinModel, phconfig::Vector{Int}, model_geometry::ModelGeometry)
+#     N = model_geometry.lattice.N
 
-Given generic phonon parameters and initial fugacity, returns an instance of the HolsteinModel type.
+#     # update total phonon number
+#     Nₚₕ = 0
+#     for i in 1:N
+#         n_ph = get_phonon_occupation(i, phconfig)
+#         Nₚₕ += n_ph
+#     end
 
-"""
-function initialize_electron_phonon_model(Ω::AbstractFloat, M::AbstractFloat, α::AbstractFloat, μₚₕ::AbstractFloat, phonon_parameters::PhononParameters, model_geometry::ModelGeometry)
-     # intialize initial phonon configuration
-     phconfig = generate_initial_phonon_density_configuration(model_geometry)
+#     # update phconfig
+#     holstein_model.phconfig = phconfig
 
-     # initial number of phonons
-     Nₚₕ = 0
+#     # update total phonon number
+#     holstein_model.Nₚₕ = Nₚₕ
 
-     return HolsteinModel(phonon_parameters, μₚₕ, Nₚₕ, phconfig)
-end
+#     return nothing
+# end
 
-
-"""
-
-    initialize_electron_phonon_model( phonon_parameters::PhononParameters, loc::AbstractString )
-
-Given generic phonon parameters and phonon location, returns an instance of the SSHModel type.
-
-"""
-function initialize_electron_phonon_model(Ω::AbstractFloat, M::AbstractFloat, α::AbstractFloat, loc::AbstractString, z_x::AbstractFloat, z_y::AbstractFloat, phonon_parameters::PhononParameters, model_geometry::ModelGeometry)
-    # lattice dimensions
-    dims = size(model_geometry.lattice.L)[1]
-
-    # intialize initial phonon configuration
-    phconfig = generate_initial_phonon_displacement_configuration(loc, model_geometry)
-
-    # standard deviation of the equilibrium distribution of a quantum harmonic oscillator
-    ΔX = sqrt(0.5)
-
-    # add initial random displacements
-    for i in eachindex(phconfig)
-        x₀ = rand(rng) * ΔX
-        phconfig[i] += x₀
-    end
-
-    # initialize fugacity
-    z = AbstractFloat[]
-    push!(z, z_x)
-    push!(z, z_y)
-
-    return SSHModel(phonon_parameters, loc, z, phconfig)
-end
-
-"""
-
-    update_electron_phonon_model(  )
-
-After a Metropolis update, updates phonon configurations and parameters.
-
-"""
-function update_electron_phonon_model!(holstein_model::HolsteinModel, phconfig::Vector{Int}, model_geometry::ModelGeometry)
-    N = model_geometry.lattice.N
-
-    # update total phonon number
-    Nₚₕ = 0
-    for i in 1:N
-        n_ph = get_phonon_occupation(i, phconfig)
-        Nₚₕ += n_ph
-    end
-
-    # update phconfig
-    holstein_model.phconfig = phconfig
-
-    # update total phonon number
-    holstein_model.Nₚₕ = Nₚₕ
-
-    return nothing
-end
-
-# TODO: maybe put in a phonon module (Phonon.jl) to contain handling of the coherent states and such?
+# # TODO: maybe put in a phonon module (Phonon.jl) to contain handling of the coherent states and such?
