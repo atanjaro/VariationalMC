@@ -20,6 +20,9 @@ export DeterminantalParameters
 export build_mean_field_hamiltonian
 export get_Ak_matrices
 
+include("Greens.jl")
+export get_equal_greens
+
 include("ParticleConfiguration.jl")
 export get_particle_numbers
 export get_particle_density
@@ -35,11 +38,7 @@ export local_fermion_update!
 include("Utilities.jl")
 export cat_vpars
 
-include("Greens.jl")
-export build_determinantal_state
-export get_equal_greens
-
-include("Hessian.jl")
+include("Optimizer.jl")
 
 include("Measurements.jl")
 export initialize_measurement_container

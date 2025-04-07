@@ -14,6 +14,7 @@ using Revise
 include("Hamiltonian.jl");
 include("ParticleConfiguration.jl");
 include("Wavefunction.jl");
+include("Greens.jl")
 include("Jastrow.jl");
 include("Markov.jl");
 include("Utilities.jl");
