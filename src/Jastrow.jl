@@ -294,7 +294,7 @@ function update_fermionic_Tvec!(markov_move::MarkovMove, spin::Int64, jastrow::J
     else
         debug && println("Jastrow::update_fermionic_Tvec!() : performing quick update of T!")
 
-        detwf.nq_updates_T += 1
+        detwf.nq_updates_T += 1 
 
         return nothing
     end
@@ -583,7 +583,7 @@ function check_deviation(jastrow_Tvec::Vector{Float64}, Tvec_r::Vector{Float64})
     # rms difference
     ΔT = sqrt(diff_sum / T_sum);
 
-    return ΔT;
+    return isnan(ΔT) ? 0.0 : ΔT
 end
 
 

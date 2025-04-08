@@ -57,7 +57,7 @@ function metropolis_step(detwf::DeterminantalWavefunction, jastrow::Jastrow, Ne:
                         n_stab_W::Int64, n_stab_T::Int64, δW::Float64, δT::Float64, 
                         model_geometry::ModelGeometry, pht::Bool, rng::Xoshiro)::String
     # propose a random move
-    markov_move = propose_random_move(Ne, detwf.pconfig, model_geometry, rng)
+    markov_move = propose_random_move(Ne, detwf.pconfig, model_geometry, rng) 
 
     if markov_move.possible == false
         debug && println("Markov::metropolis_step() : hop impossible!")
@@ -88,13 +88,7 @@ function metropolis_step(detwf::DeterminantalWavefunction, jastrow::Jastrow, Ne:
             hop!(markov_move, detwf.pconfig)
 
             # perform rank-1 update to W matrix
-            update_equal_time_greens!(markov_move, detwf, model_geometry, Ne, n_stab_W, δW) # TODO: There is a bug where the stabilization does not work as intended.
-                                                                                            #       When stabilizing every step, the Green's function is never stabilized
-                                                                                            #       while the T vector is always stabilized. 
-                                                                                            #       This might be because as the quick update for the Green's function 
-                                                                                            #       increments nq_updates by 1, this triggers stabilization for the T vector 
-                                                                                            #       which then resets nq_updated to 0; hence, the W matrix is never
-                                                                                            #       stabilized.
+            update_equal_time_greens!(markov_move, detwf, model_geometry, Ne, n_stab_W, δW) 
 
             # update T vector
             update_fermionic_Tvec!(markov_move, spin, jastrow, model_geometry, n_stab_T, δT, pht)

@@ -24,7 +24,7 @@ include("Measurements.jl");
 # include("ElectronPhonon.jl");
 
 # Open the file for writing
-io = open("simulation_output_chain_L4_U4_deltaafm_Nopts100_optbinsize1000_dt0p03.txt", "w")
+io = open("simulation_output_chain_L4_U4_deltaa_Nopts500_optbinsize1000_dt0p1.txt", "w")
 
 # Redirect stdout to the file
 redirect_stdout(io)
@@ -66,27 +66,27 @@ t = 1.0;
 tp = 0.0;
 
 # (BCS) chemical potential 
-μ_BCS = 0.0;
+μ_BCS = 0.001;
 
 # onsite Hubbard repulsion
 U = 4.0;
 
 # antiferromagnetic (Neél) order parameter
-Δa = 0.1;
+Δa = 1.0;
 
 # s-wave pairing (BCS)
 Δs = 0.1;
 
-# Parameters to be optimized and initial value(s)
-parameters_to_optimize = ["Δa"];   
-parameter_values = [[Δa]];     
-
 # # Parameters to be optimized and initial value(s)
-# parameters_to_optimize = ["Δs", "μ_BCS"];   
-# parameter_values = [[Δs],[μ_BCS]];  
+# parameters_to_optimize = ["Δa"];   
+# parameter_values = [[Δa]];     
+
+# Parameters to be optimized and initial value(s)
+parameters_to_optimize = ["Δs", "μ_BCS"];   
+parameter_values = [[Δs],[μ_BCS]];  
 
 # whether model is particle-hole transformed
-pht = false;
+pht = true;
 
 # define electron density
 n̄ = 1.0;
@@ -138,7 +138,7 @@ initialize_datafolder(simulation_info);
 ##############################################
 
 # random seed
-seed = abs(rand(Int)) #8947935343182193186 # 
+seed = abs(rand(Int)) #3152596382106499424 #
 println("seed = ", seed)
 
 # initialize random number generator
@@ -148,7 +148,7 @@ rng = Xoshiro(seed);
 N_equil = 3000;
 
 # number of minimization/optimization updates
-N_opts = 100;
+N_opts = 500;
 
 # optimization bin size
 opt_bin_size = 1000;
@@ -176,7 +176,7 @@ n_stab_T= 1;
 η = 1e-4;    
 
 # optimization rate for Stochastic Reconfiguration
-dt = 0.03;   # 0.03      
+dt = 0.1;       
 
 # whether debug statements are printed 
 debug = true;
@@ -223,7 +223,7 @@ measurement_container = initialize_measurement_container(N_opts, opt_bin_size, N
 initialize_measurement_directories(simulation_info, measurement_container);
 
 
-# DEBUG
+# TESTING AND DEBUG
 energy_bin = Float64[];
 dblocc_bin = Float64[];
 param_bin = [];
@@ -286,11 +286,11 @@ close(io)
 using Plots
 using LaTeXStrings
 
-# collect Δa
-deltaa = [v[1] for v in param_bin]
-# collect Jastrow pseudopotentials
-vij_1 = [v[2] for v in param_bin]
-vij_2 = [v[3] for v in param_bin]
+# # collect Δa
+# deltaa = [v[1] for v in param_bin]
+# # collect Jastrow pseudopotentials
+# vij_1 = [v[2] for v in param_bin]
+# vij_2 = [v[3] for v in param_bin]
 
 # collect Δs
 deltas = [v[1] for v in param_bin]
@@ -300,9 +300,18 @@ mus = [v[2] for v in param_bin]
 vij_1 = [v[3] for v in param_bin]
 vij_2 = [v[4] for v in param_bin]
 
-# df = DataFrame(A = collect(1:400), B = vij_1/opt_bin_size, C = vij_2/opt_bin_size)
-
-# CSV.write("vij_bins.csv", df)
+# write data to file
+df_erg = DataFrame(A = collect(1:N_opts), B = energy_bin/opt_bin_size)
+df_dblocc = DataFrame(A = collect(1:N_opts), B = dblocc_bin/opt_bin_size)
+# df_afm = DataFrame(A = collect(1:N_opts), B = deltaa/opt_bin_size)
+# df_s = DataFrame(A = collect(1:N_opts), B = deltas/opt_bin_size)
+df_vij = DataFrame(A = collect(1:N_opts), B = vij_1/opt_bin_size, C = vij_2/opt_bin_size)
+# df_mus = DataFrame(A = collect(1:N_opts), B = mus/opt_bin_size)
+CSV.write("chain_L4_U4_deltas_Nopts500_optbinsize1000_dt0p1_energy_bins.csv", df_erg)
+CSV.write("chain_L4_U4_deltas_Nopts500_optbinsize1000_dt0p1_dblocc_bins.csv", df_dblocc)
+CSV.write("chain_L4_U4_deltas_Nopts500_optbinsize1000_dt0p1_deltas_bins.csv", df_s)
+CSV.write("chain_L4_U4_deltas_Nopts500_optbinsize1000_dt0p1_mus_bins.csv", df_mus)
+CSV.write("chain_L4_U4_deltas_Nopts500_optbinsize1000_dt0p1_vij_bins.csv", df_vij)
 
 # plot energy per site
 scatter(1:N_opts, energy_bin/opt_bin_size, marker=:square, color=:red, markersize=5, markerstrokewidth=0,
@@ -314,10 +323,15 @@ scatter(1:N_opts, dblocc_bin/opt_bin_size, marker=:square, color=:red, markersiz
         legend=false, xlabel="Optimization steps", ylabel=L"D", tickfontsize=14, guidefontsize=14, legendfontsize=14,
         xlims=(0,N_opts), ylims=(0,0.5))
 
-# plot AFM parameter
-scatter(1:N_opts, deltaa/opt_bin_size, marker=:circle, color=:blue, markersize=5, markerstrokewidth=0,
-        legend=false, xlabel="Optimization steps", ylabel=L"\Delta_a", tickfontsize=14, guidefontsize=14, legendfontsize=14,
-        xlims=(0,N_opts))
+# # plot AFM parameter
+# scatter(1:N_opts, deltaa/opt_bin_size, marker=:circle, color=:blue, markersize=5, markerstrokewidth=0,
+#         legend=false, xlabel="Optimization steps", ylabel=L"\Delta_a", tickfontsize=14, guidefontsize=14, legendfontsize=14,
+#         xlims=(0,N_opts))
+
+# plot s-wave parameter
+scatter(1:N_opts, deltas/opt_bin_size, marker=:circle, color=:blue, markersize=5, markerstrokewidth=0,
+legend=false, xlabel="Optimization steps", ylabel=L"\Delta_s", tickfontsize=14, guidefontsize=14, legendfontsize=14,
+xlims=(0,N_opts))
 
 # plot Jastrow parameters
 scatter(1:N_opts, vij_1/opt_bin_size, marker=:circle, color=:blue, markersize=5, markerstrokewidth=0,
@@ -325,6 +339,11 @@ scatter(1:N_opts, vij_1/opt_bin_size, marker=:circle, color=:blue, markersize=5,
         xlims=(0,N_opts)) 
 scatter!(1:N_opts, vij_2/opt_bin_size, marker=:square, color=:red, markersize=5, markerstrokewidth=0,
         label=L"v_{ij}^2", xlabel="Optimization steps", ylabel=L"v_{ij}", tickfontsize=14, guidefontsize=14, legendfontsize=14,
+        xlims=(0,N_opts))
+
+# plot mu parameter
+scatter(1:N_opts, mus/opt_bin_size, marker=:circle, color=:blue, markersize=5, markerstrokewidth=0,
+        legend=false, xlabel="Optimization steps", ylabel=L"\mu_{\mathrm{BCS}}", tickfontsize=14, guidefontsize=14, legendfontsize=14,
         xlims=(0,N_opts))
 ## END TESTING
 

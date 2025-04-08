@@ -101,9 +101,10 @@ function build_determinantal_wavefunction(tight_binding_model::TightBindingModel
     end
 
     # intialize quick updating tracker
-    nq_updates = 0 
+    nq_updates_W = 0 
+    nq_updates_T = 0
 
-    return DeterminantalWavefunction(W, D, M, U_int, A, ε, pconfig, nq_updates);
+    return DeterminantalWavefunction(W, D, M, U_int, A, ε, pconfig, nq_updates_W, nq_updates_T);
 end
 
 
