@@ -6,7 +6,7 @@ Returns all eigenenergies and all eigenstates of the mean-field Hamiltonian,
 the latter being stored in the columns of a matrix. Convention: H(diag) = U⁺HU.
 
 """
-function diagonalize(H::Matrix{ComplexF64})::Tuple{Vector{Float64}, Matrix{ComplexF64}}
+function diagonalize(H::AbstractMatrix{<:Complex})
     # check if Hamiltonian is Hermitian
     @assert ishermitian(H) == true
     F = eigen(H)    

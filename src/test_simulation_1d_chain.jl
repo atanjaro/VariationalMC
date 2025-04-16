@@ -23,11 +23,11 @@ include("SimulationInfo.jl");
 include("Measurements.jl");
 # include("ElectronPhonon.jl");
 
-# Open the file for writing
-io = open("simulation_output_chain_L4_U4_deltaa_Nopts500_optbinsize1000_dt0p1.txt", "w")
+# # Open the file for writing
+# io = open("simulation_output_chain_L4_U4_deltaa_Nopts500_optbinsize1000_dt0p1.txt", "w")
 
-# Redirect stdout to the file
-redirect_stdout(io)
+# # Redirect stdout to the file
+# redirect_stdout(io)
 
 ###########################################
 ##          LATTICE PARAMETERS           ##
@@ -46,11 +46,11 @@ lattice = Lattice([Lx],[true]);
 # define nearest neighbor bonds
 bond_x = Bond(orbitals = (1,1), displacement = [1]);
 
-# # define next nearest neighbor bonds
-# bond_xp = Bond(orbitals = (1,1), displacement = [2]);
+# define next nearest neighbor bonds
+bond_xp = Bond(orbitals = (1,1), displacement = [2]);
 
 # collect all bond definitions
-bonds = [[bond_x]];     # bonds are organized into [[nearest],[next-nearest]] #,[bond_xp]
+bonds = [[bond_x], [bond_xp]];     # bonds are organized into [[nearest],[next-nearest]] 
 
 # define model geometry
 model_geometry = ModelGeometry(unit_cell,lattice, bonds);
@@ -65,28 +65,36 @@ t = 1.0;
 # next nearest neighbor hopping amplitude
 tp = 0.0;
 
-# (BCS) chemical potential 
-μ_BCS = 0.001;
-
 # onsite Hubbard repulsion
 U = 4.0;
 
+# (BCS) chemical potential 
+μ = 0.0;
+
+# s-wave pairing
+Δ_0 = 0.1;
+
+# d-wave pairing
+Δ_d = 0.0;
+
 # antiferromagnetic (Neél) order parameter
-Δa = 1.0;
+Δ_afm = 0.1;
 
-# s-wave pairing (BCS)
-Δs = 0.1;
+# uniform charge-density-wave order parameter
+Δ_cdw = 0.0;
 
-# # Parameters to be optimized and initial value(s)
-# parameters_to_optimize = ["Δa"];   
-# parameter_values = [[Δa]];     
+# site dependent hole density
+Δ_shd = fill(0.0, Lx);     
 
-# Parameters to be optimized and initial value(s)
-parameters_to_optimize = ["Δs", "μ_BCS"];   
-parameter_values = [[Δs],[μ_BCS]];  
+# site dependent spin density
+Δ_sds = fill(0.0, Lx);
+
+# Select which parameters will be optimized
+optimize = ["Δ_afm"];  
+# optimize = ["μ", "Δ_0"];   
 
 # whether model is particle-hole transformed
-pht = true;
+pht = false;
 
 # define electron density
 n̄ = 1.0;
@@ -102,10 +110,10 @@ n̄ = 1.0;
 # (density, Np, Ne) = get_particle_density(nup, ndn);   # Use this if initial particle numbers are specified
 
 # define non-interacting tight binding model
-tight_binding_model = TightBindingModel([t, tp], μ_BCS);
+tight_binding_model = TightBindingModel(t, tp);
 
 # initialize determinantal parameters
-determinantal_parameters = initialize_determinantal_parameters(parameters_to_optimize, parameter_values);
+determinantal_parameters = DeterminantalParameters(μ, Δ_0, Δ_d, Δ_afm, Δ_cdw, Δ_shd, Δ_sds, optimize);
 
 
 ######################################
@@ -138,7 +146,7 @@ initialize_datafolder(simulation_info);
 ##############################################
 
 # random seed
-seed = abs(rand(Int)) #3152596382106499424 #
+seed = 3152596382106499424 #abs(rand(Int)) #
 println("seed = ", seed)
 
 # initialize random number generator
@@ -229,9 +237,8 @@ dblocc_bin = Float64[];
 param_bin = [];
 global_acceptance_rate = 0.0;
 
-# Run your simulation as usual (no scope issues)
-println("Starting simulation...")
 
+println("Starting simulation...")
 #############################################
 ##          OPTIMIZATION UPDATES           ##
 #############################################
@@ -286,27 +293,27 @@ close(io)
 using Plots
 using LaTeXStrings
 
-# # collect Δa
-# deltaa = [v[1] for v in param_bin]
-# # collect Jastrow pseudopotentials
-# vij_1 = [v[2] for v in param_bin]
-# vij_2 = [v[3] for v in param_bin]
-
-# collect Δs
-deltas = [v[1] for v in param_bin]
-# collect Δs
-mus = [v[2] for v in param_bin]
+# collect Δa
+deltaa = [v[1] for v in param_bin]
 # collect Jastrow pseudopotentials
-vij_1 = [v[3] for v in param_bin]
-vij_2 = [v[4] for v in param_bin]
+vij_1 = [v[2] for v in param_bin]
+vij_2 = [v[3] for v in param_bin]
+
+# # collect Δs
+# deltas = [v[1] for v in param_bin]
+# # collect Δs
+# mus = [v[2] for v in param_bin]
+# # collect Jastrow pseudopotentials
+# vij_1 = [v[3] for v in param_bin]
+# vij_2 = [v[4] for v in param_bin]
 
 # write data to file
 df_erg = DataFrame(A = collect(1:N_opts), B = energy_bin/opt_bin_size)
 df_dblocc = DataFrame(A = collect(1:N_opts), B = dblocc_bin/opt_bin_size)
 # df_afm = DataFrame(A = collect(1:N_opts), B = deltaa/opt_bin_size)
-# df_s = DataFrame(A = collect(1:N_opts), B = deltas/opt_bin_size)
+df_s = DataFrame(A = collect(1:N_opts), B = deltas/opt_bin_size)
 df_vij = DataFrame(A = collect(1:N_opts), B = vij_1/opt_bin_size, C = vij_2/opt_bin_size)
-# df_mus = DataFrame(A = collect(1:N_opts), B = mus/opt_bin_size)
+df_mus = DataFrame(A = collect(1:N_opts), B = mus/opt_bin_size)
 CSV.write("chain_L4_U4_deltas_Nopts500_optbinsize1000_dt0p1_energy_bins.csv", df_erg)
 CSV.write("chain_L4_U4_deltas_Nopts500_optbinsize1000_dt0p1_dblocc_bins.csv", df_dblocc)
 CSV.write("chain_L4_U4_deltas_Nopts500_optbinsize1000_dt0p1_deltas_bins.csv", df_s)
@@ -323,15 +330,15 @@ scatter(1:N_opts, dblocc_bin/opt_bin_size, marker=:square, color=:red, markersiz
         legend=false, xlabel="Optimization steps", ylabel=L"D", tickfontsize=14, guidefontsize=14, legendfontsize=14,
         xlims=(0,N_opts), ylims=(0,0.5))
 
-# # plot AFM parameter
-# scatter(1:N_opts, deltaa/opt_bin_size, marker=:circle, color=:blue, markersize=5, markerstrokewidth=0,
-#         legend=false, xlabel="Optimization steps", ylabel=L"\Delta_a", tickfontsize=14, guidefontsize=14, legendfontsize=14,
-#         xlims=(0,N_opts))
+# plot AFM parameter
+scatter(1:N_opts, deltaa/opt_bin_size, marker=:circle, color=:blue, markersize=5, markerstrokewidth=0,
+        legend=false, xlabel="Optimization steps", ylabel=L"\Delta_a", tickfontsize=14, guidefontsize=14, legendfontsize=14,
+        xlims=(0,N_opts))
 
-# plot s-wave parameter
-scatter(1:N_opts, deltas/opt_bin_size, marker=:circle, color=:blue, markersize=5, markerstrokewidth=0,
-legend=false, xlabel="Optimization steps", ylabel=L"\Delta_s", tickfontsize=14, guidefontsize=14, legendfontsize=14,
-xlims=(0,N_opts))
+# # plot s-wave parameter
+# scatter(1:N_opts, deltas/opt_bin_size, marker=:circle, color=:blue, markersize=5, markerstrokewidth=0,
+# legend=false, xlabel="Optimization steps", ylabel=L"\Delta_s", tickfontsize=14, guidefontsize=14, legendfontsize=14,
+# xlims=(0,N_opts))
 
 # plot Jastrow parameters
 scatter(1:N_opts, vij_1/opt_bin_size, marker=:circle, color=:blue, markersize=5, markerstrokewidth=0,
@@ -341,11 +348,16 @@ scatter!(1:N_opts, vij_2/opt_bin_size, marker=:square, color=:red, markersize=5,
         label=L"v_{ij}^2", xlabel="Optimization steps", ylabel=L"v_{ij}", tickfontsize=14, guidefontsize=14, legendfontsize=14,
         xlims=(0,N_opts))
 
-# plot mu parameter
-scatter(1:N_opts, mus/opt_bin_size, marker=:circle, color=:blue, markersize=5, markerstrokewidth=0,
-        legend=false, xlabel="Optimization steps", ylabel=L"\mu_{\mathrm{BCS}}", tickfontsize=14, guidefontsize=14, legendfontsize=14,
-        xlims=(0,N_opts))
+# # plot mu parameter
+# scatter(1:N_opts, mus/opt_bin_size, marker=:circle, color=:blue, markersize=5, markerstrokewidth=0,
+#         legend=false, xlabel="Optimization steps", ylabel=L"\mu_{\mathrm{BCS}}", tickfontsize=14, guidefontsize=14, legendfontsize=14,
+#         xlims=(0,N_opts))
 ## END TESTING
+
+
+
+
+
 
 # ###########################################
 # ##          SIMULATION UPDATES           ##

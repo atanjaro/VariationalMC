@@ -541,20 +541,17 @@ function get_local_kinetic_energy(detwf::DeterminantalWavefunction, tight_bindin
     N = model_geometry.lattice.N
 
     # generate neighbor table
-    nbr_table = build_neighbor_table(model_geometry.bond[1],
+    nbr_table0 = build_neighbor_table(model_geometry.bond[1],
                                     model_geometry.unit_cell,
                                     model_geometry.lattice)
 
-    # generate neighbor map
-    nbr_map = map_neighbor_table(nbr_table)
+    nbr_table1 = build_neighbor_table(model_geometry.bond[2],
+                                    model_geometry.unit_cell,
+                                    model_geometry.lattice)
 
-    # # checks for next nearest neighbors
-    # if length(model_geometry.bond) == 2
-    #     nbr_table_p = build_neighbor_table(bonds[2],
-    #                                       model_geometry.unit_cell,
-    #                                       model_geometry.lattice)
-    #     nbr_map_p = map_neighbor_table(nbr_table_p)
-    # end
+    # generate neighbor maps
+    nbr_map0 = map_neighbor_table(nbr_table0)
+    nbr_map1 = map_neighbor_table(nbr_table1)
 
     E_loc_kinetic = 0.0
 
@@ -568,9 +565,25 @@ function get_local_kinetic_energy(detwf::DeterminantalWavefunction, tight_bindin
         # check spin of particle  
         spin = get_spindex_type(k, model_geometry)
       
-        # loop over nearest neighbors. TODO: add next-nearest neighbors
+        # loop over nearest neighbors
         sum_nn = 0.0
-        for lsite in nbr_map[ksite][2]
+        for lsite in nbr_map0[ksite][2]
+            if spin == 1
+                l = get_spindices_from_index(lsite, model_geometry)[1]
+            else
+                l = get_spindices_from_index(lsite, model_geometry)[2]
+            end
+
+            # check that neighboring site is unoccupied
+            if detwf.pconfig[l] == 0
+                Rⱼ = get_fermionic_jastrow_ratio(k, l, jastrow, pht, spin, model_geometry)
+                sum_nn += Rⱼ * detwf.W[l, β]
+            end
+        end
+
+        # loop over next nearest neighbors
+        sum_nnn = 0.0
+        for lsite in nbr_map1[ksite][2]
             if spin == 1
                 l = get_spindices_from_index(lsite, model_geometry)[1]
             else
@@ -585,16 +598,17 @@ function get_local_kinetic_energy(detwf::DeterminantalWavefunction, tight_bindin
         end
 
         # hopping amplitudes       
-        t = tight_binding_model.t
+        t₀ = tight_binding_model.t₀
+        t₁ = tight_binding_model.t₁
 
         if pht 
             if spin == 1
-                E_loc_kinetic += -t[1] * sum_nn        
+                E_loc_kinetic += (-t₀ * sum_nn) + (t₁ * sum_nnn)
             else
-                E_loc_kinetic += t[1] * sum_nn 
+                E_loc_kinetic += (t₀ * sum_nn) - (t₁ * sum_nnn)
             end
         else
-            E_loc_kinetic += -t[1] * sum_nn
+            E_loc_kinetic += (-t₀ * sum_nn) + (t₁ * sum_nnn)
         end
     end
 

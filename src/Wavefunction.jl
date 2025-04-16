@@ -55,7 +55,7 @@ function build_determinantal_wavefunction(tight_binding_model::TightBindingModel
     N = model_geometry.lattice.N;
 
     # build auxiliary (mean-field) Hamiltonian and variational operators
-    (H, V) = build_mean_field_hamiltonian(tight_binding_model, determinantal_parameters);
+    (H, V) = build_auxiliary_hamiltonian(tight_binding_model, determinantal_parameters, model_geometry, pht);
 
     # diagonalize Hamiltonian
     (ε, U_int) = diagonalize(H);
