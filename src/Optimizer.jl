@@ -1,6 +1,46 @@
 """
 
     stochastic_reconfiguration!( measurement_container::NamedTuple, determinantal_parameters::DeterminantalParameters, 
+                                η::Float64, dt::Float64, bin_size::Int64 )::Nothing
+
+Updates variational parameters through stochastic optimization.
+
+"""
+function stochastic_reconfiguration!(measurement_container::NamedTuple, determinantal_parameters::DeterminantalParameters, 
+                                     η::Float64, dt::Float64, bin_size::Int64)::Nothing
+    debug && println("Optimizer::stochastic_reconfiguration!() : ")
+    debug && println("Start of optimization")
+
+    # get S matrix
+    S = get_covariance_matrix(measurement_container, bin_size)
+
+    # get f vector
+    f = get_force_vector(measurement_container, bin_size)
+
+    # solve for variation in the parameters
+    δvpars = (S + η * I(size(S,1))) \ f  
+
+    # new varitaional parameters
+    new_vpars = collect(values(determinantal_parameters.det_pars))
+    new_vpars .+= dt .* δvpars
+
+    debug && println("Optimizer::stochastic_reconfiguration!() : ")
+    debug && println("Parameters have been updated")
+    debug && println("new parameters = ", new_vpars)
+
+    # push back determinantal_parameters
+    update_parameters!(new_vpars, determinantal_parameters)
+
+    debug && println("Optimizer::stochastic_reconfiguration!() : ")
+    debug && println("End of optimization")
+
+    return nothing
+end
+
+
+"""
+
+    stochastic_reconfiguration!( measurement_container::NamedTuple, determinantal_parameters::DeterminantalParameters, 
                                     jastrow::Jastrow, η::Float64, dt::Float64, bin_size::Int64 )::Nothing
 
 Updates variational parameters through stochastic optimization.
@@ -41,27 +81,27 @@ function stochastic_reconfiguration!(measurement_container::NamedTuple, determin
 end
 
 
-"""
 
-    get_detpar_derivatives( detwf::DeterminantalWavefunction, determinantal_parameters::DeterminantalParameters, 
-                            model_geometry::ModelGeometry, Ne::Int64 )::Vector{Float64}
-
-Calculates the local logarithmic derivative Δₖ(x) = ∂lnΨ(x)/∂αₖ, with respect to the kth variational parameter αₖ,
-in the determinantal part of the wavefunction. Returns a vector of derivatives.
-
-"""
-function get_detpar_derivatives(detwf::DeterminantalWavefunction, determinantal_parameters::DeterminantalParameters, 
-                                model_geometry::ModelGeometry, Ne::Int64)::Vector{Float64}
+function get_Δk(optimize::NamedTuple, determinantal_parameters::DeterminantalParameters, 
+                detwf::DeterminantalWavefunction, model_geometry::ModelGeometry, Ne::Int)
+    # # check that at least one parameter is being optimized
+    # @assert any(values(optimize))
+    
     # number of lattice sites
     N = model_geometry.unit_cell.n * model_geometry.lattice.N
 
-    # number of determinantal parameters
-    num_detpars = determinantal_parameters.num_detpars
+    # current determinantal_parameters
+    det_pars = determinantal_parameters.det_pars
 
-    # vector to store derivatives
-    det_par_derivatives = zeros(Float64, num_detpars)
-    
-    # loop over Nₑ particles 
+    # total number of parameters in the model
+    num_det_pars = determinantal_parameters.num_det_pars
+
+    # # number of parameters being optimized
+    # num_det_opts = determinantal_parameters.num_det_opts
+
+    # resultant derivatives
+    result = zeros(Float64, num_det_pars)
+
     G = zeros(Complex, 2*N, 2*N)
     for β in 1:Ne
         k = findfirst(x -> x == β, detwf.pconfig)
@@ -69,90 +109,136 @@ function get_detpar_derivatives(detwf::DeterminantalWavefunction, determinantal_
         G[k, :] .= detwf.W[:, β]
     end
 
-    # loop over the number of determinantal parameters
-    for num in 1:num_detpars
-        det_par_derivatives[num] += sum(detwf.A[num] .* G)
+    opt_idx = 1
+    for (i, pname) in enumerate(keys(det_pars))
+        if getfield(optimize, pname)
+            result[i] = sum(detwf.A[opt_idx] .* G)
+            opt_idx += 1
+        end
     end
 
-    return det_par_derivatives
+    return result
 end
 
 
-"""
+# function get_Δk(optimize::NamedTuple, determinantal_parameters::DeterminantalParameters, 
+#                 jastrow::Jastrow, detwf::DeterminantalParameters, model_geometry:ModelGeometry, Ne::Int)
 
-    get_jpar_derivatives( detwf::DeterminantalWavefunction, jastrow::Jastrow, pht::Bool )::Vector{Float64}
+# end
 
-Calculates the local logarithmic derivative Δₖ(x) = ∂lnΨ(x)/∂vₗₘ, with respect to the kth 
-Jastrow parameter vₗₘ. Returns a vector of derivatives.
 
-"""
-function get_jpar_derivatives(detwf::DeterminantalWavefunction, jastrow::Jastrow, pht::Bool)::Vector{Float64}
-    # jastrow type
-    jastrow_type = jastrow.jastrow_type;
+# """
 
-    # number of Jastrow parameters, except for the last one
-    num_jpars = jastrow.num_jpars - 1;
+#     get_detpar_derivatives( detwf::DeterminantalWavefunction, determinantal_parameters::DeterminantalParameters, 
+#                             model_geometry::ModelGeometry, Ne::Int64 )::Vector{Float64}
 
-    # map of Jastrow parameters
-    jpar_map = jastrow.jpar_map;
+# Calculates the local logarithmic derivative Δₖ(x) = ∂lnΨ(x)/∂αₖ, with respect to the kth variational parameter αₖ,
+# in the determinantal part of the wavefunction. Returns a vector of derivatives.
 
-    # vector to store derivatives
-    jpar_derivatives = zeros(Float64, num_jpars)
+# """
+# function get_detpar_derivatives(detwf::DeterminantalWavefunction, determinantal_parameters::DeterminantalParameters, 
+#                                 model_geometry::ModelGeometry, Ne::Int64)::Vector{Float64}
+#     # number of lattice sites
+#     N = model_geometry.unit_cell.n * model_geometry.lattice.N
 
-    # get irreducible indices
-    irr_indices = collect(keys(jpar_map))
+#     # number of determinantal parameters
+#     num_det_opts = determinantal_parameters.num_det_opts
+
+#     # vector to store derivatives
+#     det_par_derivatives = zeros(Float64, num_det_opts)
+    
+#     # loop over Nₑ particles 
+#     G = zeros(Complex, 2*N, 2*N)
+#     for β in 1:Ne
+#         k = findfirst(x -> x == β, detwf.pconfig)
+
+#         G[k, :] .= detwf.W[:, β]
+#     end
+
+#     # loop over the number of determinantal parameters
+#     for num in 1:num_det_opts
+#         det_par_derivatives[num] += sum(detwf.A[num] .* G) 
+#     end
+
+#     return det_par_derivatives
+# end
+
+
+# """
+
+#     get_jpar_derivatives( detwf::DeterminantalWavefunction, jastrow::Jastrow, pht::Bool )::Vector{Float64}
+
+# Calculates the local logarithmic derivative Δₖ(x) = ∂lnΨ(x)/∂vₗₘ, with respect to the kth 
+# Jastrow parameter vₗₘ. Returns a vector of derivatives.
+
+# """
+# function get_jpar_derivatives(detwf::DeterminantalWavefunction, jastrow::Jastrow, pht::Bool)::Vector{Float64}
+#     # jastrow type
+#     jastrow_type = jastrow.jastrow_type;
+
+#     # number of Jastrow parameters, except for the last one
+#     num_jpars = jastrow.num_jpars - 1;
+
+#     # map of Jastrow parameters
+#     jpar_map = jastrow.jpar_map;
+
+#     # vector to store derivatives
+#     jpar_derivatives = zeros(Float64, num_jpars)
+
+#     # get irreducible indices
+#     irr_indices = collect(keys(jpar_map))
                 
-    if jastrow_type == "e-den-den"
-        for num in 1:num_jpars
-            # Extract the current (indices, jpars) tuple
-            indices, _ = jpar_map[irr_indices[num]]
+#     if jastrow_type == "e-den-den"
+#         for num in 1:num_jpars
+#             # Extract the current (indices, jpars) tuple
+#             indices, _ = jpar_map[irr_indices[num]]
 
-            for idx in indices
-                i = idx[1]
-                j = idx[2]
+#             for idx in indices
+#                 i = idx[1]
+#                 j = idx[2]
 
-                # double counting
-                dblcount_correction = (j==i) ? 0.5 : 1.0
+#                 # double counting
+#                 dblcount_correction = (j==i) ? 0.5 : 1.0
 
-                # get occupations
-                nup_i = get_onsite_fermion_occupation(i+1, detwf.pconfig)[1]
-                ndn_i = get_onsite_fermion_occupation(i+1, detwf.pconfig)[2]
-                nup_j = get_onsite_fermion_occupation(j+1, detwf.pconfig)[1]
-                ndn_j = get_onsite_fermion_occupation(j+1, detwf.pconfig)[2]
-                if pht
-                    jpar_derivatives[num] += -dblcount_correction * (nup_i - ndn_i) * (nup_j - ndn_j)
-                else
-                    jpar_derivatives[num] += -dblcount_correction * (nup_i + ndn_i) * (nup_j + ndn_j)
-                end
-            end
-        end
-    elseif jastrow_type == "e-spn-spn"
-        for num in 1:num_jpars
-            # Extract the current (indices, jpars) tuple
-            indices, _ = jpar_map[irr_indices[num]]
+#                 # get occupations
+#                 nup_i = get_onsite_fermion_occupation(i+1, detwf.pconfig)[1]
+#                 ndn_i = get_onsite_fermion_occupation(i+1, detwf.pconfig)[2]
+#                 nup_j = get_onsite_fermion_occupation(j+1, detwf.pconfig)[1]
+#                 ndn_j = get_onsite_fermion_occupation(j+1, detwf.pconfig)[2]
+#                 if pht
+#                     jpar_derivatives[num] += -dblcount_correction * (nup_i - ndn_i) * (nup_j - ndn_j)
+#                 else
+#                     jpar_derivatives[num] += -dblcount_correction * (nup_i + ndn_i) * (nup_j + ndn_j)
+#                 end
+#             end
+#         end
+#     elseif jastrow_type == "e-spn-spn"
+#         for num in 1:num_jpars
+#             # Extract the current (indices, jpars) tuple
+#             indices, _ = jpar_map[irr_indices[num]]
 
-            for idx in indices
-                i = idx[1]
-                j = idx[2]
+#             for idx in indices
+#                 i = idx[1]
+#                 j = idx[2]
 
-                # double counting
-                dblcount_correction = (j==i) ? 0.5 : 1.0
+#                 # double counting
+#                 dblcount_correction = (j==i) ? 0.5 : 1.0
 
-                # get occupations
-                nup_i = get_onsite_fermion_occupation(i+1, detwf.pconfig)[1]
-                ndn_i = get_onsite_fermion_occupation(i+1, detwf.pconfig)[2]
-                nup_j = get_onsite_fermion_occupation(j+1, detwf.pconfig)[1]
-                ndn_j = get_onsite_fermion_occupation(j+1, detwf.pconfig)[2]
-                if pht
-                    jpar_derivatives[num] += -0.5 * dblcount_correction * (nup_i - ndn_i) * (nup_j - ndn_j)
-                else
-                    jpar_derivatives[num] += -0.5 * dblcount_correction * (nup_i + ndn_i) * (nup_j + ndn_j)
-                end
-            end
-        end
-    end
-    return jpar_derivatives
-end
+#                 # get occupations
+#                 nup_i = get_onsite_fermion_occupation(i+1, detwf.pconfig)[1]
+#                 ndn_i = get_onsite_fermion_occupation(i+1, detwf.pconfig)[2]
+#                 nup_j = get_onsite_fermion_occupation(j+1, detwf.pconfig)[1]
+#                 ndn_j = get_onsite_fermion_occupation(j+1, detwf.pconfig)[2]
+#                 if pht
+#                     jpar_derivatives[num] += -0.5 * dblcount_correction * (nup_i - ndn_i) * (nup_j - ndn_j)
+#                 else
+#                     jpar_derivatives[num] += -0.5 * dblcount_correction * (nup_i + ndn_i) * (nup_j + ndn_j)
+#                 end
+#             end
+#         end
+#     end
+#     return jpar_derivatives
+# end
 
 
 """
@@ -192,7 +278,7 @@ f_k = <Δ_k><H> - <Δ_kH>.
 function get_force_vector(measurement_container::NamedTuple, opt_bin_size::Int64)
     
     # initialize force vector
-    f = [] # TODO: change this initialize a vector with Float64 elements
+    f = Float64[] # TODO: change this initialize a vector with Float64 elements
 
     # measure local parameters derivatives ⟨Δₖ⟩ for the current bin
     Δk = measurement_container.optimization_measurements["Δk"][1]/opt_bin_size
@@ -215,22 +301,22 @@ function get_force_vector(measurement_container::NamedTuple, opt_bin_size::Int64
 end
 
 
-"""
+# """
 
-    variations( S::Matrix, f::Vector, η::Float64 )
+#     variations( S::Matrix, f::Vector, η::Float64 )
 
-Solves for the variation in parameters for Stochastic Reconfiguration.
+# Solves for the variation in parameters for Stochastic Reconfiguration.
 
-"""
-function variations(S, f, η::Float64)
-    # Convert f to a vector of Float64
-    f = convert(Vector{Float64}, f)
+# """
+# function variations(S, f, η::Float64)
+#     # Convert f to a vector of Float64
+#     f = convert(Vector{Float64}, f)
 
-    # solve for variation in the parameters
-    δvpars = (S + (η * I)) \ f
+#     # solve for variation in the parameters
+#     δvpars = (S + (η * I)) \ f
 
-    return δvpars
-end
+#     return δvpars
+# end
 
 
 

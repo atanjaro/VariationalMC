@@ -1,6 +1,73 @@
 """
 
     initialize_measurement_container( N_opts::Int, opt_bin_size::Int, N_bins::Int, bin_size::Int,
+                                         determinantal_parameters::DeterminantalParameters, 
+                                         model_geometry::ModelGeometry )::NamedTuple
+
+Creates dictionaries of generic arrays for storing measurements. Each dictionary in the container
+has (keys => values): observable_name => local_values (i.e. ∑ O_loc(x)), binned_values (i.e. ⟨O⟩≈(N)⁻¹local_values)
+
+"""
+function initialize_measurement_container(N_opts::Int, opt_bin_size::Int, N_bins::Int, bin_size::Int,
+                                         determinantal_parameters::DeterminantalParameters, 
+                                         model_geometry::ModelGeometry)::NamedTuple
+    # total number of lattice sites
+    N = model_geometry.lattice.N
+    
+    # one side of the lattice
+    L = model_geometry.lattice.L
+
+    # number of determinantal parameters
+    num_det_pars = determinantal_parameters.num_det_pars
+
+    # number of variational parameters to be optimized
+    num_vpars = determinantal_parameters.num_det_opts
+
+    # initial parameters
+    init_vpars = collect(values(determinantal_parameters.det_pars))
+
+    # container to store optimization measurements
+    optimization_measurements = Dict{String, Any}([
+        ("parameters", (init_vpars, init_vpars)),                     # variational parameters
+        ("Δk", (zeros(num_det_pars), zeros(num_det_pars),[])),                          # log derivative of variational parameters
+        ("ΔkΔkp", (zeros(num_det_pars, num_det_pars), zeros(num_det_pars, num_det_pars),[])),   # product between log derivatives        
+        ("ΔkE", (zeros(num_det_pars), zeros(num_det_pars),[])),                         # product of log derivatives and energy
+    ])      
+
+    # dictionary to store simulation measurements
+    simulation_measurements = Dict{String, Any}([
+        ("density", (0.0,  0.0)),          # average density
+        ("double_occ", (0.0,  0.0)),       # average double occupancy 
+        ("energy", (0.0,  0.0)),           # local energy
+        ("pconfig", zeros(N))              # particle configurations
+    ])                     
+
+    # TODO: dictionary to store correlation measurements
+    correlation_measurements = Dict{String, Any}()
+
+    # create container
+    measurement_container = (
+        simulation_measurements   = simulation_measurements,
+        optimization_measurements = optimization_measurements,         
+        correlation_measurements  = correlation_measurements,                       
+        L                         = L,
+        N                         = N,
+        N_opts                    = N_opts,
+        opt_bin_size              = opt_bin_size,
+        N_updates                 = N_updates,
+        N_bins                    = N_bins,
+        bin_size                  = bin_size,
+        num_vpars                 = num_vpars,
+        num_detpars               = num_det_pars                 
+    )
+
+    return measurement_container
+end
+
+
+"""
+
+    initialize_measurement_container( N_opts::Int, opt_bin_size::Int, N_bins::Int, bin_size::Int,
                                         model_geometry::ModelGeometry, determinantal_parameters::DeterminantalParameters, 
                                         jastrow::Jastrow )::NamedTuple
 
@@ -18,7 +85,7 @@ function initialize_measurement_container(N_opts::Int, opt_bin_size::Int, N_bins
     L = model_geometry.lattice.L
 
     # number of determinantal_parameters
-    num_detpars = determinantal_parameters.num_detpars
+    num_detpars = determinantal_parameters.num_det_opts
 
     # number of Jastrow parameters
     num_jpars = jastrow.num_jpars - 1
@@ -64,6 +131,45 @@ function initialize_measurement_container(N_opts::Int, opt_bin_size::Int, N_bins
 
     return measurement_container
 end
+
+
+"""
+
+    make_measurements!( measurement_container::NamedTuple, detwf::DeterminantalWavefunction, 
+                        tight_binding_model::TightBindingModel, determinantal_parameters::DeterminantalParameters, 
+                        optimize::NamedTuple, model_geometry::ModelGeometry, Ne::Int64, pht::Bool )
+
+Measure the local energy and logarithmic derivatives (without a Jastrow factor) for a particular bin.
+
+"""
+# TODO: separate optimization and simulation measurements?
+function make_measurements!(measurement_container::NamedTuple, detwf::DeterminantalWavefunction, 
+                            tight_binding_model::TightBindingModel, determinantal_parameters::DeterminantalParameters, 
+                            optimize::NamedTuple, model_geometry::ModelGeometry, Ne::Int64, pht::Bool)
+
+    # measure the variational parameters
+    measure_parameters!(measurement_container, optimize, determinantal_parameters)
+    
+    # measure the energy
+    measure_local_energy!(measurement_container, detwf, tight_binding_model, model_geometry, Ne, pht)
+
+    # measure the lograithmic derivatives
+    measure_Δk!(measurement_container, detwf, determinantal_parameters,model_geometry, Ne)
+    measure_ΔkΔkp!(measurement_container, detwf, determinantal_parameters, model_geometry, Ne)
+    measure_ΔkE!(measurement_container, detwf, tight_binding_model, determinantal_parameters, model_geometry, Ne, pht)
+
+    # measure double occupancy
+    measure_double_occ!(measurement_container, detwf, model_geometry)
+
+    # measure average density
+    measure_n!(measurement_container, detwf, model_geometry)
+
+    # record the current particle configuration
+    measurement_container.simulation_measurements["pconfig"] = detwf.pconfig
+
+    return nothing
+end
+
 
 
 """
@@ -227,6 +333,46 @@ end
 
 """
 
+    measure_parameters!( measurement_container::NamedTuple, optimize::NamedTuple,
+                        determinantal_parameters::DeterminantalParameters )::Nothing
+
+Measures all variational (determinantal) parameters. Measurements are then written to the measurement container.
+
+"""
+function measure_parameters!(measurement_container::NamedTuple, optimize::NamedTuple,
+                            determinantal_parameters::DeterminantalParameters)::Nothing
+    # record current variational parameters
+    parameters_current = collect(values(determinantal_parameters.det_pars))
+
+    # for name in fieldnames(typeof(optimize))
+    #     if hasfield(typeof(determinantal_parameters.det_pars), name) && getfield(optimize, name)
+    #         push!(parameters_current, getfield(determinantal_parameters.det_pars, name))
+    #     end
+    # end
+
+    # get current values from the container
+    parameters_container = measurement_container.optimization_measurements["parameters"]
+
+    # update value for the current bin
+    current_parameters_bin = parameters_container[2]
+    current_parameters_bin = parameters_current
+
+    # update accumuator for this bin
+    thisbin_parameters_sum = parameters_container[1]
+    thisbin_parameters_sum += parameters_current
+
+    # combine the updated values 
+    updated_values = (thisbin_parameters_sum, current_parameters_bin)
+
+    # write the new values to the container
+    measurement_container.optimization_measurements["parameters"] = updated_values
+
+    return nothing
+end
+
+
+"""
+
     measure_parameters!( measurement_container::NamedTuple, 
                         determinantal_parameters::DeterminantalParameters, jastrow::Jastrow )::Nothing
 
@@ -255,6 +401,48 @@ function measure_parameters!(measurement_container::NamedTuple,
 
     # write the new values to the container
     measurement_container.optimization_measurements["parameters"] = updated_values
+
+    return nothing
+end
+
+
+"""
+
+    measure_Δk!( measurement_container::NamedTuple, detwf::DeterminantalWavefunction, 
+                    determinantal_parameters::DeterminantalParameters, 
+                    model_geometry::ModelGeometry, Ne::Int64 )::Nothing
+
+Measures logarithmic derivatives for all variational parameters (without Jastrow parameters). 
+The first 'p' are derivatives of determinantal parameters. Measurements are then written
+to the measurement container.
+
+"""
+function measure_Δk!(measurement_container::NamedTuple, detwf::DeterminantalWavefunction, 
+                    determinantal_parameters::DeterminantalParameters,
+                    model_geometry::ModelGeometry, Ne::Int64)::Nothing
+    # calculate variational parameter derivatives
+    Δk_current = get_Δk(optimize, determinantal_parameters, detwf, model_geometry, Ne) #TODO: the length of Δk is not equal to num_det_pars
+
+    # get current values from the container
+    Δk_container = measurement_container.optimization_measurements["Δk"]
+
+    # update value for the current bin
+    current_Δk_bin = Δk_container[2]
+    current_Δk_bin = Δk_current
+
+    # add to bin history
+    bin_Δk_history = Δk_container[3]
+    push!(bin_Δk_history, current_Δk_bin)
+
+    # update accumuator for this bin
+    thisbin_Δk_sum = Δk_container[1]
+    thisbin_Δk_sum += Δk_current
+
+    # combine the updated values 
+    updated_values = (thisbin_Δk_sum, current_Δk_bin, bin_Δk_history)
+
+    # write the new values to the container
+    measurement_container.optimization_measurements["Δk"] = updated_values
 
     return nothing
 end
@@ -307,6 +495,50 @@ end
 """
 
     measure_ΔkΔkp!( measurement_container::NamedTuple, detwf::DeterminantalWavefunction, 
+                        determinantal_parameters::DeterminantalParameters,
+                        model_geometry::ModelGeometry, Ne::Int64)::Nothing
+
+Measures the product of variational derivatives with other variational derivatives (without any Jastrow parameters). 
+Measurements are then written to the measurement container.
+
+"""
+function measure_ΔkΔkp!(measurement_container::NamedTuple, detwf::DeterminantalWavefunction, 
+                        determinantal_parameters::DeterminantalParameters, 
+                        model_geometry::ModelGeometry, Ne::Int64)::Nothing
+    # calculate variational parameter derivatives
+    Δk = get_Δk(optimize, determinantal_parameters, detwf, model_geometry, Ne)
+
+    # inner product of Δk and Δk′
+    ΔkΔkp_current = Δk .* Δk'
+
+    # get current values from the container
+    ΔkΔkp_container = measurement_container.optimization_measurements["ΔkΔkp"]
+
+    # update value for the current bin
+    current_ΔkΔkp_bin = ΔkΔkp_container[2]
+    current_ΔkΔkp_bin = ΔkΔkp_current
+
+    # add to bin history
+    bin_ΔkΔkp_history = ΔkΔkp_container[3]
+    push!(bin_ΔkΔkp_history, current_ΔkΔkp_bin)
+
+    # update accumuator for this bin
+    thisbin_ΔkΔkp_sum = ΔkΔkp_container[1]
+    thisbin_ΔkΔkp_sum += ΔkΔkp_current
+
+    # combine the updated values 
+    updated_values = (thisbin_ΔkΔkp_sum, current_ΔkΔkp_bin, bin_ΔkΔkp_history)
+
+    # write the new values to the container
+    measurement_container.optimization_measurements["ΔkΔkp"] = updated_values
+
+    return nothing
+end 
+
+
+"""
+
+    measure_ΔkΔkp!( measurement_container::NamedTuple, detwf::DeterminantalWavefunction, 
                         determinantal_parameters::DeterminantalParameters, jastrow::Jastrow, 
                         model_geometry::ModelGeometry, Ne::Int64, pht::Bool )::Nothing
 
@@ -354,6 +586,53 @@ end
 
     measure_ΔkE!( measurement_container::NamedTuple, detwf::DeterminantalWavefunction, 
                     tight_binding_model::TightBindingModel, determinantal_parameters::DeterminantalParameters, 
+                    model_geometry::ModelGeometry, Ne::Int64, pht::Bool )::Nothing
+
+Measures the product of variational derivatives with the local energy (without a Jastrow factor). Measurements 
+are then written to the measurement container.
+
+"""
+function measure_ΔkE!(measurement_container::NamedTuple, detwf::DeterminantalWavefunction, 
+                    tight_binding_model::TightBindingModel, determinantal_parameters::DeterminantalParameters, 
+                    model_geometry::ModelGeometry, Ne::Int64, pht::Bool)::Nothing
+    # calculate variational parameter derivatives
+    Δk = get_Δk(optimize, determinantal_parameters, detwf, model_geometry, Ne)
+
+    # compute local energy
+    E_loc = get_local_energy(detwf, tight_binding_model, model_geometry, Ne, pht) 
+
+    # compute product of local derivatives with the local energy
+    ΔkE_current = Δk * E_loc
+
+    # get current values from the container
+    ΔkE_container = measurement_container.optimization_measurements["ΔkE"]
+
+    # update value for the current bin
+    current_ΔkE_bin = ΔkE_container[2]
+    current_ΔkE_bin = ΔkE_current
+
+    # add to bin history
+    bin_ΔkE_history = ΔkE_container[3]
+    push!(bin_ΔkE_history, current_ΔkE_bin)
+
+    # update accumuator for this bin
+    thisbin_ΔkE_sum = ΔkE_container[1]
+    thisbin_ΔkE_sum += ΔkE_current
+
+    # combine the updated values 
+    updated_values = (thisbin_ΔkE_sum, current_ΔkE_bin, bin_ΔkE_history)
+
+    # write the new values to the container
+    measurement_container.optimization_measurements["ΔkE"] = updated_values
+
+    return nothing
+end
+
+
+"""
+
+    measure_ΔkE!( measurement_container::NamedTuple, detwf::DeterminantalWavefunction, 
+                    tight_binding_model::TightBindingModel, determinantal_parameters::DeterminantalParameters, 
                     jastrow::Jastrow, model_geometry::ModelGeometry, Ne::Int64, pht::Bool )::Nothing
 
 Measures the product of variational derivatives with the local energy. Measurements are then written
@@ -394,6 +673,41 @@ function measure_ΔkE!(measurement_container::NamedTuple, detwf::DeterminantalWa
 
     # write the new values to the container
     measurement_container.optimization_measurements["ΔkE"] = updated_values
+
+    return nothing
+end
+
+
+"""
+
+    measure_local_energy!( measurement_container::NamedTuple, detwf::DeterminantalWavefunction, 
+                            tight_binding_model::TightBindingModel, model_geometry::ModelGeometry )
+
+Measures the total local energy for a Hubbard model (without a Jastrow factor) and writes to the measurement container.
+
+"""
+function measure_local_energy!(measurement_container::NamedTuple, detwf::DeterminantalWavefunction, 
+                                tight_binding_model::TightBindingModel, 
+                                model_geometry::ModelGeometry, Ne::Int64, pht::Bool)
+   # calculate the current local energy
+    E_loc_current = get_local_energy(detwf, tight_binding_model, model_geometry, Ne, pht)
+
+    # get current values from the container
+    energy_container = measurement_container.simulation_measurements["energy"]
+
+    # update value for the current bin
+    current_E_loc_bin = energy_container[2]
+    current_E_loc_bin = E_loc_current
+
+    # update accumuator for this bin
+    thisbin_E_loc_sum = energy_container[1]
+    thisbin_E_loc_sum += E_loc_current
+
+    # combine the updated values 
+    updated_values = (thisbin_E_loc_sum, current_E_loc_bin)
+
+    # write the new values to the container
+    measurement_container.simulation_measurements["energy"] = updated_values
 
     return nothing
 end
@@ -505,6 +819,31 @@ end
 
 """
     get_local_energy( detwf::DeterminantalWavefunction, tight_binding_model::TightBindingModel, 
+                        model_geometry::ModelGeometry )
+
+Calculates the local variational energy per site for a Hubbard model (without a Jastrow factor).
+
+"""
+function get_local_energy(detwf::DeterminantalWavefunction, tight_binding_model::TightBindingModel, 
+                            model_geometry::ModelGeometry, Ne::Int64, pht::Bool)
+    # number of lattice sites
+    N = model_geometry.lattice.N
+
+    # calculate kinetic energy
+    E_k = get_local_kinetic_energy(detwf, tight_binding_model, model_geometry, Ne, pht)
+
+    # calculate Hubbard energy
+    E_hubb = get_local_hubbard_energy(U, detwf, model_geometry, pht)
+
+    # calculate total local energy
+    E_loc = E_k + E_hubb
+    
+    return E_loc/N
+end
+
+
+"""
+    get_local_energy( detwf::DeterminantalWavefunction, tight_binding_model::TightBindingModel, 
                         jastrow::Jastrow, model_geometry::ModelGeometry )
 
 Calculates the local variational energy per site for a Hubbard model.
@@ -525,6 +864,92 @@ function get_local_energy(detwf::DeterminantalWavefunction, tight_binding_model:
     E_loc = E_k + E_hubb
     
     return E_loc/N
+end
+
+
+"""
+    get_local_kinetic_energy( detwf::DeterminantalWavefunction, tight_binding_model::TightBindingModel, 
+                                model_geometry::ModelGeometry, pht::Bool )
+
+Calculates the local electronic kinetic energy (without a Jastrow factor). 
+
+"""
+function get_local_kinetic_energy(detwf::DeterminantalWavefunction, tight_binding_model::TightBindingModel, 
+                                    model_geometry::ModelGeometry, Ne::Int64, pht::Bool)
+    # number of sites
+    N = model_geometry.lattice.N
+
+    # generate neighbor table
+    nbr_table0 = build_neighbor_table(model_geometry.bond[1],
+                                    model_geometry.unit_cell,
+                                    model_geometry.lattice)
+
+    nbr_table1 = build_neighbor_table(model_geometry.bond[2],
+                                    model_geometry.unit_cell,
+                                    model_geometry.lattice)
+
+    # generate neighbor maps
+    nbr_map0 = map_neighbor_table(nbr_table0)
+    nbr_map1 = map_neighbor_table(nbr_table1)
+
+    E_loc_kinetic = 0.0
+
+    for β in 1:Ne
+        # spindex of particle
+        k = findfirst(x -> x == β, detwf.pconfig)
+
+        # real position position 
+        ksite = get_index_from_spindex(k, model_geometry) 
+
+        # check spin of particle  
+        spin = get_spindex_type(k, model_geometry)
+      
+        # loop over nearest neighbors
+        sum_nn = 0.0
+        for lsite in nbr_map0[ksite][2]
+            if spin == 1
+                l = get_spindices_from_index(lsite, model_geometry)[1]
+            else
+                l = get_spindices_from_index(lsite, model_geometry)[2]
+            end
+
+            # check that neighboring site is unoccupied
+            if detwf.pconfig[l] == 0
+                sum_nn += detwf.W[l, β]
+            end
+        end
+
+        # loop over next nearest neighbors
+        sum_nnn = 0.0
+        for lsite in nbr_map1[ksite][2]
+            if spin == 1
+                l = get_spindices_from_index(lsite, model_geometry)[1]
+            else
+                l = get_spindices_from_index(lsite, model_geometry)[2]
+            end
+
+            # check that neighboring site is unoccupied
+            if detwf.pconfig[l] == 0
+                sum_nn += detwf.W[l, β]
+            end
+        end
+
+        # hopping amplitudes       
+        t₀ = tight_binding_model.t₀
+        t₁ = tight_binding_model.t₁
+
+        if pht 
+            if spin == 1
+                E_loc_kinetic += (-t₀ * sum_nn) + (t₁ * sum_nnn)
+            else
+                E_loc_kinetic += (t₀ * sum_nn) - (t₁ * sum_nnn)
+            end
+        else
+            E_loc_kinetic += (-t₀ * sum_nn) + (t₁ * sum_nnn)
+        end
+    end
+
+    return real(E_loc_kinetic)
 end
 
 
@@ -656,16 +1081,15 @@ Calculates the double occupancy.
 function get_double_occ(detwf::DeterminantalWavefunction, model_geometry::ModelGeometry)
     N = model_geometry.lattice.N
 
-    spin_up = detwf.pconfig[1:N]    
-    spin_down = detwf.pconfig[N+1:end]  
-
     nup_ndn = 0.0
-    for i in 1:N
-        if spin_up[i] != 0 && spin_down[i] != 0
+    for site in 1:N
+        tot_occ = get_onsite_fermion_occupation(site, detwf.pconfig)
+
+        if tot_occ[3] == 2
             nup_ndn += 1.0
         end
     end
-
+    
     return nup_ndn / N
 end
 

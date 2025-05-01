@@ -49,13 +49,13 @@ Returns an instances of the DeterminantalWavefunction type.
 """
 function build_determinantal_wavefunction(tight_binding_model::TightBindingModel, 
                                         determinantal_parameters::DeterminantalParameters, 
-                                        Ne::Int64, nup::Int64, ndn::Int64, 
+                                        optimize::NamedTuple, Ne::Int64, nup::Int64, ndn::Int64, 
                                         model_geometry::ModelGeometry, rng::Xoshiro)::DeterminantalWavefunction
     # number of lattice sites
     N = model_geometry.lattice.N;
 
     # build auxiliary (mean-field) Hamiltonian and variational operators
-    (H, V) = build_auxiliary_hamiltonian(tight_binding_model, determinantal_parameters, model_geometry, pht);
+    (H, V) = build_auxiliary_hamiltonian(tight_binding_model, determinantal_parameters, optimize, model_geometry, pht);
 
     # diagonalize Hamiltonian
     (ε, U_int) = diagonalize(H);
@@ -82,7 +82,7 @@ function build_determinantal_wavefunction(tight_binding_model::TightBindingModel
     pconfig = generate_initial_fermion_configuration(nup, ndn, model_geometry, rng);
 
     # initialize equal-time Green's function and Slater matrix
-    overlap = initialize_equal_time_greens!(W, D, M, pconfig, Ne);
+    overlap = initialize_equal_time_greens!(W, D, M, pconfig, Ne); 
 
     while overlap == false
         debug && println("Wavefunction::build_determinantal_wavefunction() : ")

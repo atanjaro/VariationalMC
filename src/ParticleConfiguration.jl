@@ -28,7 +28,7 @@ end
 Proposes randomly hopping or exchanging a particle from some intial site 'k' to a neighboring site 'l' 
 and returns an instance of the MarkovMove type. 
 
-""" # TODO: add loop over different neighbor orders (i.e. next-nearest neighbors)
+"""
 function propose_random_move(Ne::Int64, pconfig::Vector{Int64}, 
                             model_geometry::ModelGeometry, rng::Xoshiro)::MarkovMove
     # create nearest neighbor table

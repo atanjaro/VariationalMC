@@ -62,77 +62,145 @@ A type defining a set of variational parameters for the determinantal wavefuncti
 
 """
 mutable struct DeterminantalParameters
-    # (BCS) chemical potential
-    μ::Float64
+    # determinantal parameters and their values
+    det_pars::NamedTuple
 
-    # s-wave pairing
-    Δ_0::Float64
+    # total number of determinantal parameters
+    num_det_pars::Int
 
-    # d-wave pairing
-    Δ_d::Float64
-
-    # antiferromagnetic (Neél) order parameter
-    Δ_afm::Float64
-
-    # uniform charge-density-wave order parameter
-    Δ_cdw::Float64
-
-    # site-dependent charge density
-    Δ_sdc::Vector{Float64}
-
-    # site-dependent spin density
-    Δ_sds::Vector{Float64}
-
-    # vector of parameters to be optimized
-    optimize::Vector{String}
-
-    # initial optimization values
-    init_opt_vals::Vector{Float64}
-
-    # number of determinantal parameters
+    # total number of determinantal parameters being optimized
     num_det_opts::Int
 end
 
 
 """
 
-    DeterminantalParameters( μ::Float64, Δ_0::Float64, Δ_d::Float64, Δ_afm::Float64, 
-                            Δ_cdw::Float64, Δ_sdc::Vector{Float64}, Δ_sds::Vector{Float64}, optimize::Vector{String} )
+    DeterminantalParameters( optimize::NamedTuple, tight_binding_model::TightBindingModel, 
+                                model_geometry::ModelGeometry, minabs_vpar::Float64, Ne::Int, pht::Bool )
 
 Given an intial set of parameters and set of optimization flags, generates a set of variational parameters.
 """
-function DeterminantalParameters(μ::Float64, Δ_0::Float64, Δ_d::Float64, Δ_afm::Float64, 
-                                Δ_cdw::Float64, Δ_sdc::Vector{Float64}, Δ_sds::Vector{Float64}, optimize::Vector{String})
-    # add parameters to be optimized
-    init_opt_vals = [];
-    for param in optimize
-        if param == "μ"
-            push!(init_opt_vals, μ);
-        elseif param == "Δ_0"
-            push!(init_opt_vals, Δ_0);
-        elseif param == "Δ_d"
-            push!(init_opt_vals, Δ_d);
-        elseif param == "Δ_afm"
-            push!(init_opt_vals, Δ_afm);
-        elseif param == "Δ_cdw"
-            push!(init_opt_vals, Δ_cdw);
-        elseif param == "Δ_sdc"
-            push!(init_opt_vals, Δ_sdc);
-        elseif param == "Δ_sds"
-            push!(init_opt_vals, Δ_sds);
+function DeterminantalParameters(optimize::NamedTuple, tight_binding_model::TightBindingModel, 
+                                model_geometry::ModelGeometry, minabs_vpar, Ne::Int, pht::Bool)
+    # dimensions
+    dims = size(model_geometry.lattice.L)[1]
+
+    # x-dimension
+    Lx = model_geometry.lattice.L[1]
+
+    # TODO: change starting values of these parameters
+    if dims > 1
+        if pht
+            det_pars = (
+                μ = 0.0,
+                Δ_0 = minabs_vpar,
+                Δ_d = 0.0,
+                Δ_afm = minabs_vpar,
+                Δ_cdw = 0.0,
+                Δ_sdc = fill(0.0, Lx),
+                Δ_sds = fill(0.0, Lx)
+            )
         else
-            debug && println("No parameters to be optimized")
+            det_pars = (
+                μ = get_tb_chem_pot(Ne, tight_binding_model, model_geometry),
+                Δ_afm = minabs_vpar,
+                Δ_cdw = 0.0,
+                Δ_sdc = fill(0.0, Lx),
+                Δ_sds = fill(0.0, Lx)
+            )
+        end
+    else
+        if pht
+            det_pars = (
+                μ = 0.0,
+                Δ_0 = 0.0,
+                Δ_afm = minabs_vpar,
+                Δ_cdw = 0.0,
+            )
+        else
+            det_pars = (
+                μ = get_tb_chem_pot(Ne, tight_binding_model, model_geometry),
+                Δ_afm = minabs_vpar,
+                Δ_cdw = 0.0,
+            )
         end
     end
 
-    # determine the number of variational parameters being optimized
-    if !isempty(init_opt_vals)
-        num_det_opts = sum(length, init_opt_vals);
+    # determine total number of determinantal parameters being added to the model
+    num_det_pars = sum(x -> isa(x, AbstractArray) ? length(x) : 1, values(det_pars))
+
+    # determine the number of determinantal parameters being optimized
+    num_det_opts = count(identity, Base.Iterators.take(values(optimize), length(values(optimize)) - 2))
+
+    debug && println("Hamiltonian::DeterminantalParameters() : ")
+    debug && println("Number of determinantal parameters = $num_det_pars")
+    debug && println("Number of determinantal parameters to be optimized = $num_det_opts")
+
+    return DeterminantalParameters(det_pars, num_det_pars, num_det_opts)
+end
+
+
+"""
+
+    DeterminantalParameters( optimize::NamedTuple, model_geometry::ModelGeometry, pht::Bool, path_to_parameter_file::String )
+
+Given an intial set of parameters and set of optimization flags, generates a set of variational parameters.
+"""
+function DeterminantalParameters(optimize::NamedTuple, model_geometry::ModelGeometry, pht::Bool, path_to_parameter_file::String)
+    # dimensions
+    dims = size(model_geometry.lattice.L)[1]
+
+    # get parameters from file
+    vpar_dict = readin_parameters(path_to_parameter_file)
+
+    if dims > 1
+        if pht
+            det_pars = (
+                μ = vpar_dict[:chemical_potential],
+                Δ_0 = vpar_dict[:pairing][1],
+                Δ_d = vpar_dict[:pairing][2],
+                Δ_afm = vpar_dict[:afm],
+                Δ_cdw = vpar_dict[:cdw],
+                Δ_sdc = fill(0.0, Lx),
+                Δ_sds = fill(0.0, Lx)
+            )
+        else
+            det_pars = (
+                μ = vpar_dict[:chemical_potential],
+                Δ_afm = vpar_dict[:afm],
+                Δ_cdw = vpar_dict[:cdw],
+                Δ_sdc = fill(0.0, Lx),
+                Δ_sds = fill(0.0, Lx)
+            )
+        end
     else
-        num_det_opts = 0;
+        if pht
+            det_pars = (
+                μ = vpar_dict[:chemical_potential],
+                Δ_0 = Δ_0 = vpar_dict[:pairing][1],
+                Δ_afm = vpar_dict[:afm],
+                Δ_cdw = vpar_dict[:cdw],
+            )
+        else
+            det_pars = (
+                μ = vpar_dict[:chemical_potential],
+                Δ_afm = vpar_dict[:afm],
+                Δ_cdw = vpar_dict[:cdw],
+            )
+        end
     end
 
-    return DeterminantalParameters(μ, Δ_0, Δ_d, Δ_afm, Δ_cdw, Δ_sdc, Δ_sds, optimize, init_opt_vals, num_det_opts)
+    # determine total number of parameters being added to the model
+    num_det_pars = sum(x -> isa(x, AbstractArray) ? length(x) : 1, values(det_pars))
+
+    # determine the number of determinantal parameters being optimized
+    num_det_opts = count(identity, Base.Iterators.take(values(optimize), length(values(optimize)) - 2))
+
+    debug && println("Hamiltonian::DeterminantalParameters() : ")
+    debug && println("Number of determinantal parameters = $num_det_pars")
+    debug && println("Number of determinantal parameters to be optimized = $num_det_opts")
+
+    return DeterminantalParameters(det_pars, num_det_pars, num_det_opts)
 end
 
 
@@ -145,13 +213,13 @@ Constructs a matrix by combining the non-interacting Hamiltonian with
 matrix of variational terms.
 
 """
-function build_auxiliary_hamiltonian(tight_binding_model::TightBindingModel,
-                                        determinantal_parameters::DeterminantalParameters, model_geometry::ModelGeometry, pht::Bool)
+function build_auxiliary_hamiltonian(tight_binding_model::TightBindingModel, determinantal_parameters::DeterminantalParameters, 
+                                    optimize::NamedTuple, model_geometry::ModelGeometry, pht::Bool)
     # hopping matrix
     H_tb = build_tight_binding_hamiltonian(tight_binding_model, model_geometry, pht)
 
     # variational matrices and operators
-    H_var, V = build_variational_hamiltonian(determinantal_parameters, pht)
+    H_var, V = build_variational_hamiltonian(determinantal_parameters, optimize, pht)
 
     return H_tb + H_var, V
 end
@@ -159,24 +227,36 @@ end
 
 """
 
-    update_detpars!( determinantal_parameters::DeterminantalParameters, Vector{Float64} )
+    update_parameters!( new_vpars::AbstractVector, determinantal_parameters::DeterminantalParameters, optimize::NamedTuple )
 
-Updates determinantal_parameters.
+Updates variational parameters.
 
 """
-# TODO: update this?
-function update_detpars!(determinantal_parameters::DeterminantalParameters, new_vpars::Vector{Float64})
-    num_detpars = determinantal_parameters.num_detpars
-    current_vals = determinantal_parameters.vals
+function update_parameters!(new_vpars::AbstractVector, determinantal_parameters::DeterminantalParameters)
+    # extract current parameters
+    current_pars = determinantal_parameters.det_pars
 
-    new_detpars = new_vpars[1:num_detpars]
-
-    for i in 1:num_detpars
-        current_vals[i][1] = new_detpars[i]
+    # check that the new values match the number of existing parameters
+    if length(new_vpars) != length(current_pars)
+        error("Mismatch: got $(length(new_vpars)) new values but $(length(current_pars)) parameters to update.")
     end
+
+    # preserve parameter names from current_pars
+    param_names = keys(current_pars)
+
+    # build updated NamedTuple with same keys and new values
+    new_det_pars = NamedTuple{Tuple(param_names)}(Tuple(new_vpars))
+
+    # update the struct
+    determinantal_parameters.det_pars = new_det_pars
 
     return nothing
 end
+
+
+# function update_parameters!(new_vpars::AbstractVector, determinantal_parameters::DeterminantalParameters, jastrow::Jastrow, optimize::NamedTuple)
+
+# end
 
 
 """
@@ -359,24 +439,21 @@ Hamiltonian for each variational parameter. Returns a vector of the sum of
 matrices and a vector of individual matrix terms.
 
 """
-function build_variational_hamiltonian(determinantal_parameters::DeterminantalParameters, pht::Bool)
+function build_variational_hamiltonian(determinantal_parameters::DeterminantalParameters, optimize::NamedTuple, pht::Bool)
     # dimensions
     dims = size(model_geometry.lattice.L)[1];
-
-    # initial variational parameters
-    opts = determinantal_parameters.optimize;
    
     # initialize Hamiltonian and operator matrices
     H_vpars = [];
     V = [];
     
     # add chemical potential term
-    add_chemical_potential!(determinantal_parameters, H_vpars, V, model_geometry, pht);
+    add_chemical_potential!(determinantal_parameters, optimize, H_vpars, V, model_geometry, pht);
 
     debug && println("Hamiltonian::build_variational_hamiltonian() : ")
     debug && println("adding chemical potential matrix")
-    debug && println("initial μ = ", determinantal_parameters.μ)
-    if "μ" in opts
+    debug && println("initial μ = ", determinantal_parameters.det_pars.μ)
+    if optimize.μ
         debug && println("optimize = true")
     else
         debug && println("optimize = false")
@@ -384,12 +461,12 @@ function build_variational_hamiltonian(determinantal_parameters::DeterminantalPa
 
     # add s-wave term
     if pht == true
-        add_pairing_symmetry!("s", determinantal_parameters, H_vpars, V, model_geometry, pht)
+        add_pairing_symmetry!("s", determinantal_parameters, optimize, H_vpars, V, model_geometry, pht)
 
         debug && println("Hamiltonian::build_variational_hamiltonian() : ")
         debug && println("adding s-wave pairing matrix")
-        debug && println("initial Δ_0 = ", determinantal_parameters.Δ_0)
-        if "Δ_0" in opts
+        debug && println("initial Δ_0 = ", determinantal_parameters.det_pars.Δ_0)
+        if optimize.Δ_0
             debug && println("optimize = true")
         else
             debug && println("optimize = false")
@@ -397,12 +474,12 @@ function build_variational_hamiltonian(determinantal_parameters::DeterminantalPa
 
         # add d-wave pairing 
         if dims > 1
-            add_pairing_symmetry!("d", determinantal_parameters, H_vpars, V, model_geometry, pht);
+            add_pairing_symmetry!("d", determinantal_parameters, optimize, H_vpars, V, model_geometry, pht);
 
             debug && println("Hamiltonian::build_variational_hamiltonian() : ")
             debug && println("adding d-wave pairing matrix")
-            debug && println("initial Δ_d = ", determinantal_parameters.Δ_d)
-            if "Δ_d" in opts
+            debug && println("initial Δ_d = ", determinantal_parameters.det_pars.Δ_d)
+            if optimize.Δ_d
                 debug && println("optimize = true")
             else
                 debug && println("optimize = false")
@@ -411,37 +488,37 @@ function build_variational_hamiltonian(determinantal_parameters::DeterminantalPa
     end
 
     # add antiferromagnetic (Neél) term
-    add_spin_order!("spin-z", determinantal_parameters, H_vpars, V, model_geometry, pht);
+    add_spin_order!("spin-z", determinantal_parameters, optimize, H_vpars, V, model_geometry, pht);
 
     debug && println("Hamiltonian::build_variational_hamiltonian() : ")
     debug && println("adding spin-z matrix")
-    debug && println("initial Δ_afm = ", determinantal_parameters.Δ_afm)
-    if "Δ_afm" in opts
+    debug && println("initial Δ_afm = ", determinantal_parameters.det_pars.Δ_afm)
+    if optimize.Δ_afm
         debug && println("optimize = true")
     else
         debug && println("optimize = false")
     end
 
     # add charge-density-wave term
-    add_charge_order!("density wave", determinantal_parameters, H_vpars, V, model_geometry, pht);
+    add_charge_order!("density wave", determinantal_parameters, optimize, H_vpars, V, model_geometry, pht);
 
     debug && println("Hamiltonian::build_variational_hamiltonian() : ")
     debug && println("adding charge density wave matrix")
-    debug && println("initial Δ_cdw = ", determinantal_parameters.Δ_cdw)
-    if "Δ_cdw" in opts
+    debug && println("initial Δ_cdw = ", determinantal_parameters.det_pars.Δ_cdw)
+    if optimize.Δ_cdw
         debug && println("optimize = true")
     else
         debug && println("optimize = false")
     end
 
-    # add site-depndent charge term
+    # add site-dependent charge term
     if dims > 1
-        add_charge_order!("site-dependent", determinantal_parameters, H_vpars, V, model_geometry, pht);
+        add_charge_order!("site-dependent", determinantal_parameters, optimize, H_vpars, V, model_geometry, pht);
 
         debug && println("Hamiltonian::build_variational_hamiltonian() : ")
         debug && println("adding site-dependent charge matrix")
-        debug && println("initial Δ_sdc = ", determinantal_parameters.Δ_sdc)
-        if "Δ_sdc" in opts
+        debug && println("initial Δ_sdc = ", determinantal_parameters.det_pars.Δ_sdc)
+        if optimize.Δ_sdc
             debug && println("optimize = true")
         else
             debug && println("optimize = false")
@@ -450,17 +527,20 @@ function build_variational_hamiltonian(determinantal_parameters::DeterminantalPa
 
     # add site-dependent spin term
     if dims > 1
-        add_spin_order!("site-dependent", determinantal_parameters, H_vpars, V, model_geometry, pht);
+        add_spin_order!("site-dependent", determinantal_parameters, optimize, H_vpars, V, model_geometry, pht);
 
         debug && println("Hamiltonian::build_variational_hamiltonian() : ")
         debug && println("adding site-dependent spin matrix")
-        debug && println("initial Δ_sds = ", determinantal_parameters.Δ_sds)
-        if "Δ_sds" in opts
+        debug && println("initial Δ_sds = ", determinantal_parameters.det_pars.Δ_sds)
+        if optimize.Δ_sds
             debug && println("optimize = true")
         else
             debug && println("optimize = false")
         end
     end
+
+    @assert length(H_vpars) == determinantal_parameters.num_det_pars
+    @assert length(V) == determinantal_parameters.num_det_opts
 
     return sum(H_vpars), V;
 end
@@ -474,7 +554,7 @@ end
 Adds specified pairing symmetry to the auxiliary Hamiltonian. 
 
 """
-function add_pairing_symmetry!(symmetry::String, determinantal_parameters::DeterminantalParameters, H_vpars, V, model_geometry, pht)
+function add_pairing_symmetry!(symmetry::String, determinantal_parameters::DeterminantalParameters, optimize, H_vpars, V, model_geometry, pht)
     # lattice sites
     N = model_geometry.lattice.N;
 
@@ -483,7 +563,7 @@ function add_pairing_symmetry!(symmetry::String, determinantal_parameters::Deter
         @assert pht == true
 
         # s-wave parameter
-        Δ_0 = determinantal_parameters.Δ_0;
+        Δ_0 = determinantal_parameters.det_pars.Δ_0;
 
         # add s-wave symmetry
         H_s = zeros(Complex, 2*N, 2*N) 
@@ -492,18 +572,19 @@ function add_pairing_symmetry!(symmetry::String, determinantal_parameters::Deter
             V_s[i + 1, get_linked_spindex(i, N) + 1] = 1.0  
         end
 
-        # add variational term
+        # add s-wave matrix
         H_s += Δ_0 * V_s;
-
-        # add to total variational Hamiltonian
         push!(H_vpars,H_s);
-        push!(V, V_s);
+
+        if optimize.Δ_0
+            push!(V, V_s);
+        end
     elseif symmetry == "d"
         @assert pht == true
         @assert dims > 1
 
         # d-wave parameter
-        Δ_d = determinantal_parameters.Δ_d;
+        Δ_d = determinantal_parameters.det_pars.Δ_d;
 
         # create neighbor table
         nbr_table = build_neighbor_table(bonds[1],
@@ -549,12 +630,14 @@ function add_pairing_symmetry!(symmetry::String, determinantal_parameters::Deter
             end
         end
 
-        # add variational term
+        # add d-wave matrix
         H_d += Δ_d * V_dwave;
-
-        # add to total variational Hamiltonian
         push!(H_vpars,H_d);
-        push!(V, V_dwave);
+
+        # if Δ_d is being optimized, store Vdwave matrix
+        if optimize.Δ_d
+            push!(V, V_dwave);
+        end
     end
 
     return nothing
@@ -568,7 +651,7 @@ end
 Add spin order to the auxiliary Hamiltonian. 
 
 """
-function add_spin_order!(order, determinantal_parameters, H_vpars, V, model_geometry, pht)
+function add_spin_order!(order, determinantal_parameters, optimize, H_vpars, V, model_geometry, pht)
     # lattice sites
     N = model_geometry.lattice.N;
 
@@ -579,7 +662,7 @@ function add_spin_order!(order, determinantal_parameters, H_vpars, V, model_geom
         afm_vec = fill(1,2*N);
 
         # antiferromagnetic parameter
-        Δ_afm = determinantal_parameters.Δ_afm; 
+        Δ_afm = determinantal_parameters.det_pars.Δ_afm; 
 
         if pht
             # stagger
@@ -604,14 +687,16 @@ function add_spin_order!(order, determinantal_parameters, H_vpars, V, model_geom
                 end
             end
 
-            # store variational operator
+            # add afm matrix
             H_afm = zeros(Complex, 2*N, 2*N); 
             V_afm = LinearAlgebra.Diagonal(afm_vec);
-                
-            # create Hamiltonian term
             H_afm += Δ_afm * V_afm;
             push!(H_vpars, H_afm);
-            push!(V, V_afm);
+
+            # if Δ_afm is being optimized, store Vafm matrix
+            if optimize.Δ_afm
+                push!(V, V_afm);
+            end
         else
             # additional sign flip in spin down sector
             afm_vec_neg = copy(afm_vec);
@@ -639,17 +724,19 @@ function add_spin_order!(order, determinantal_parameters, H_vpars, V, model_geom
                 end
             end
 
-            # store variational operator
+            # add afm matrix
             H_afm = zeros(Complex, 2*N, 2*N); 
             V_afm_neg = LinearAlgebra.Diagonal(afm_vec_neg);
-                
-            # create Hamiltonian term
             H_afm += Δ_afm * V_afm_neg;
             push!(H_vpars, H_afm);
-            push!(V, V_afm_neg);
+
+            # if Δ_afm is being optimized, store Vafm matrix
+            if optimize.Δ_afm
+                push!(V, V_afm_neg);
+            end
         end
     elseif order == "site-dependent"
-        @assert pht == false
+        @assert pht == false        # TODO: add PHT version
 
         Δ_sds = determinantal_parameters.Δ_sds;
 
@@ -668,9 +755,7 @@ function add_spin_order!(order, determinantal_parameters, H_vpars, V, model_geom
             push!(sds_vectors, vec);  
         end
 
-        iter = 0;
         for sds_vec in sds_vectors
-            iter += 1;
 
             H_sds = zeros(AbstractFloat, 2*N, 2*N);
             sds_vec_neg = copy(sds_vec);
@@ -683,10 +768,13 @@ function add_spin_order!(order, determinantal_parameters, H_vpars, V, model_geom
             end
 
             V_sds_neg = LinearAlgebra.Diagonal(sds_vec_neg);
-
             H_sds += Δ_sds * V_sds_neg;
             push!(H_vpars, H_sds);
-            push!(V, V_sds_neg);
+
+            # if Δ_sds is being optimized, store Vsds matrix
+            if optimize.Δ_sds
+                push!(V, V_sds_neg);
+            end
         end
     end
 
@@ -701,7 +789,7 @@ end
 Add charge order to the auxiliary Hamiltonian.
 
 """
-function add_charge_order!(order, determinantal_parameters, H_vpars, V, model_geometry, pht)
+function add_charge_order!(order, determinantal_parameters, optimize, H_vpars, V, model_geometry, pht)
     # lattice sites
     N = model_geometry.lattice.N;
 
@@ -710,7 +798,7 @@ function add_charge_order!(order, determinantal_parameters, H_vpars, V, model_ge
 
     if order == "density wave"
         # charge density wave parameter
-        Δ_cdw = determinantal_parameters.Δ_cdw;
+        Δ_cdw = determinantal_parameters.det_pars.Δ_cdw;
 
         # diagonal vector
         cdw_vec = fill(1,2*N);
@@ -743,14 +831,16 @@ function add_charge_order!(order, determinantal_parameters, H_vpars, V, model_ge
                 end
             end
 
-            # store variational operator
+            # add cdw matrix
             H_cdw = zeros(Complex, 2*N, 2*N); 
             V_cdw = LinearAlgebra.Diagonal(cdw_vec_neg);
-
-            # account for particle-hole transformation
             H_cdw += Δ_cdw * V_cdw;
             push!(H_vpars, H_cdw);
-            push!(V, V_cdw);
+
+            # if Δ_cdw is being optimized, save Vcdw matrix
+            if optimize.Δ_cdw
+                push!(V, V_cdw);
+            end
         else
             # stagger
             for s in 1:2*N
@@ -774,17 +864,19 @@ function add_charge_order!(order, determinantal_parameters, H_vpars, V, model_ge
                 end
             end
 
-            # store variational operator
+            # add cdw matrix
             H_cdw = zeros(Complex, 2*N, 2*N); 
             V_cdw = LinearAlgebra.Diagonal(cdw_vec);
-
-            # create Hamiltonian term
             H_cdw += Δ_cdw * V_cdw;
             push!(H_vpars, H_cdw);
-            push!(V, V_cdw);
+
+            # if Δ_cdw is being optimized, save Vcdw matrix
+            if optimize.Δ_cdw
+                push!(V, V_cdw);
+            end
         end
     elseif order == "site-dependent"
-        @assert pht == false
+        @assert pht == false    # TODO: add PHT version
 
         # site-dependent charge parameters
         Δ_sdc = determinantal_parameters.Δ_sdc;
@@ -807,20 +899,22 @@ function add_charge_order!(order, determinantal_parameters, H_vpars, V, model_ge
             push!(sdc_vectors, vec);  
         end
 
-        iter = 0;
         for sdc_vec in sdc_vectors
             H_sdc = zeros(AbstractFloat, 2*N, 2*N);
-            iter += 1;
             V_sdc = LinearAlgebra.Diagonal(sdc_vec);
-
             H_sdc += Δ_sdc * V_sdc;
             push!(H_vpars, H_sdc);
-            push!(V, V_sdc);
+
+            # if Δ_sdc is being optimized, store Vsdc matrix
+            if optimize.Δ_sdc
+                push!(V, V_sdc);
+            end
         end
     end
 
     return nothing
 end
+
 
 """
 
@@ -829,12 +923,12 @@ end
 Adds chemical potential term to the auxiliary Hamiltonian.
 
 """
-function add_chemical_potential!(determinantal_parameters, H_vpars, V, model_geometry, pht)
+function add_chemical_potential!(determinantal_parameters, optimize, H_vpars, V, model_geometry, pht)
     # lattice sites
     N = model_geometry.lattice.N;
 
-    # add chemical potential term
-    μ = determinantal_parameters.μ
+    # initial chemical potential value
+    μ = determinantal_parameters.det_pars.μ
 
     μ_vec = fill(-1,2*N);
     if pht
@@ -842,20 +936,27 @@ function add_chemical_potential!(determinantal_parameters, H_vpars, V, model_geo
         μ_vec_neg = copy(μ_vec);
         μ_vec_neg[N+1:2*N] .= -μ_vec_neg[N+1:2*N];
 
-        # store variational operator
+        # add chemical potential matrix
         H_μ = zeros(Complex, 2*N, 2*N)
         V_μ_neg = LinearAlgebra.Diagonal(μ_vec_neg);
-
         H_μ += μ * V_μ_neg;
         push!(H_vpars, H_μ);
-        push!(V, V_μ_neg);
+
+        # if μ is being optimized, save Vμ matrix
+        if optimize.μ
+            push!(V, V_μ_neg);
+        end
     else
+        # add chemical potential matrix
         H_μ = zeros(Complex, 2*N, 2*N)
         V_μ = LinearAlgebra.Diagonal(μ_vec);
-
         H_μ += μ * V_μ;
         push!(H_vpars,H_μ);
-        push!(V, V_μ);
+
+        # if μ is being optimized, save Vμ matrix
+        if optimize.μ
+            push!(V, V_μ);
+        end
     end
 
     return nothing
@@ -915,8 +1016,8 @@ function get_tb_chem_pot(Ne::Int64, tight_binding_model::TightBindingModel, mode
     H_t₁ = zeros(Complex, 2*N, 2*N);
 
     # hopping amplitudes
-    t₀ = tight_binding_model.t[1];
-    t₁ = tight_binding_model.t[2];
+    t₀ = tight_binding_model.t₀;
+    t₁ = tight_binding_model.t₁;
 
     # add nearest neighbor hopping
     nbr0 = build_neighbor_table(bonds[1],

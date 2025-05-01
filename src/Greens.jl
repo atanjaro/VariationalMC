@@ -12,7 +12,7 @@ function initialize_equal_time_greens!(W::Matrix{ComplexF64}, D::Matrix{ComplexF
     config_indices = [findfirst(==(i), pconfig) for i in 1:Ne];
 
     # get Slater matrix
-    D .= M[config_indices, :];
+    D .= M[config_indices, :]; 
 
     if abs(det(D)) < 1e-12 * size(D, 1) 
         debug && println("Wavefunction::initialize_equal_time_greens() : state has no")

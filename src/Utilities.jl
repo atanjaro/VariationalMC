@@ -22,7 +22,29 @@ Checks whether a energy configuration is open shell.
 
 """
 function is_openshell(ε, Np)
-    return ε[Np+1] - ε[Np] < 0.0001
+    return ε[Np + 1] - ε[Np] < 0.0001
+end
+
+
+"""
+
+    readin_parameters()
+
+"""
+function readin_parameters(filename::String)
+    lines = filter(x -> !isempty(x), readlines(filename))  # skip empty lines
+    parameters = [parse.(Float64, split(line)) for line in lines]
+
+    return Dict(
+        :chemical_potential => parameters[1][1],
+        :pairing        => parameters[2],
+        :afm                => parameters[3][1],
+        :sds                => parameters[4],
+        :cdw                => parameters[5][1],
+        :sdc                => parameters[6],
+        :density_jastrow    => parameters[7],
+        :spin_jastrow       => parameters[8]
+    )
 end
 
 
@@ -76,32 +98,32 @@ function all_vpars(determinantal_parameters::DeterminantalParameters,
 end
 
 
-"""
+# """
 
-    convert_par_name( parameters_to_optimize::Vector{String} )
+#     convert_par_name( parameters_to_optimize::Vector{String} )
 
-Converts vector of parameter names to string for appending to the datafolder prefix.
+# Converts vector of parameter names to string for appending to the datafolder prefix.
 
-"""
-function convert_par_name(parameters_to_optimize::Vector{String})
-    # Map of special characters to their ASCII replacements
-    replacements = Dict('Δ' => "Delta", 'μ' => "mu")
+# """
+# function convert_par_name(optimize::Vector{String})
+#     # Map of special characters to their ASCII replacements
+#     replacements = Dict('Δ' => "Delta", 'μ' => "mu")
     
-    # Helper function to sanitize each string
-    function sanitize_string(s::String)
-        # Replace special characters using the replacements dictionary
-        for (char, replacement) in replacements
-            s = replace(s, char => replacement)
-        end
-        # Remove any remaining non-alphanumeric characters
-        s = replace(s, r"[^a-zA-Z0-9]" => "")
-        return s
-    end
+#     # Helper function to sanitize each string
+#     function sanitize_string(s::String)
+#         # Replace special characters using the replacements dictionary
+#         for (char, replacement) in replacements
+#             s = replace(s, char => replacement)
+#         end
+#         # Remove any remaining non-alphanumeric characters
+#         s = replace(s, r"[^a-zA-Z0-9]" => "")
+#         return s
+#     end
 
-    # Apply sanitization to each parameter and join with underscores
-    cleaned_parameters = join(sanitize_string.(parameters_to_optimize), "_")
-    return cleaned_parameters
-end
+#     # Apply sanitization to each parameter and join with underscores
+#     cleaned_parameters = join(sanitize_string.(optimize), "_")
+#     return cleaned_parameters
+# end
 
 
 """

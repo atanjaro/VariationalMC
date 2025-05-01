@@ -1,3 +1,97 @@
+### DEBUG ###
+"""
+    check_detailed_balance(detwf::DeterminantalWavefunction, Ne::Int,
+                           n_stab_W::Int64, δW::Float64,
+                           model_geometry::ModelGeometry, rng::Xoshiro)::Nothing
+
+Samples a proposed move and its reverse, then checks if detailed balance holds approximately.
+"""
+function check_detailed_balance(detwf::DeterminantalWavefunction, Ne::Int,
+                                n_stab_W::Int64, δW::Float64,
+                                model_geometry::ModelGeometry, rng::Xoshiro)::Nothing
+    # Save current configuration
+    original_pconfig = copy(detwf.pconfig)
+    original_W = copy(detwf.W)
+
+    # Propose forward move
+    move_fwd = propose_random_move(Ne, detwf.pconfig, model_geometry, rng)
+    if !move_fwd.possible
+        println("Move not possible. Skipping check.")
+        return
+    end
+
+    # Compute forward amplitude ratio
+    R_fwd = real(detwf.W[move_fwd.l, move_fwd.particle])
+    A_fwd = min(1, R_fwd^2)
+
+    # Hop forward
+    hop!(move_fwd, detwf.pconfig)
+    update_equal_time_greens!(move_fwd, detwf, model_geometry, Ne, n_stab_W, δW)
+
+    # Define reverse move (from l to k)
+    move_rev = MarkovMove(move_fwd.particle, move_fwd.l, move_fwd.k, true)
+
+    # Compute reverse amplitude ratio
+    R_rev = real(detwf.W[move_rev.l, move_rev.particle])
+    A_rev = min(1, R_rev^2)
+
+    # Compute proposal symmetry factor
+    # Assume symmetric proposals for now; if not, this must be adjusted
+    proposal_ratio = 1.0
+
+    # Compute the detailed balance condition
+    lhs = R_fwd^2 * A_fwd * proposal_ratio
+    rhs = R_rev^2 * A_rev * proposal_ratio
+
+    println("Detailed Balance Check:")
+    println("π(x')/π(x) * A(x→x') = ", lhs)
+    println("π(x)/π(x') * A(x'→x) = ", rhs)
+    println("Ratio (should be ~1): ", lhs / rhs)
+
+    # Restore original configuration
+    detwf.pconfig .= original_pconfig
+    detwf.W .= original_W
+
+    return nothing
+end
+
+## END DEBUG ###
+
+
+"""
+
+    local_fermion_update!( detwf::DeterminantalWavefunction,
+                                Ne::Int, model_geometry::ModelGeometry, 
+                                pht::Bool, δW::Float64, δT::Float64, rng::Xoshiro )
+
+Performs a local update to the electron sector, with a certain number of equilibration steps.
+
+"""
+function local_fermion_update!(detwf::DeterminantalWavefunction,
+                                Ne::Int, model_geometry::ModelGeometry, 
+                                δW::Float64, rng::Xoshiro)
+    # track acceptances and rejections
+    acceptances = 0.0
+    rejections = 0.0
+
+    debug && println("Markov:local_fermion_update!() : Starting new Monte Carlo step")
+
+    acceptance = metropolis_step(detwf, Ne, n_stab_W, δW, model_geometry, rng)
+
+    if acceptance == "accepted"
+        acceptances += 1.0
+    elseif acceptance == "rejected"
+        rejections += 1.0
+    end
+
+    # calculate local acceptance rate
+    acceptance_rate = acceptances / (acceptances + rejections)
+
+    return acceptance_rate, detwf
+end
+
+
+
 """
 
     local_fermion_update!( detwf::DeterminantalWavefunction, jastrow::Jastrow, 
@@ -29,8 +123,7 @@ function local_fermion_update!(detwf::DeterminantalWavefunction, jastrow::Jastro
     #     end
     # end
 
-    acceptance = metropolis_step(detwf, jastrow, Ne, n_stab_W, n_stab_T, 
-                                        δW, δT, model_geometry, pht, rng)
+    acceptance = metropolis_step(detwf, jastrow, Ne, n_stab_W, n_stab_T, δW, δT, model_geometry, pht, rng)
 
     if acceptance == "accepted"
         acceptances += 1.0
@@ -47,8 +140,61 @@ end
 
 """
 
+    metropolis_step( detwf::DeterminantalWavefunction, Ne::Int, 
+                        n_stab_W::Int64, δW::Float64,
+                        model_geometry::ModelGeometry, rng::Xoshiro )::String
+
+Proposes a particle to hop to a random neighboring site, and then accepts or rejects using the Metropolis algorithm. 
+
+"""
+function metropolis_step(detwf::DeterminantalWavefunction, Ne::Int, 
+                        n_stab_W::Int64, δW::Float64,
+                        model_geometry::ModelGeometry, rng::Xoshiro)::String
+    # propose a random move
+    markov_move = propose_random_move(Ne, detwf.pconfig, model_geometry, rng) 
+
+    if markov_move.possible == false
+        debug && println("Markov::metropolis_step() : hop impossible!")
+
+        return "impossible"
+    else
+        # check particle spin
+        spin = get_spindex_type(markov_move.k, model_geometry)
+
+        # get wavefunction ratio (element of the equal-time Green's function)
+        Rₛ = real(detwf.W[markov_move.l, markov_move.particle])
+
+        # acceptance probability
+        acceptance_prob = Rₛ^2   # TODO: include phase
+
+        debug && println("Markov::metropolis_step() : hop possible =>")
+        debug && println("R_s = ", Rₛ)
+        debug && println("acceptance_prob = ", acceptance_prob)
+
+        if acceptance_prob > rand(rng)
+            debug && println("Markov::metropolis_step() : hop accepted!")
+
+            # hop the particle
+            hop!(markov_move, detwf.pconfig)
+
+            # perform rank-1 update to W matrix
+            update_equal_time_greens!(markov_move, detwf, model_geometry, Ne, n_stab_W, δW) 
+
+            return "accepted"
+        else
+            debug && println("Markov::metropolis_step() : hop rejected!")
+
+            return "rejected"
+        end
+    end
+end
+
+
+"""
+
     metropolis_step( detwf::DeterminantalWavefunction, jastrow::Jastrow, Ne::Int, 
-                        model_geometry::ModelGeometry, bonds::Vector{Vector{Bond{1}}}, pht::Bool, rng::Xoshiro )::String
+                        n_stab_W::Int64, n_stab_T::Int64, δW::Float64, δT::Float64, 
+                        model_geometry::ModelGeometry, pht::Bool, rng::Xoshiro )::String
 
 Proposes a particle to hop to a random neighboring site, and then accepts or rejects using the Metropolis algorithm. 
 
