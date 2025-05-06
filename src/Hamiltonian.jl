@@ -113,7 +113,7 @@ function DeterminantalParameters(optimize::NamedTuple, tight_binding_model::Tigh
         if pht
             det_pars = (
                 μ = 0.0,
-                Δ_0 = 0.0,
+                Δ_0 = minabs_vpar,
                 Δ_afm = minabs_vpar,
                 Δ_cdw = 0.0,
             )

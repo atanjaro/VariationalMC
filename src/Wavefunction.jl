@@ -38,19 +38,21 @@ end
 
 """
 
-    build_determinantal_wavefunction(tight_binding_model::TightBindingModel, 
+    get_determinantal_wavefunction(tight_binding_model::TightBindingModel, 
                                     determinantal_parameters::DeterminantalParameters, 
                                     Ne::Int64, nup::Int64, ndn::Int64,
                                     model_geometry::ModelGeometry, rng::Xoshiro)::DeterminantalWavefunction
 
 Constructs a variational wavefunction based on parameters given by the tight binding model and determinantal parameters. 
-Returns an instances of the DeterminantalWavefunction type.                                    
+Returns an instances of the DeterminantalWavefunction type. If no particle configuration is specified, a random
+configuration will be generated.                            
 
 """
-function build_determinantal_wavefunction(tight_binding_model::TightBindingModel, 
+function get_determinantal_wavefunction(tight_binding_model::TightBindingModel, 
                                         determinantal_parameters::DeterminantalParameters, 
                                         optimize::NamedTuple, Ne::Int64, nup::Int64, ndn::Int64, 
-                                        model_geometry::ModelGeometry, rng::Xoshiro)::DeterminantalWavefunction
+                                        model_geometry::ModelGeometry, rng::Xoshiro, 
+                                        pconfig::Union{Nothing, Vector{Int}}=nothing)::DeterminantalWavefunction
     # number of lattice sites
     N = model_geometry.lattice.N;
 
@@ -78,8 +80,13 @@ function build_determinantal_wavefunction(tight_binding_model::TightBindingModel
     # initialize W matrix
     W = zeros(ComplexF64, 2*N, Ne);
 
-    # generate a random particle configuration
-    pconfig = generate_initial_fermion_configuration(nup, ndn, model_geometry, rng);
+     # use provided pconfig or generate a new one
+     if isnothing(pconfig)
+        pconfig = generate_initial_fermion_configuration(nup, ndn, model_geometry, rng);
+    end
+
+    # # generate a random particle configuration
+    # pconfig = generate_initial_fermion_configuration(nup, ndn, model_geometry, rng);
 
     # initialize equal-time Green's function and Slater matrix
     overlap = initialize_equal_time_greens!(W, D, M, pconfig, Ne); 
@@ -93,6 +100,9 @@ function build_determinantal_wavefunction(tight_binding_model::TightBindingModel
         # re-generate a random particle configuration
         pconfig = generate_initial_fermion_configuration(nup, ndn, model_geometry, rng);
 
+        # initialize W matrix
+        W = zeros(ComplexF64, 2*N, Ne);
+
         # initialize Slater matrix
         D = zeros(ComplexF64, Ne, Ne);
 
@@ -101,8 +111,8 @@ function build_determinantal_wavefunction(tight_binding_model::TightBindingModel
     end
 
     # intialize quick updating tracker
-    nq_updates_W = 0 
-    nq_updates_T = 0
+    nq_updates_W = 0; 
+    nq_updates_T = 0;
 
     return DeterminantalWavefunction(W, D, M, U_int, A, ε, pconfig, nq_updates_W, nq_updates_T);
 end

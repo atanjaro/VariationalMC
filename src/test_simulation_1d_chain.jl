@@ -29,7 +29,7 @@ include("Measurements.jl");
 # include("ElectronPhonon.jl");
 
 # Open the file for writing
-preamble = "chain_L4_U0_mu0.0_afm0.0_cdw0.0_swave0.0_no_pht_no_opt"
+preamble = "chain_L4_U1_mu0.0_afm0.0_cdw0.0_swave0.1_pht_opt_swave_mu_dt0.03"
 io = open("simulation_output_" * preamble * ".txt", "w")
 
 # Redirect stdout to the file
@@ -72,7 +72,7 @@ t = 1.0;
 tp = 0.0;
 
 # onsite Hubbard repulsion
-U = 0.0;
+U = 1.0;
 
 # use to read-in initial parameters from file
 path_to_parameter_file = "/Users/xzt/Documents/VariationalMC/src/vpar_out.dat"
@@ -83,9 +83,9 @@ minabs_vpar = 1e-4;
 # select which parameters will be optimized
 optimize = (
     # (BCS) chemical potential
-    μ = false,
+    μ = true,
     # onsite (s-wave)
-    Δ_0 = false,
+    Δ_0 = true,
     # d-wave
     Δ_d = false,
     # spin-z (AFM)
@@ -103,7 +103,7 @@ optimize = (
 )
 
 # whether model is particle-hole transformed
-pht = false;
+pht = true;
 
 # define electron density
 n̄ = 1.0;
@@ -160,7 +160,7 @@ N_equil = 300;
 N_opts = 1000;
 
 # optimization bin size
-opt_bin_size = 100;
+opt_bin_size = 1000;
 
 # number of simulation updates 
 N_updates = 1000;
@@ -173,7 +173,7 @@ bin_size = div(N_updates, N_bins);
 
 # number of steps until numerical stabilization is performed 
 n_stab_W = 50;
-n_stab_T= 50;
+n_stab_T = 50;
 
 # maximum allowed error in the equal-time Green's function
 δW = 1e-3;
@@ -185,7 +185,7 @@ n_stab_T= 50;
 η = 1e-4;    
 
 # optimization rate for Stochastic Reconfiguration
-dt = 0.1;       
+dt = 0.03;       
 
 # whether debug statements are printed 
 debug = true;
@@ -216,18 +216,14 @@ debug = true;
 # define non-interacting tight binding model
 tight_binding_model = TightBindingModel(t, tp);
 
-# initialize determinantal parameters
-determinantal_parameters = DeterminantalParameters(optimize, tight_binding_model, 
-                                                    model_geometry, minabs_vpar, Ne, pht);
+# # initialize determinantal parameters
+# determinantal_parameters = DeterminantalParameters(optimize, tight_binding_model, 
+#                                                     model_geometry, minabs_vpar, Ne, pht);
 
-# # initialize determinantal parameters from file
-# determinantal_parameters =  DeterminantalParameters(optimize, model_geometry, pht, 
-#                                                         path_to_parameter_file);
+# initialize determinantal parameters from file
+determinantal_parameters =  DeterminantalParameters(optimize, model_geometry, pht, 
+                                                        path_to_parameter_file);
 
-
-# initialize determinantal wavefunction
-detwf = build_determinantal_wavefunction(tight_binding_model, determinantal_parameters, 
-                                        optimize, Ne, nup, ndn, model_geometry, rng);
 
 # # initialize (density) Jastrow factor
 # jastrow = build_jastrow_factor("e-den-den", detwf, model_geometry, pht, rng);
@@ -257,7 +253,14 @@ global_acceptance_rate = 0.0;
 println("Starting optimization...")
 opt_start_time = time();
 
+# particle configuration cache
+pconfig_cache = nothing
+
 for bin in 1:N_opts
+    # initialize determinantal wavefunction
+    detwf = get_determinantal_wavefunction(tight_binding_model, determinantal_parameters, 
+                                            optimize, Ne, nup, ndn, model_geometry, rng,
+                                            pconfig_cache);   
     println("Currently in bin: ", bin)
 
     println("Thermalizing system...")
@@ -286,9 +289,12 @@ for bin in 1:N_opts
                             determinantal_parameters, optimize, model_geometry, Ne, pht);
     end
 
-    # # perform update to variational parameters
-    # stochastic_reconfiguration!(measurement_container, 
-    #                             determinantal_parameters, η, dt, bin_size)
+    # save particle configuration from the current bin
+    pconfig_cahce = detwf.pconfig
+
+    # perform update to variational parameters
+    stochastic_reconfiguration!(measurement_container, 
+                                determinantal_parameters, η, dt, opt_bin_size)
 
     # write measurements (to file)
     write_measurements!(measurement_container, energy_bin, dblocc_bin, param_bin)
@@ -306,8 +312,12 @@ println("Optimization completed in $(opt_time) seconds.")
 println("Starting simulation...")
 sim_start_time = time();
 
-# SKIP SIMULATION FOR NOW
+# SKIP simulation for now
 # for bin in 1:N_updates
+#     # initialize determinantal wavefunction
+#     detwf = get_determinantal_wavefunction(tight_binding_model, determinantal_parameters, 
+#                                             optimize, Ne, nup, ndn, model_geometry, rng,
+#                                             pconfig_cache);   
 #     println("Currently in bin: ", bin)
 
 #     println("Thermalizing system...")
@@ -321,22 +331,26 @@ sim_start_time = time();
 #     end
 #     println("System thermalized!")
 
+#     # perform measurements for optimization
 #     for n in 1:bin_size
 #         println("Starting Monte Carlo step = ", n)
 
 #         # perform local update to electronic degrees of freedom
 #         (acceptance_rate, detwf) = local_fermion_update!(detwf, Ne, model_geometry, δW, rng); 
-        
+                                                                                                    
 #         # record acceptance rate                                                        
 #         global_acceptance_rate += acceptance_rate;
-
+        
 #         # make basic measurements
 #         make_measurements!(measurement_container, detwf, tight_binding_model, 
 #                             determinantal_parameters, optimize, model_geometry, Ne, pht);
 #     end
 
+#     # save particle configuration from the current bin
+#     pconfig_cahce = detwf.pconfig
+
 #     # write measurements (to file)
-#     write_measurements!(measurement_container, energy_bin, dblocc_bin, param_bin);
+#     write_measurements!(measurement_container, energy_bin, dblocc_bin, param_bin)
 # end
 sim_end_time = time();
 
@@ -354,62 +368,31 @@ close(io)
 
 ## BEGIN DATA PROCESSING TESTS  ##
 
-# AFM PARAMETERS
-# collect Δa
-deltam = [v[1] for v in param_bin]
-deltaa = [v[2] for v in param_bin]
-deltac = [v[3] for v in param_bin]
+# # PARAMETER SET 1 (MU, AFM, CDW)
+# deltam = [v[1] for v in param_bin]
+# deltaa = [v[2] for v in param_bin]
+# deltac = [v[3] for v in param_bin]
+
+# PARAMETER SET 2 (MU, SWAVE, AFM, CDW)
+mu = [v[1] for v in param_bin]
+deltas = [v[2] for v in param_bin]
+deltaa = [v[3] for v in param_bin]
+deltac = [v[4] for v in param_bin]
 
 
-# # collect Jastrow pseudopotentials
-# vij_1 = [v[2] for v in param_bin]
-# vij_2 = [v[3] for v in param_bin]
-
-
-# # BCS PARAMETERS
-# # collect Δs and μ
-# deltas = [v[1] for v in param_bin]
-# mus = [v[2] for v in param_bin]
-# # collect Jastrow pseudopotentials
-# vij_1 = [v[3] for v in param_bin]
-# vij_2 = [v[4] for v in param_bin]
-
-# WRITE DATA TO FILE
-# energy
-df_erg = DataFrame(A = collect(1:N_opts), B = energy_bin/opt_bin_size)
-CSV.write("energy_" * preamble * ".csv", df_erg)
-
-# double occupancy
-df_dblocc = DataFrame(A = collect(1:N_opts), B = dblocc_bin/opt_bin_size)
-CSV.write("dblocc_" * preamble * ".csv", df_dblocc)
-
-# AFM parameters
-df_afm = DataFrame(A = collect(1:N_opts), B = deltaa/opt_bin_size)
-CSV.write("deltaAFM_" * preamble * ".csv", df_afm)
-
-df_cdw = DataFrame(A = collect(1:N_opts), B = deltac/opt_bin_size)
-CSV.write("deltaCDW_" * preamble * ".csv", df_cdw)
-
-df_mu = DataFrame(A = collect(1:N_opts), B = deltam/opt_bin_size)
-CSV.write("mu_" * preamble * ".csv", df_mu)
-
-# # BCS parameters
-# df_s = DataFrame(A = collect(1:N_opts), B = deltas/opt_bin_size)
-# CSV.write("deltaS_" * preamble * ".csv", df_s)
-# df_mus = DataFrame(A = collect(1:N_opts), B = mus/opt_bin_size)
-# CSV.write("mus_" * preamble * ".csv", df_mus)
-
-# # Jastrow parameters
-# df_vij = DataFrame(A = collect(1:N_opts), B = vij_1/opt_bin_size, C = vij_2/opt_bin_size)
-# CSV.write("vij_" * preamble * ".csv", df_vij)
+# # collect energy results
+# N = 4
+# E_N = (energy_bin[1:N_opts]/opt_bin_size + energy_bin[1:N_updates]/bin_size)/4
 
 # QUICK PLOTTING
+# exact energy from ED (U = 1)
+energy_exact_U1 = -0.8352119
 
 # plot energy per site
 energy_plt = scatter(1:N_opts, energy_bin/opt_bin_size, marker=:square, color=:red, markersize=5, markerstrokewidth=0,
         legend=false, xlabel="Optimization steps", ylabel=L"E/N", tickfontsize=14, guidefontsize=14, legendfontsize=14,
-        xlims=(0,N_opts),ylims=(-1.0001,-0.9999))
-# hline!([-0.8352119], linestyle=:dash, color=:black, linewidth=2)
+        xlims=(0,N_opts), ylims=(-1.05, 0))
+# hline!([energy_exact_U1], linestyle=:dash, color=:black, linewidth=2)
 savefig(energy_plt, "energy_" * preamble * ".png")
 
 # plot double occupancy
@@ -420,19 +403,24 @@ savefig(dblocc_plt, "dblocc_" * preamble * ".png")
 
 # plot AFM parameter
 dafm_plt = scatter(1:N_opts, deltaa/opt_bin_size, marker=:circle, color=:blue, markersize=5, markerstrokewidth=0,
-        legend=false, xlabel="Optimization steps", ylabel=L"\Delta_{\mathrm{afm}}", tickfontsize=14, guidefontsize=14, legendfontsize=14,
-        xlims=(0,N_opts))
+        legend=false, xlabel="Optimization steps", ylabel=L"\Delta_{\mathrm{AFM}}", tickfontsize=14, guidefontsize=14, legendfontsize=14,
+        xlims=(0,N_opts), ylims=(0, 0.001))
 savefig(dafm_plt, "dafm_" * preamble * ".png")
 
-dc_plt = scatter(1:N_opts, deltac/opt_bin_size, marker=:circle, color=:blue, markersize=5, markerstrokewidth=0,
-        legend=false, xlabel="Optimization steps", ylabel=L"\Delta_{\mathrm{afm}}", tickfontsize=14, guidefontsize=14, legendfontsize=14,
+dcdw_plt = scatter(1:N_opts, deltac/opt_bin_size, marker=:circle, color=:blue, markersize=5, markerstrokewidth=0,
+        legend=false, xlabel="Optimization steps", ylabel=L"\Delta_{\mathrm{CDW}}", tickfontsize=14, guidefontsize=14, legendfontsize=14,
         xlims=(0,N_opts))
-savefig(dc_plt, "dc_" * preamble * ".png")
+savefig(dcdw_plt, "dcdw_" * preamble * ".png")
 
-dm_plt = scatter(1:N_opts, deltam/opt_bin_size, marker=:circle, color=:blue, markersize=5, markerstrokewidth=0,
-        legend=false, xlabel="Optimization steps", ylabel=L"\Delta_{\mathrm{afm}}", tickfontsize=14, guidefontsize=14, legendfontsize=14,
+mu_plt = scatter(1:N_opts, mu/opt_bin_size, marker=:circle, color=:blue, markersize=5, markerstrokewidth=0,
+        legend=false, xlabel="Optimization steps", ylabel=L"\mu_{\mathrm{BCS}}", tickfontsize=14, guidefontsize=14, legendfontsize=14,
         xlims=(0,N_opts))
-savefig(dm_plt, "dm_" * preamble * ".png")
+savefig(mu_plt, "mu_" * preamble * ".png")
+
+ds_plt = scatter(1:N_opts, deltas/opt_bin_size, marker=:circle, color=:blue, markersize=5, markerstrokewidth=0,
+        legend=false, xlabel="Optimization steps", ylabel=L"\Delta_{0}", tickfontsize=14, guidefontsize=14, legendfontsize=14,
+        xlims=(0,N_opts))
+savefig(ds_plt, "ds_" * preamble * ".png")
 
 # # plot s-wave parameter
 # scatter(1:N_opts, deltas/opt_bin_size, marker=:circle, color=:blue, markersize=5, markerstrokewidth=0,
@@ -447,7 +435,40 @@ savefig(dm_plt, "dm_" * preamble * ".png")
 #         label=L"v_{ij}^2", xlabel="Optimization steps", ylabel=L"v_{ij}", tickfontsize=14, guidefontsize=14, legendfontsize=14,
 #         xlims=(0,N_opts))
 
-# plot mu parameter
-scatter(1:N_opts, mus/opt_bin_size, marker=:circle, color=:blue, markersize=5, markerstrokewidth=0,
-        legend=false, xlabel="Optimization steps", ylabel=L"\mu_{\mathrm{BCS}}", tickfontsize=14, guidefontsize=14, legendfontsize=14,
-        xlims=(0,N_opts))
+# # plot mu parameter
+# scatter(1:N_opts, mus/opt_bin_size, marker=:circle, color=:blue, markersize=5, markerstrokewidth=0,
+#         legend=false, xlabel="Optimization steps", ylabel=L"\mu_{\mathrm{BCS}}", tickfontsize=14, guidefontsize=14, legendfontsize=14,
+#         xlims=(0,N_opts))
+
+
+# WRITE DATA TO FILE
+# energy
+df_erg = DataFrame(A = collect(1:N_opts), B = energy_bin/opt_bin_size)
+CSV.write("energy_" * preamble * ".csv", df_erg)
+
+# double occupancy
+df_dblocc = DataFrame(A = collect(1:N_opts), B = dblocc_bin/opt_bin_size)
+CSV.write("dblocc_" * preamble * ".csv", df_dblocc)
+
+# parameters
+df_afm = DataFrame(A = collect(1:N_opts), B = deltaa/opt_bin_size)
+CSV.write("deltaAFM_" * preamble * ".csv", df_afm)
+
+df_cdw = DataFrame(A = collect(1:N_opts), B = deltac/opt_bin_size)
+CSV.write("deltaCDW_" * preamble * ".csv", df_cdw)
+
+df_mu = DataFrame(A = collect(1:N_opts), B = mu/opt_bin_size)
+CSV.write("mu_" * preamble * ".csv", df_mu)
+
+df_s = DataFrame(A = collect(1:N_opts), B = deltas/opt_bin_size)
+CSV.write("deltaS_" * preamble * ".csv", df_mu)
+
+# # BCS parameters
+# df_s = DataFrame(A = collect(1:N_opts), B = deltas/opt_bin_size)
+# CSV.write("deltaS_" * preamble * ".csv", df_s)
+# df_mus = DataFrame(A = collect(1:N_opts), B = mus/opt_bin_size)
+# CSV.write("mus_" * preamble * ".csv", df_mus)
+
+# # Jastrow parameters
+# df_vij = DataFrame(A = collect(1:N_opts), B = vij_1/opt_bin_size, C = vij_2/opt_bin_size)
+# CSV.write("vij_" * preamble * ".csv", df_vij)

@@ -7,15 +7,15 @@ Updates variational parameters through stochastic optimization.
 
 """
 function stochastic_reconfiguration!(measurement_container::NamedTuple, determinantal_parameters::DeterminantalParameters, 
-                                     η::Float64, dt::Float64, bin_size::Int64)::Nothing
+                                     η::Float64, dt::Float64, opt_bin_size::Int64)::Nothing
     debug && println("Optimizer::stochastic_reconfiguration!() : ")
     debug && println("Start of optimization")
 
     # get S matrix
-    S = get_covariance_matrix(measurement_container, bin_size)
+    S = get_covariance_matrix(measurement_container, opt_bin_size) 
 
     # get f vector
-    f = get_force_vector(measurement_container, bin_size)
+    f = get_force_vector(measurement_container, opt_bin_size)
 
     # solve for variation in the parameters
     δvpars = (S + η * I(size(S,1))) \ f  
@@ -47,15 +47,15 @@ Updates variational parameters through stochastic optimization.
 
 """
 function stochastic_reconfiguration!(measurement_container::NamedTuple, determinantal_parameters::DeterminantalParameters, 
-                                    jastrow::Jastrow, η::Float64, dt::Float64, bin_size::Int64)::Nothing
+                                    jastrow::Jastrow, η::Float64, dt::Float64, opt_bin_size::Int64)::Nothing
     debug && println("Optimizer::stochastic_reconfiguration!() : ")
     debug && println("Start of optimization")
 
     # get S matrix
-    S = get_covariance_matrix(measurement_container, bin_size)
+    S = get_covariance_matrix(measurement_container, opt_bin_size) 
 
     # get f vector
-    f = get_force_vector(measurement_container, bin_size)
+    f = get_force_vector(measurement_container, opt_bin_size)      
 
     # solve for variation in the parameters
     δvpars = variations(S, f, η)     
@@ -278,7 +278,7 @@ f_k = <Δ_k><H> - <Δ_kH>.
 function get_force_vector(measurement_container::NamedTuple, opt_bin_size::Int64)
     
     # initialize force vector
-    f = Float64[] # TODO: change this initialize a vector with Float64 elements
+    f = Float64[]
 
     # measure local parameters derivatives ⟨Δₖ⟩ for the current bin
     Δk = measurement_container.optimization_measurements["Δk"][1]/opt_bin_size
@@ -292,7 +292,7 @@ function get_force_vector(measurement_container::NamedTuple, opt_bin_size::Int64
     # calculate product of local derivative with the local energy ⟨Δk⟩⟨H⟩
     ΔktE = Δk * E
     
-    for (i,j) in zip(ΔktE,ΔkE)
+    for (i, j) in zip(ΔktE, ΔkE)
         fk = i - j
         push!(f, fk)
     end
