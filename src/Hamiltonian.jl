@@ -130,7 +130,13 @@ function DeterminantalParameters(optimize::NamedTuple, tight_binding_model::Tigh
     num_det_pars = sum(x -> isa(x, AbstractArray) ? length(x) : 1, values(det_pars))
 
     # determine the number of determinantal parameters being optimized
-    num_det_opts = count(identity, Base.Iterators.take(values(optimize), length(values(optimize)) - 2))
+    opt_keys = intersect(keys(optimize), keys(det_pars))
+    num_det_opts = sum(opt_keys) do key
+        opt = getfield(optimize, key)
+        val = getfield(det_pars, key)
+        opt ? (isa(val, AbstractArray) ? length(val) : 1) : 0
+    end
+
 
     debug && println("Hamiltonian::DeterminantalParameters() : ")
     debug && println("Number of determinantal parameters = $num_det_pars")
@@ -161,16 +167,16 @@ function DeterminantalParameters(optimize::NamedTuple, model_geometry::ModelGeom
                 Δ_d = vpar_dict[:pairing][2],
                 Δ_afm = vpar_dict[:afm],
                 Δ_cdw = vpar_dict[:cdw],
-                Δ_sdc = fill(0.0, Lx),
-                Δ_sds = fill(0.0, Lx)
+                Δ_sdc = vpar_dict[:sdc],
+                Δ_sds = vpar_dict[:sds]
             )
         else
             det_pars = (
                 μ = vpar_dict[:chemical_potential],
                 Δ_afm = vpar_dict[:afm],
                 Δ_cdw = vpar_dict[:cdw],
-                Δ_sdc = fill(0.0, Lx),
-                Δ_sds = fill(0.0, Lx)
+                Δ_sdc = vpar_dict[:sdc],
+                Δ_sds = vpar_dict[:sds]
             )
         end
     else
@@ -189,12 +195,17 @@ function DeterminantalParameters(optimize::NamedTuple, model_geometry::ModelGeom
             )
         end
     end
-
-    # determine total number of parameters being added to the model
+    
+    # determine total number of determinantal parameters being added to the model
     num_det_pars = sum(x -> isa(x, AbstractArray) ? length(x) : 1, values(det_pars))
 
     # determine the number of determinantal parameters being optimized
-    num_det_opts = count(identity, Base.Iterators.take(values(optimize), length(values(optimize)) - 2))
+    opt_keys = intersect(keys(optimize), keys(det_pars))
+    num_det_opts = sum(opt_keys) do key
+        opt = getfield(optimize, key)
+        val = getfield(det_pars, key)
+        opt ? (isa(val, AbstractArray) ? length(val) : 1) : 0
+    end
 
     debug && println("Hamiltonian::DeterminantalParameters() : ")
     debug && println("Number of determinantal parameters = $num_det_pars")
@@ -216,10 +227,10 @@ matrix of variational terms.
 function build_auxiliary_hamiltonian(tight_binding_model::TightBindingModel, determinantal_parameters::DeterminantalParameters, 
                                     optimize::NamedTuple, model_geometry::ModelGeometry, pht::Bool)
     # hopping matrix
-    H_tb = build_tight_binding_hamiltonian(tight_binding_model, model_geometry, pht)
+    H_tb = build_tight_binding_hamiltonian(tight_binding_model, model_geometry, pht);
 
     # variational matrices and operators
-    H_var, V = build_variational_hamiltonian(determinantal_parameters, optimize, pht)
+    H_var, V = build_variational_hamiltonian(determinantal_parameters, optimize, pht);
 
     return H_tb + H_var, V
 end
@@ -738,7 +749,10 @@ function add_spin_order!(order, determinantal_parameters, optimize, H_vpars, V, 
     elseif order == "site-dependent"
         @assert pht == false        # TODO: add PHT version
 
-        Δ_sds = determinantal_parameters.Δ_sds;
+        # lattice dimensions
+        L = model_geometry.lattice.L
+
+        Δ_sds = determinantal_parameters.det_pars.Δ_sds;
 
         sds_vectors = [];
         for shift in 0:(L[1]-1)
@@ -755,27 +769,47 @@ function add_spin_order!(order, determinantal_parameters, optimize, H_vpars, V, 
             push!(sds_vectors, vec);  
         end
 
-        for sds_vec in sds_vectors
-
-            H_sds = zeros(AbstractFloat, 2*N, 2*N);
-            sds_vec_neg = copy(sds_vec);
-            sds_vec_neg[N+1:2*N] .= -sds_vec_neg[N+1:2*N];
-
+        for (i, sds_vec) in enumerate(sds_vectors)
+            H_sds = zeros(AbstractFloat, 2*N, 2*N)
+            sds_vec_neg = copy(sds_vec)
+            sds_vec_neg[N+1:2*N] .= -sds_vec_neg[N+1:2*N]
+        
             for s in 1:2*N
-                idx = get_index_from_spindex(s, model_geometry);
-                loc = site_to_loc(idx, model_geometry.unit_cell, model_geometry.lattice);
-                sds_vec_neg[s] *= (-1)^(loc[1][1]+loc[1][2]);
+                idx = get_index_from_spindex(s, model_geometry)
+                loc = site_to_loc(idx, model_geometry.unit_cell, model_geometry.lattice)
+                sds_vec_neg[s] *= (-1)^(loc[1][1] + loc[1][2])
             end
-
-            V_sds_neg = LinearAlgebra.Diagonal(sds_vec_neg);
-            H_sds += Δ_sds * V_sds_neg;
-            push!(H_vpars, H_sds);
-
-            # if Δ_sds is being optimized, store Vsds matrix
+        
+            V_sds_neg = LinearAlgebra.Diagonal(sds_vec_neg)
+            H_sds += Δ_sds[i] * V_sds_neg
+            push!(H_vpars, H_sds)
+        
             if optimize.Δ_sds
-                push!(V, V_sds_neg);
+                push!(V, V_sds_neg)
             end
         end
+
+        # for sds_vec in sds_vectors
+
+        #     H_sds = zeros(AbstractFloat, 2*N, 2*N);
+        #     sds_vec_neg = copy(sds_vec);
+        #     sds_vec_neg[N+1:2*N] .= -sds_vec_neg[N+1:2*N];
+
+        #     for s in 1:2*N
+        #         idx = get_index_from_spindex(s, model_geometry);
+        #         loc = site_to_loc(idx, model_geometry.unit_cell, model_geometry.lattice);
+        #         sds_vec_neg[s] *= (-1)^(loc[1][1]+loc[1][2]);
+        #     end
+
+        #     V_sds_neg = LinearAlgebra.Diagonal(sds_vec_neg);
+        #     H_sds += Δ_sds * V_sds_neg;
+        #     push!(H_vpars, H_sds);
+
+        #     # if Δ_sds is being optimized, store Vsds matrix
+        #     if optimize.Δ_sds
+        #         push!(V, V_sds_neg);
+        #     end
+        # end
     end
 
     return nothing
@@ -877,9 +911,11 @@ function add_charge_order!(order, determinantal_parameters, optimize, H_vpars, V
         end
     elseif order == "site-dependent"
         @assert pht == false    # TODO: add PHT version
+        # lattice dimensions
+        L = model_geometry.lattice.L
 
         # site-dependent charge parameters
-        Δ_sdc = determinantal_parameters.Δ_sdc;
+        Δ_sdc = determinantal_parameters.det_pars.Δ_sdc;
 
         # store diagonal vectors
         sdc_vectors = [];
@@ -899,10 +935,10 @@ function add_charge_order!(order, determinantal_parameters, optimize, H_vpars, V
             push!(sdc_vectors, vec);  
         end
 
-        for sdc_vec in sdc_vectors
+        for (i, sdc_vec) in enumerate(sdc_vectors)
             H_sdc = zeros(AbstractFloat, 2*N, 2*N);
             V_sdc = LinearAlgebra.Diagonal(sdc_vec);
-            H_sdc += Δ_sdc * V_sdc;
+            H_sdc += Δ_sdc[i] .* V_sdc;
             push!(H_vpars, H_sdc);
 
             # if Δ_sdc is being optimized, store Vsdc matrix

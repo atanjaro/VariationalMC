@@ -40,23 +40,25 @@ include("Measurements.jl");
 ###########################################
 # define the size of the lattice
 Lx = 4;
-Ly = 1;
+Ly = 4;
 
-# chain unit cell
-unit_cell = UnitCell(lattice_vecs = [[1.0]],
-                            basis_vecs   = [[0.0]]);
+# square unit cell
+unit_cell = UnitCell([[1.0,0.0], [0.0,1.0]],           # lattice vectors
+                               [[0.0,0.0]])            # basis vectors 
 
 # build the lattice
-lattice = Lattice([Lx],[true]);
+lattice = Lattice([Lx, Ly], [true, true]);
 
 # define nearest neighbor bonds
-bond_x = Bond(orbitals = (1,1), displacement = [1]);
+bond_x = Bond((1,1), [1,0])
+bond_y = Bond((1,1), [0,1])
 
 # define next nearest neighbor bonds
-bond_xp = Bond(orbitals = (1,1), displacement = [2]);
+bond_xp = Bond((1,1), [1,1])
+bond_yp = Bond((1,1), [1,-1])
 
 # collect all bond definitions
-bonds = [[bond_x], [bond_xp]];     # bonds are organized into [[nearest],[next-nearest]] 
+bonds = [[bond_x, bond_y], [bond_xp, bond_yp]];     # bonds are organized into [[nearest],[next-nearest]] 
 
 # define model geometry
 model_geometry = ModelGeometry(unit_cell,lattice, bonds);
@@ -93,9 +95,9 @@ optimize = (
     # charge density 
     Δ_cdw = false,
     # site-dependent charge (stripe)
-    Δsdc = false,
+    Δ_sdc = true,
     # site-dependent spin (stripe)
-    Δ_sds = false,
+    Δ_sds = true,
     # density Jastrow 
     djastrow = false,
     # spin Jastrow
@@ -216,13 +218,13 @@ debug = true;
 # define non-interacting tight binding model
 tight_binding_model = TightBindingModel(t, tp);
 
-# initialize determinantal parameters
-determinantal_parameters = DeterminantalParameters(optimize, tight_binding_model, 
-                                                    model_geometry, minabs_vpar, Ne, pht);
+# # initialize determinantal parameters
+# determinantal_parameters = DeterminantalParameters(optimize, tight_binding_model, 
+#                                                     model_geometry, minabs_vpar, Ne, pht);
 
-# # initialize determinantal parameters from file
-# determinantal_parameters =  DeterminantalParameters(optimize, model_geometry, pht, 
-#                                                         path_to_parameter_file);
+# initialize determinantal parameters from file
+determinantal_parameters =  DeterminantalParameters(optimize, model_geometry, pht, 
+                                                        path_to_parameter_file);
 
 
 # # initialize (density) Jastrow factor
