@@ -105,7 +105,7 @@ optimize = (
 )
 
 # whether model is particle-hole transformed
-pht = false;
+pht = true;
 
 # define electron density
 n̄ = 1.0;

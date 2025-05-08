@@ -83,10 +83,10 @@ Given an intial set of parameters and set of optimization flags, generates a set
 function DeterminantalParameters(optimize::NamedTuple, tight_binding_model::TightBindingModel, 
                                 model_geometry::ModelGeometry, minabs_vpar, Ne::Int, pht::Bool)
     # dimensions
-    dims = size(model_geometry.lattice.L)[1]
+    dims = size(model_geometry.lattice.L)[1];
 
     # x-dimension
-    Lx = model_geometry.lattice.L[1]
+    Lx = model_geometry.lattice.L[1];
 
     # TODO: change starting values of these parameters
     if dims > 1
@@ -127,7 +127,7 @@ function DeterminantalParameters(optimize::NamedTuple, tight_binding_model::Tigh
     end
 
     # determine total number of determinantal parameters being added to the model
-    num_det_pars = sum(x -> isa(x, AbstractArray) ? length(x) : 1, values(det_pars))
+    num_det_pars = sum(x -> isa(x, AbstractArray) ? length(x) : 1, values(det_pars));
 
     # determine the number of determinantal parameters being optimized
     opt_keys = intersect(keys(optimize), keys(det_pars))
@@ -142,7 +142,7 @@ function DeterminantalParameters(optimize::NamedTuple, tight_binding_model::Tigh
     debug && println("Number of determinantal parameters = $num_det_pars")
     debug && println("Number of determinantal parameters to be optimized = $num_det_opts")
 
-    return DeterminantalParameters(det_pars, num_det_pars, num_det_opts)
+    return DeterminantalParameters(det_pars, num_det_pars, num_det_opts);
 end
 
 
@@ -154,10 +154,10 @@ Given an intial set of parameters and set of optimization flags, generates a set
 """
 function DeterminantalParameters(optimize::NamedTuple, model_geometry::ModelGeometry, pht::Bool, path_to_parameter_file::String)
     # dimensions
-    dims = size(model_geometry.lattice.L)[1]
+    dims = size(model_geometry.lattice.L)[1];
 
     # get parameters from file
-    vpar_dict = readin_parameters(path_to_parameter_file)
+    vpar_dict = readin_parameters(path_to_parameter_file);
 
     if dims > 1
         if pht
@@ -195,12 +195,12 @@ function DeterminantalParameters(optimize::NamedTuple, model_geometry::ModelGeom
             )
         end
     end
-    
+
     # determine total number of determinantal parameters being added to the model
     num_det_pars = sum(x -> isa(x, AbstractArray) ? length(x) : 1, values(det_pars))
 
     # determine the number of determinantal parameters being optimized
-    opt_keys = intersect(keys(optimize), keys(det_pars))
+    opt_keys = intersect(keys(optimize), keys(det_pars));
     num_det_opts = sum(opt_keys) do key
         opt = getfield(optimize, key)
         val = getfield(det_pars, key)
@@ -211,7 +211,7 @@ function DeterminantalParameters(optimize::NamedTuple, model_geometry::ModelGeom
     debug && println("Number of determinantal parameters = $num_det_pars")
     debug && println("Number of determinantal parameters to be optimized = $num_det_opts")
 
-    return DeterminantalParameters(det_pars, num_det_pars, num_det_opts)
+    return DeterminantalParameters(det_pars, num_det_pars, num_det_opts);
 end
 
 
@@ -232,7 +232,7 @@ function build_auxiliary_hamiltonian(tight_binding_model::TightBindingModel, det
     # variational matrices and operators
     H_var, V = build_variational_hamiltonian(determinantal_parameters, optimize, pht);
 
-    return H_tb + H_var, V
+    return H_tb + H_var, V;
 end
 
 
@@ -245,21 +245,21 @@ Updates variational parameters.
 """
 function update_parameters!(new_vpars::AbstractVector, determinantal_parameters::DeterminantalParameters)
     # extract current parameters
-    current_pars = determinantal_parameters.det_pars
+    current_pars = determinantal_parameters.det_pars;
 
     # check that the new values match the number of existing parameters
     if length(new_vpars) != length(current_pars)
-        error("Mismatch: got $(length(new_vpars)) new values but $(length(current_pars)) parameters to update.")
+        error("Mismatch: got $(length(new_vpars)) new values but $(length(current_pars)) parameters to update.");
     end
 
     # preserve parameter names from current_pars
-    param_names = keys(current_pars)
+    param_names = keys(current_pars);
 
     # build updated NamedTuple with same keys and new values
-    new_det_pars = NamedTuple{Tuple(param_names)}(Tuple(new_vpars))
+    new_det_pars = NamedTuple{Tuple(param_names)}(Tuple(new_vpars));
 
     # update the struct
-    determinantal_parameters.det_pars = new_det_pars
+    determinantal_parameters.det_pars = new_det_pars;
 
     return nothing
 end
@@ -566,6 +566,9 @@ Adds specified pairing symmetry to the auxiliary Hamiltonian.
 
 """
 function add_pairing_symmetry!(symmetry::String, determinantal_parameters::DeterminantalParameters, optimize, H_vpars, V, model_geometry, pht)
+    # lattice dimensions
+    dims = size(model_geometry.lattice.L)[1];
+
     # lattice sites
     N = model_geometry.lattice.N;
 
@@ -577,10 +580,10 @@ function add_pairing_symmetry!(symmetry::String, determinantal_parameters::Deter
         Δ_0 = determinantal_parameters.det_pars.Δ_0;
 
         # add s-wave symmetry
-        H_s = zeros(Complex, 2*N, 2*N) 
+        H_s = zeros(Complex, 2*N, 2*N); 
         V_s = copy(H_s);
         for i in 0:(2 * N - 1)
-            V_s[i + 1, get_linked_spindex(i, N) + 1] = 1.0  
+            V_s[i + 1, get_linked_spindex(i, N) + 1] = 1.0;
         end
 
         # add s-wave matrix
@@ -626,17 +629,17 @@ function add_pairing_symmetry!(symmetry::String, determinantal_parameters::Deter
                 dsgn = get(disp_sign_map, disp, 0);  # Default to 0 if no match
 
                 if dsgn != 0
-                    println(dsgn > 0 ? "+1" : "-1");
+                    # println(dsgn > 0 ? "+1" : "-1");
 
                     # Store spin-down indices
                     idn_idx = get_spindices_from_index(i, model_geometry)[2];
                     jdn_idx = get_spindices_from_index(j, model_geometry)[2];
 
                     # Add elements to variational operator
-                    Vdwave[i, jdn_idx] = dsgn; 
-                    Vdwave[j, idn_idx] = dsgn; 
-                    Vdwave[jdn_idx, i] = dsgn; 
-                    Vdwave[idn_idx, j] = dsgn; 
+                    V_dwave[i, jdn_idx] = dsgn; 
+                    V_dwave[j, idn_idx] = dsgn; 
+                    V_dwave[jdn_idx, i] = dsgn; 
+                    V_dwave[idn_idx, j] = dsgn; 
                 end
             end
         end
@@ -747,26 +750,35 @@ function add_spin_order!(order, determinantal_parameters, optimize, H_vpars, V, 
             end
         end
     elseif order == "site-dependent"
-        @assert pht == false        # TODO: add PHT version
-
         # lattice dimensions
         L = model_geometry.lattice.L
 
         Δ_sds = determinantal_parameters.det_pars.Δ_sds;
-
         sds_vectors = [];
-        for shift in 0:(L[1]-1)
-            vec = zeros(Int, 2 * N);  
-            for i in 1:2*L[1]
-                idx = (i-1)*L[1] + 1 + shift;  
-                if idx <= 2 * N  
-                    vec[idx] = 1;  
+        if pht
+            for shift in 0:(L[1]-1)
+                vec = zeros(Int, 2 * N)
+                for i in 1:2*L[1]
+                    idx = (i - 1) * L[1] + 1 + shift
+                    if idx <= 2 * N
+                        vec[idx] = 1
+                    end
                 end
+                # Flip the sign of the last N elements
+                vec[N+1:end] .*= -1
+                push!(sds_vectors, vec)
             end
-            # for i in 1:(2*L[1])
-            #     vec[(i-1)*L[1] + 1 + shift] = 1  
-            # end
-            push!(sds_vectors, vec);  
+        else
+            for shift in 0:(L[1]-1)
+                vec = zeros(Int, 2 * N);  
+                for i in 1:2*L[1]
+                    idx = (i-1)*L[1] + 1 + shift;  
+                    if idx <= 2 * N  
+                        vec[idx] = 1;  
+                    end
+                end
+                push!(sds_vectors, vec);  
+            end
         end
 
         for (i, sds_vec) in enumerate(sds_vectors)
@@ -788,28 +800,6 @@ function add_spin_order!(order, determinantal_parameters, optimize, H_vpars, V, 
                 push!(V, V_sds_neg)
             end
         end
-
-        # for sds_vec in sds_vectors
-
-        #     H_sds = zeros(AbstractFloat, 2*N, 2*N);
-        #     sds_vec_neg = copy(sds_vec);
-        #     sds_vec_neg[N+1:2*N] .= -sds_vec_neg[N+1:2*N];
-
-        #     for s in 1:2*N
-        #         idx = get_index_from_spindex(s, model_geometry);
-        #         loc = site_to_loc(idx, model_geometry.unit_cell, model_geometry.lattice);
-        #         sds_vec_neg[s] *= (-1)^(loc[1][1]+loc[1][2]);
-        #     end
-
-        #     V_sds_neg = LinearAlgebra.Diagonal(sds_vec_neg);
-        #     H_sds += Δ_sds * V_sds_neg;
-        #     push!(H_vpars, H_sds);
-
-        #     # if Δ_sds is being optimized, store Vsds matrix
-        #     if optimize.Δ_sds
-        #         push!(V, V_sds_neg);
-        #     end
-        # end
     end
 
     return nothing
@@ -910,29 +900,34 @@ function add_charge_order!(order, determinantal_parameters, optimize, H_vpars, V
             end
         end
     elseif order == "site-dependent"
-        @assert pht == false    # TODO: add PHT version
         # lattice dimensions
         L = model_geometry.lattice.L
-
-        # site-dependent charge parameters
         Δ_sdc = determinantal_parameters.det_pars.Δ_sdc;
-
-        # store diagonal vectors
         sdc_vectors = [];
 
-        # populate vectors
-        for shift in 0:(L[1]-1)
-            vec = zeros(Int, 2 * N);  
-            for i in 1:2*L[1]
-                idx = (i-1)*L[1] + 1 + shift;  
-                if idx <= 2 * N  
-                    vec[idx] = 1;
+        if pht
+            for shift in 0:(L[1]-1)
+                vec = zeros(Int, 2 * N)
+                for i in 1:2*L[1]
+                    idx = (i - 1) * L[1] + 1 + shift
+                    if idx <= 2 * N
+                        vec[idx] = 1
+                    end
                 end
+                vec[N+1:end] .*= -1  # Flip sign of last N elements
+                push!(sdc_vectors, vec)
             end
-            # for i in 1:2*L[1]
-            #     vec[(i-1)*L[1] + 1 + shift] = 1  
-            # end
-            push!(sdc_vectors, vec);  
+        else
+            for shift in 0:(L[1]-1)
+                vec = zeros(Int, 2 * N);  
+                for i in 1:2*L[1]
+                    idx = (i-1)*L[1] + 1 + shift;  
+                    if idx <= 2 * N  
+                        vec[idx] = 1;
+                    end
+                end
+                push!(sdc_vectors, vec);  
+            end
         end
 
         for (i, sdc_vec) in enumerate(sdc_vectors)
