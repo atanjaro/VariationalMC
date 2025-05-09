@@ -159,7 +159,7 @@ function make_measurements!(measurement_container::NamedTuple, detwf::Determinan
     measure_ΔkE!(measurement_container, detwf, tight_binding_model, determinantal_parameters, model_geometry, Ne, pht)
 
     # measure double occupancy
-    measure_double_occ!(measurement_container, detwf, model_geometry)
+    measure_double_occ!(measurement_container, detwf, model_geometry, pht)
 
     # measure average density
     measure_n!(measurement_container, detwf, model_geometry)
@@ -213,7 +213,7 @@ end
 
     write_measurements!( measurement_container::NamedTuple, simulation_info::SimulationInfo )::Nothing
 
-Writes current measurements in the current bin to a JLD2 file. 
+Writes measurements in the current bin to a JLD2 file. 
 
 """ 
 function write_measurements!(measurement_container::NamedTuple, simulation_info::SimulationInfo)::Nothing
@@ -235,9 +235,15 @@ function write_measurements!(measurement_container::NamedTuple, simulation_info:
     energy_measurements = simulation_measurements["energy"][1]
     JLD2.@save file_path_energy energy_measurements append=true
 
-    # append double occupancy to file
+    # append double occupancy measurements to file
     dblocc_measurements = simulation_measurements["double_occ"][1]
     JLD2.@save file_path_dblocc dblocc_measurements append=true
+
+    # append parameter measurements to file
+    parameter_measurements = optimization_measurements["parameters"][1]
+    JLD2.@save file_path_parameters parameter_measurements append=true
+
+    #TODO: split determinantal and Jastrow measurements?
 
     # reset all measurements
     reset_measurements!(simulation_measurements)
@@ -751,15 +757,15 @@ end
 """
 
     measure_double_occ!( measurement_container::NamedTuple, 
-                        detwf::DeterminantalWavefunction, model_geometry::ModelGeometry )
+                        detwf::DeterminantalWavefunction, model_geometry::ModelGeometry, pht::Bool )
 
 Measure the average double occupancy ⟨D⟩ = N⁻¹ ∑ᵢ ⟨nᵢ↑nᵢ↓⟩.
 
 """
 function measure_double_occ!(measurement_container::NamedTuple, 
-                            detwf::DeterminantalWavefunction, model_geometry::ModelGeometry)
+                            detwf::DeterminantalWavefunction, model_geometry::ModelGeometry, pht::Bool)
     # calculate the current double occupancy
-    dblocc_current = get_double_occ(detwf, model_geometry)
+    dblocc_current = get_double_occ(detwf, model_geometry, pht)
 
     # get current values from the container
     dblocc_container = measurement_container.simulation_measurements["double_occ"]
@@ -1056,12 +1062,10 @@ function get_local_hubbard_energy(U::Float64, detwf::DeterminantalWavefunction,
     hubbard_sum = 0.0
     for i in 1:N
         occ_up, occ_dn, occ_e = get_onsite_fermion_occupation(i, detwf.pconfig)
-        if occ_e == 2
-            if pht
-                hubbard_sum += occ_up .* (1 .- occ_dn)
-            else
-                hubbard_sum+= occ_up .* occ_dn
-            end
+        if pht
+            hubbard_sum += occ_up .* (1 .- occ_dn)
+        else
+            hubbard_sum += occ_up .* occ_dn
         end
     end
 
@@ -1073,20 +1077,21 @@ end
 
 """
 
-    get_double_occ( detwf::DeterminantalParameters, model_geometry::ModelGeometry )
+    get_double_occ( detwf::DeterminantalParameters, model_geometry::ModelGeometry, pht::Bool )
 
 Calculates the double occupancy. 
 
 """
-function get_double_occ(detwf::DeterminantalWavefunction, model_geometry::ModelGeometry)
+function get_double_occ(detwf::DeterminantalWavefunction, model_geometry::ModelGeometry, pht::Bool)
     N = model_geometry.lattice.N
 
     nup_ndn = 0.0
     for site in 1:N
-        tot_occ = get_onsite_fermion_occupation(site, detwf.pconfig)
-
-        if tot_occ[3] == 2
-            nup_ndn += 1.0
+        occ_up, occ_dn, occ_e = get_onsite_fermion_occupation(site, detwf.pconfig)
+        if pht
+            nup_ndn += occ_up .* (1 .- occ_dn)
+        else
+            nup_ndn += occ_up .* occ_dn
         end
     end
     

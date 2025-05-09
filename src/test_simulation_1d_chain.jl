@@ -28,12 +28,12 @@ include("SimulationInfo.jl");
 include("Measurements.jl");
 # include("ElectronPhonon.jl");
 
-# # Open the file for writing
-# preamble = "chain_L4_U1_mu0.0_afm0.0_cdw0.0_swave0.0_pht_opt_swave_mu_dt0.1"
-# io = open("simulation_output_" * preamble * ".txt", "w")
+# Open the file for writing
+preamble = "chain_L4_U1_mu0.0_afm0.0_cdw0.0_swave0.0_no_pht_no_opt_dt0.03"
+io = open("simulation_output_" * preamble * ".txt", "w")
 
-# # Redirect stdout to the file
-# redirect_stdout(io)
+# Redirect stdout to the file
+redirect_stdout(io)
 
 ###########################################
 ##          LATTICE PARAMETERS           ##
@@ -127,9 +127,11 @@ filepath = ".";
 # simulation ID
 sID = 1;
 
-# construct the foldername the data will be written
-# param_names = convert_par_name(optimize);    
-datafolder_prefix = @sprintf "hubbard_chain_U%.2f_n%.2f_Lx%d_Ly%d_" U n̄ Lx Ly ;
+# construct the foldername the data will be written 
+df_prefix = @sprintf "hubbard_chain_U%.2f_n%.2f_Lx%d_Ly%d_opt" U n̄ Lx Ly;
+
+# append parameters to the foldername
+datafolder_prefix = create_datafolder_prefix(optimize, df_prefix)
 
 # initialize an instance of the SimulationInfo type
 simulation_info = SimulationInfo(
@@ -185,7 +187,7 @@ n_stab_T = 50;
 η = 1e-4;    
 
 # optimization rate for Stochastic Reconfiguration
-dt = 0.1;       
+dt = 0.03;       
 
 # whether debug statements are printed 
 debug = true;
@@ -216,13 +218,13 @@ debug = true;
 # define non-interacting tight binding model
 tight_binding_model = TightBindingModel(t, tp);
 
-# initialize determinantal parameters
-determinantal_parameters = DeterminantalParameters(optimize, tight_binding_model, 
-                                                    model_geometry, minabs_vpar, Ne, pht);
+# # initialize determinantal parameters
+# determinantal_parameters = DeterminantalParameters(optimize, tight_binding_model, 
+#                                                     model_geometry, minabs_vpar, Ne, pht);
 
-# # initialize determinantal parameters from file
-# determinantal_parameters =  DeterminantalParameters(optimize, model_geometry, pht, 
-#                                                         path_to_parameter_file);
+# initialize determinantal parameters from file
+determinantal_parameters =  DeterminantalParameters(optimize, model_geometry, pht, 
+                                                        path_to_parameter_file);
 
 
 # # initialize (density) Jastrow factor
@@ -292,9 +294,9 @@ for bin in 1:N_opts
     # save particle configuration from the current bin
     pconfig_cahce = detwf.pconfig
 
-    # perform update to variational parameters
-    stochastic_reconfiguration!(measurement_container, 
-                                determinantal_parameters, η, dt, opt_bin_size)
+    # # perform update to variational parameters
+    # stochastic_reconfiguration!(measurement_container, 
+    #                             determinantal_parameters, η, dt, opt_bin_size)
 
     # write measurements (to file)
     write_measurements!(measurement_container, energy_bin, dblocc_bin, param_bin)
@@ -368,10 +370,10 @@ close(io)
 
 ## BEGIN DATA PROCESSING TESTS  ##
 
-# # PARAMETER SET 1 (MU, AFM, CDW)
-# deltam = [v[1] for v in param_bin]
-# deltaa = [v[2] for v in param_bin]
-# deltac = [v[3] for v in param_bin]
+# PARAMETER SET 1 (MU, AFM, CDW)
+deltam = [v[1] for v in param_bin]
+deltaa = [v[2] for v in param_bin]
+deltac = [v[3] for v in param_bin]
 
 # PARAMETER SET 2 (MU, SWAVE, AFM, CDW)
 mu = [v[1] for v in param_bin]
@@ -391,7 +393,7 @@ energy_exact_U1 = -0.8352119
 # plot energy per site
 energy_plt = scatter(1:N_opts, energy_bin/opt_bin_size, marker=:square, color=:red, markersize=5, markerstrokewidth=0,
         legend=false, xlabel="Optimization steps", ylabel=L"E/N", tickfontsize=14, guidefontsize=14, legendfontsize=14,
-        xlims=(0,N_opts), ylims=(-1.05, 0))
+        xlims=(0,N_opts))
 # hline!([energy_exact_U1], linestyle=:dash, color=:black, linewidth=2)
 savefig(energy_plt, "energy_" * preamble * ".png")
 
@@ -419,7 +421,7 @@ savefig(mu_plt, "mu_" * preamble * ".png")
 
 ds_plt = scatter(1:N_opts, deltas/opt_bin_size, marker=:circle, color=:blue, markersize=5, markerstrokewidth=0,
         legend=false, xlabel="Optimization steps", ylabel=L"\Delta_{0}", tickfontsize=14, guidefontsize=14, legendfontsize=14,
-        xlims=(0,N_opts),ylims=(0.00001,0.0001))
+        xlims=(0,N_opts))
 savefig(ds_plt, "ds_" * preamble * ".png")
 
 # # plot s-wave parameter

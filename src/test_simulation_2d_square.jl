@@ -95,9 +95,9 @@ optimize = (
     # charge density 
     Δ_cdw = false,
     # site-dependent charge (stripe)
-    Δ_sdc = true,
+    Δ_sdc = false,
     # site-dependent spin (stripe)
-    Δ_sds = true,
+    Δ_sds = false,
     # density Jastrow 
     djastrow = false,
     # spin Jastrow
@@ -130,8 +130,10 @@ filepath = ".";
 sID = 1;
 
 # construct the foldername the data will be written
-# param_names = convert_par_name(optimize);    
-datafolder_prefix = @sprintf "hubbard_chain_U%.2f_n%.2f_Lx%d_Ly%d_" U n̄ Lx Ly ;
+df_prefix = @sprintf "hubbard_square_U%.2f_n%.2f_Lx%d_Ly%d_opt" U n̄ Lx Ly;
+
+# append parameters to the foldername
+datafolder_prefix = create_datafolder_prefix(optimize, df_prefix)
 
 # initialize an instance of the SimulationInfo type
 simulation_info = SimulationInfo(

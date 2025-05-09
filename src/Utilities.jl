@@ -98,32 +98,37 @@ function all_vpars(determinantal_parameters::DeterminantalParameters,
 end
 
 
-# """
+"""
 
-#     convert_par_name( parameters_to_optimize::Vector{String} )
+    create_datfolder_prefix( optimize::NamedTuple, df_prefix::String )
 
-# Converts vector of parameter names to string for appending to the datafolder prefix.
+Check the optimization fields and appends parameter names to the end of the foldername.
+Returns the datafolder prefix.
 
-# """
-# function convert_par_name(optimize::Vector{String})
-#     # Map of special characters to their ASCII replacements
-#     replacements = Dict('Δ' => "Delta", 'μ' => "mu")
-    
-#     # Helper function to sanitize each string
-#     function sanitize_string(s::String)
-#         # Replace special characters using the replacements dictionary
-#         for (char, replacement) in replacements
-#             s = replace(s, char => replacement)
-#         end
-#         # Remove any remaining non-alphanumeric characters
-#         s = replace(s, r"[^a-zA-Z0-9]" => "")
-#         return s
-#     end
+"""
+function create_datafolder_prefix(optimize::NamedTuple, df_prefix::String)
+    opt_keys = keys(optimize)
 
-#     # Apply sanitization to each parameter and join with underscores
-#     cleaned_parameters = join(sanitize_string.(optimize), "_")
-#     return cleaned_parameters
-# end
+    enabled_opts = [begin
+        k_str = string(k)
+        if k_str == "Δ_0"
+            "swave"
+        elseif k_str == "Δ_d"
+            "dwave"
+        elseif k_str == "μ"
+            "mu"
+        elseif startswith(k_str, "Δ")
+            k_str[3:end]  # Drop the "Δ"
+        else
+            k_str
+        end
+    end for k in opt_keys if optimize[k]]
+
+    opt_suffix = isempty(enabled_opts) ? "_none" : "_" * join(enabled_opts, "_")
+    datafolder_prefix = df_prefix * opt_suffix
+
+    return datafolder_prefix
+end
 
 
 """
