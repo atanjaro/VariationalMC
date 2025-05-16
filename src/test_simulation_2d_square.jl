@@ -28,12 +28,12 @@ include("SimulationInfo.jl");
 include("Measurements.jl");
 # include("ElectronPhonon.jl");
 
-# # Open the file for writing
-# preamble = "chain_L4_U1_mu0.0_afm0.0_cdw0.0_swave0.0_pht_opt_swave_mu_dt0.1"
-# io = open("simulation_output_" * preamble * ".txt", "w")
+# Open the file for writing
+preamble = "square_L4_U1_mu0.0_afm0.0_cdw0.0_swave0.0_no_pht_no_opt_dt0.1"
+io = open("simulation_output_" * preamble * ".txt", "w")
 
-# # Redirect stdout to the file
-# redirect_stdout(io)
+# Redirect stdout to the file
+redirect_stdout(io)
 
 ###########################################
 ##          LATTICE PARAMETERS           ##
@@ -105,7 +105,7 @@ optimize = (
 )
 
 # whether model is particle-hole transformed
-pht = true;
+pht = false;
 
 # define electron density
 n̄ = 1.0;
@@ -220,13 +220,13 @@ debug = true;
 # define non-interacting tight binding model
 tight_binding_model = TightBindingModel(t, tp);
 
-# # initialize determinantal parameters
-# determinantal_parameters = DeterminantalParameters(optimize, tight_binding_model, 
-#                                                     model_geometry, minabs_vpar, Ne, pht);
+# initialize determinantal parameters
+determinantal_parameters = DeterminantalParameters(optimize, tight_binding_model, 
+                                                    model_geometry, minabs_vpar, Ne, pht);
 
-# initialize determinantal parameters from file
-determinantal_parameters =  DeterminantalParameters(optimize, model_geometry, pht, 
-                                                        path_to_parameter_file);
+# # initialize determinantal parameters from file
+# determinantal_parameters =  DeterminantalParameters(optimize, model_geometry, pht, 
+#                                                         path_to_parameter_file);
 
 
 # # initialize (density) Jastrow factor

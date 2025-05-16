@@ -29,7 +29,7 @@ include("Measurements.jl");
 # include("ElectronPhonon.jl");
 
 # Open the file for writing
-preamble = "chain_L4_U1_mu0.0_afm0.0_cdw0.0_swave0.0_no_pht_no_opt_dt0.03"
+preamble = "chain_L4_U1_mu0.0_afm0.0_cdw0.0_swave0.1_pht_opt_bcs_dt0.03"
 io = open("simulation_output_" * preamble * ".txt", "w")
 
 # Redirect stdout to the file
@@ -83,9 +83,9 @@ minabs_vpar = 1e-4;
 # select which parameters will be optimized
 optimize = (
     # (BCS) chemical potential
-    μ = false,
+    μ = true,
     # onsite (s-wave)
-    Δ_0 = false,
+    Δ_0 = true,
     # d-wave
     Δ_d = false,
     # spin-z (AFM)
@@ -103,7 +103,7 @@ optimize = (
 )
 
 # whether model is particle-hole transformed
-pht = false;
+pht = true;
 
 # define electron density
 n̄ = 1.0;
@@ -156,7 +156,7 @@ println("seed = ", seed)
 rng = Xoshiro(seed);
 
 # number of equilibration/thermalization steps 
-N_equil = 300;
+N_equil = 1000;
 
 # number of minimization/optimization updates
 N_opts = 1000;
@@ -228,9 +228,9 @@ determinantal_parameters =  DeterminantalParameters(optimize, model_geometry, ph
 
 
 # # initialize (density) Jastrow factor
-# jastrow = build_jastrow_factor("e-den-den", detwf, model_geometry, pht, rng);
+# djastrow = build_jastrow_factor("e-den-den", detwf, model_geometry, pht, rng);
 
-# # initialize spin Jastrow factor
+# # initialize (spin) Jastrow factor
 # sjastrow = build_jastrow_factor("e-spn-spn", detwf, model_geometry, pht, rng);
 
 # Initialize measurement container for VMC measurements
@@ -294,9 +294,9 @@ for bin in 1:N_opts
     # save particle configuration from the current bin
     pconfig_cahce = detwf.pconfig
 
-    # # perform update to variational parameters
-    # stochastic_reconfiguration!(measurement_container, 
-    #                             determinantal_parameters, η, dt, opt_bin_size)
+    # perform update to variational parameters
+    stochastic_reconfiguration!(measurement_container, 
+                                determinantal_parameters, η, dt, opt_bin_size)
 
     # write measurements (to file)
     write_measurements!(measurement_container, energy_bin, dblocc_bin, param_bin)
@@ -388,12 +388,12 @@ deltac = [v[4] for v in param_bin]
 
 # QUICK PLOTTING
 # exact energy from ED (U = 1)
-energy_exact_U1 = -0.8352119
+# energy_exact_U1 = -0.8352119
 
 # plot energy per site
 energy_plt = scatter(1:N_opts, energy_bin/opt_bin_size, marker=:square, color=:red, markersize=5, markerstrokewidth=0,
         legend=false, xlabel="Optimization steps", ylabel=L"E/N", tickfontsize=14, guidefontsize=14, legendfontsize=14,
-        xlims=(0,N_opts))
+        xlims=(0,N_opts),ylims =(-0.85, 0))
 # hline!([energy_exact_U1], linestyle=:dash, color=:black, linewidth=2)
 savefig(energy_plt, "energy_" * preamble * ".png")
 
@@ -406,7 +406,7 @@ savefig(dblocc_plt, "dblocc_" * preamble * ".png")
 # plot AFM parameter
 dafm_plt = scatter(1:N_opts, deltaa/opt_bin_size, marker=:circle, color=:blue, markersize=5, markerstrokewidth=0,
         legend=false, xlabel="Optimization steps", ylabel=L"\Delta_{\mathrm{AFM}}", tickfontsize=14, guidefontsize=14, legendfontsize=14,
-        xlims=(0,N_opts), ylims=(0, 0.001))
+        xlims=(0,N_opts), ylims=(0, 0.35))
 savefig(dafm_plt, "dafm_" * preamble * ".png")
 
 dcdw_plt = scatter(1:N_opts, deltac/opt_bin_size, marker=:circle, color=:blue, markersize=5, markerstrokewidth=0,
@@ -421,7 +421,7 @@ savefig(mu_plt, "mu_" * preamble * ".png")
 
 ds_plt = scatter(1:N_opts, deltas/opt_bin_size, marker=:circle, color=:blue, markersize=5, markerstrokewidth=0,
         legend=false, xlabel="Optimization steps", ylabel=L"\Delta_{0}", tickfontsize=14, guidefontsize=14, legendfontsize=14,
-        xlims=(0,N_opts))
+        xlims=(0,N_opts),ylims=(0,0.1))
 savefig(ds_plt, "ds_" * preamble * ".png")
 
 # # plot s-wave parameter

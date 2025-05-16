@@ -63,7 +63,11 @@ function get_determinantal_wavefunction(tight_binding_model::TightBindingModel,
     (ε, U_int) = diagonalize(H);
 
     if is_openshell(ε, Ne)
-        error("Open shell detected! Exiting...")
+        if isnothing(pconfig)
+            error("   ERROR! Open shell detected! Exiting...")           
+        else
+            debug && println("   WARNING! Open shell detected!")
+        end
     else
         debug && println("   Forming shell...")
     end

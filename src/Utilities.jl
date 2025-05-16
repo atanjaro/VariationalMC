@@ -28,16 +28,23 @@ end
 
 """
 
-    readin_parameters()
+    readin_parameters( filename::String )
 
 """
 function readin_parameters(filename::String)
-    lines = filter(x -> !isempty(x), readlines(filename))  # skip empty lines
+    # Read and clean lines: remove comments and skip empty lines
+    lines = open(filename) do f
+        filter(!isempty, [
+            strip(split(line, "#")[1]) for line in eachline(f)
+        ])
+    end
+
+    # Parse cleaned lines into arrays of Float64
     parameters = [parse.(Float64, split(line)) for line in lines]
 
     return Dict(
         :chemical_potential => parameters[1][1],
-        :pairing        => parameters[2],
+        :pairing            => parameters[2],
         :afm                => parameters[3][1],
         :sds                => parameters[4],
         :cdw                => parameters[5][1],

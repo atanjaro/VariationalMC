@@ -1,6 +1,6 @@
 """
 
-    Jastrow(jastrow_type::String, num_jpars::Int, jpar_map::OrderedDict{Any, Any}, 
+    Jastrow(jastrow_type::String, num_jpars::Int, num_jpar_opts::Int, jpar_map::OrderedDict{Any, Any}, 
             Tvec_f::Vector{Float64}, Tvec_b::Vector{Float64})
 
 A type defining quantities related to a Jastrow factor.
@@ -10,8 +10,11 @@ mutable struct Jastrow
     # type of Jastrow parameter
     jastrow_type::String;
 
-    # number of Jastrow parameters
+    # total number of Jastrow parameters
     num_jpars::Int;
+
+    # number of Jastrow parameters to be optimized
+    num_jpar_opts::Int;
 
     # map of Jastrow parameters
     jpar_map::OrderedDict{Any, Any};
@@ -19,7 +22,7 @@ mutable struct Jastrow
     # fermionic T vector
     Tvec_f::Vector{Float64};
 
-    # bosonic T vector
+    # bosonic (phononic) T vector
     Tvec_b::Vector{Float64};
 end
 
@@ -53,7 +56,7 @@ function build_jastrow_factor(jastrow_type::String, detwf::DeterminantalWavefunc
     num_jpars = length(jpar_map);
    
     debug && println("Jastrow::build_jastrow_factor() : type: ", jastrow_type)
-    debug && println("number of Jastrow parameters to be optimized: ", num_jpars-1)
+    debug && println("number of Jastrow parameters to be optimized = ", num_jpars-1)
 
     return Jastrow(jastrow_type, num_jpars, jpar_map, init_Tvec_f, init_Tvec_b);
 end
@@ -88,7 +91,7 @@ function build_jastrow_factor(jastrow_type::String, model_geometry::ModelGeometr
     num_jpars = length(jpar_map);
    
     debug && println("Jastrow::build_jastrow_factor() : type: ", jastrow_type)
-    debug && println("number of Jastrow parameters to be optimized: ", num_jpars-1)
+    debug && println("number of Jastrow parameters to be optimized = ", num_jpars-1)
 
     return Jastrow(jastrow_type, num_jpars, jpar_map, init_Tvec_f, init_Tvec_b);
 end
@@ -457,6 +460,7 @@ function map_jastrow_parameters(model_geometry::ModelGeometry, rng::Xoshiro)::Or
     jpar_map = OrderedDict();
 
     for i in 0:N-1
+        # get irreducible lattice index 
         red_idx = reduce_index_2d(0, i, model_geometry);
         push!(reduced_indices, red_idx);
         if haskey(jpar_map, red_idx)
@@ -470,6 +474,7 @@ function map_jastrow_parameters(model_geometry::ModelGeometry, rng::Xoshiro)::Or
 
     for i in 1:N-1
         for j in 1:N-1
+            # get irreducible lattice index 
             red_idx = reduce_index_2d(i, j, model_geometry);
             push!(reduced_indices, red_idx);
             if haskey(jpar_map, red_idx)

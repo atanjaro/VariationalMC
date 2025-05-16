@@ -197,7 +197,7 @@ function make_measurements!(measurement_container::NamedTuple, detwf::Determinan
     measure_ΔkE!(measurement_container, detwf, tight_binding_model, determinantal_parameters, jastrow, model_geometry, Ne, pht)
 
     # measure double occupancy
-    measure_double_occ!(measurement_container, detwf, model_geometry)
+    measure_double_occ!(measurement_container, detwf, model_geometry, pht)
 
     # measure average density
     measure_n!(measurement_container, detwf, model_geometry)

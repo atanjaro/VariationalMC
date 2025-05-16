@@ -21,8 +21,8 @@ function stochastic_reconfiguration!(measurement_container::NamedTuple, determin
     δvpars = (S + η * I(size(S,1))) \ f  
 
     # new varitaional parameters
-    new_vpars = collect(values(determinantal_parameters.det_pars))
-    new_vpars .+= dt .* δvpars
+    new_vpars = collect(values(determinantal_parameters.det_pars)) # TODO: for stripe parameters, need to unpack the parameters from their vectors
+    new_vpars .+= dt .* δvpars                                      #       <--- that way, this line can be executed
 
     debug && println("Optimizer::stochastic_reconfiguration!() : ")
     debug && println("Parameters have been updated")
@@ -81,7 +81,15 @@ function stochastic_reconfiguration!(measurement_container::NamedTuple, determin
 end
 
 
+"""
 
+    get_Δk( optimize::NamedTuple, determinantal_parameters::DeterminantalParameters, 
+                detwf::DeterminantalWavefunction, model_geometry::ModelGeometry, Ne::Int )::Vector{Float64}
+
+Calculates the local logarithmic derivative Δₖ(x) = ∂lnΨ(x)/∂αₖ, with respect to the kth variational parameter αₖ,
+in the determinantal part of the wavefunction. Returns a vector of derivatives.
+
+"""
 function get_Δk(optimize::NamedTuple, determinantal_parameters::DeterminantalParameters, 
                 detwf::DeterminantalWavefunction, model_geometry::ModelGeometry, Ne::Int)
     # # check that at least one parameter is being optimized
@@ -121,47 +129,57 @@ function get_Δk(optimize::NamedTuple, determinantal_parameters::DeterminantalPa
 end
 
 
-# function get_Δk(optimize::NamedTuple, determinantal_parameters::DeterminantalParameters, 
-#                 jastrow::Jastrow, detwf::DeterminantalParameters, model_geometry:ModelGeometry, Ne::Int)
+"""
 
-# end
+    get_Δk( optimize::NamedTuple, determinantal_parameters::DeterminantalParameters, jastrow::Jastrow,
+                detwf::DeterminantalWavefunction, model_geometry::ModelGeometry, Ne::Int )::Vector{Float64}
 
+Calculates the local logarithmic derivative Δₖ(x) = ∂lnΨ(x)/∂αₖ, with respect to the kth variational parameter αₖ,
+in the determinantal part of the wavefunction. Returns a vector of derivatives.
 
-# """
-
-#     get_detpar_derivatives( detwf::DeterminantalWavefunction, determinantal_parameters::DeterminantalParameters, 
-#                             model_geometry::ModelGeometry, Ne::Int64 )::Vector{Float64}
-
-# Calculates the local logarithmic derivative Δₖ(x) = ∂lnΨ(x)/∂αₖ, with respect to the kth variational parameter αₖ,
-# in the determinantal part of the wavefunction. Returns a vector of derivatives.
-
-# """
-# function get_detpar_derivatives(detwf::DeterminantalWavefunction, determinantal_parameters::DeterminantalParameters, 
-#                                 model_geometry::ModelGeometry, Ne::Int64)::Vector{Float64}
-#     # number of lattice sites
-#     N = model_geometry.unit_cell.n * model_geometry.lattice.N
-
-#     # number of determinantal parameters
-#     num_det_opts = determinantal_parameters.num_det_opts
-
-#     # vector to store derivatives
-#     det_par_derivatives = zeros(Float64, num_det_opts)
+"""
+function get_Δk(optimize::NamedTuple, determinantal_parameters::DeterminantalParameters, jastrow::Jastrow,
+                detwf::DeterminantalWavefunction, model_geometry::ModelGeometry, Ne::Int)
+    # # check that at least one parameter is being optimized
+    # @assert any(values(optimize))
     
-#     # loop over Nₑ particles 
-#     G = zeros(Complex, 2*N, 2*N)
-#     for β in 1:Ne
-#         k = findfirst(x -> x == β, detwf.pconfig)
+    # number of lattice sites
+    N = model_geometry.unit_cell.n * model_geometry.lattice.N
 
-#         G[k, :] .= detwf.W[:, β]
-#     end
+    # current determinantal_parameters
+    det_pars = determinantal_parameters.det_pars
 
-#     # loop over the number of determinantal parameters
-#     for num in 1:num_det_opts
-#         det_par_derivatives[num] += sum(detwf.A[num] .* G) 
-#     end
+    # total number of parameters in the model
+    num_det_pars = determinantal_parameters.num_det_pars
 
-#     return det_par_derivatives
-# end
+    # # number of parameters being optimized
+    # num_det_opts = determinantal_parameters.num_det_opts
+
+    # resultant derivatives
+    result = zeros(Float64, num_det_pars)
+
+    G = zeros(Complex, 2*N, 2*N)
+    for β in 1:Ne
+        k = findfirst(x -> x == β, detwf.pconfig)
+
+        G[k, :] .= detwf.W[:, β]
+    end
+
+    opt_idx = 1
+    for (i, pname) in enumerate(keys(det_pars))
+        if getfield(optimize, pname)
+            result[i] = sum(detwf.A[opt_idx] .* G)
+            opt_idx += 1
+        end
+    end
+
+    return result
+end
+
+
+
+
+
 
 
 # """
